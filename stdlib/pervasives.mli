@@ -15,17 +15,19 @@
 
 (** The initially opened module.
 
-   This module provides the built-in types (numbers, booleans,
-   strings, exceptions, references, lists, arrays, input-output channels, ...)
-   and the basic operations over these types.
+   This module provides the basic operations over the built-in types
+   (numbers, booleans, strings, exceptions, references, lists, arrays,
+   input-output channels, ...)
 
    This module is automatically opened at the beginning of each compilation.
    All components of this module can therefore be referred by their short
    name, without prefixing them by [Pervasives].
 *)
 
-(** {6 Predefined types} 
-These are predefined types :
+(** {6 Built-in types} 
+These are built-in types; they are not really part of this module, because
+they are built into the compiler.  As a consequence, they can only be
+referred by their short names, without the [Pervasives] prefix.
 {[ type int]}    The type of integer numbers.
 {[ type char]}   The type of characters.
 {[ type string]} The type of character strings.
@@ -43,6 +45,8 @@ These are predefined types :
                  of the format, ['c] is the result type for the [printf]-style
                  function, and ['b] is the type of the first argument given to
                  [%a] and [%t] printing functions (see module {!Printf}).
+{[type 'a lazy_t]} This type is used to implement the {!Lazy} module.
+                 It should not be used directly.
 *)
 
 (** {6 Exceptions} *)
@@ -187,12 +191,12 @@ external ( & ) : bool -> bool -> bool = "%sequand"
 (** @deprecated {!Pervasives.(&&)} should be used instead. *)
 
 external ( || ) : bool -> bool -> bool = "%sequor"
-(** See {!Pervasives.or}.*)
-
-external ( or ) : bool -> bool -> bool = "%sequor"
 (** The boolean ``or''. Evaluation is sequential, left-to-right:
    in [e1 || e2], [e1] is evaluated first, and if it returns [true],
    [e2] is not evaluated at all. *)
+
+external ( or ) : bool -> bool -> bool = "%sequor"
+(** @deprecated {!Pervasives.(||)} should be used instead.*)
 
 
 (** {6 Integer arithmetic} *)
@@ -604,7 +608,7 @@ val read_float : unit -> float
 type open_flag =
     Open_rdonly      (** open for reading. *)
   | Open_wronly      (** open for writing. *)
-  | Open_append      (** open for appending. always write at end of file (needs [Open_wronly]. *)
+  | Open_append      (** open for appending: always write at end of file. *)
   | Open_creat       (** create the file if it does not exist. *)
   | Open_trunc       (** empty the file if it already exists. *)
   | Open_excl        (** fail if the file already exists. *)
@@ -802,6 +806,22 @@ val set_binary_mode_in : in_channel -> bool -> unit
    This function has no effect under operating systems that
    do not distinguish between text mode and binary mode. *)
 
+(** {7 Operations on large files} *)
+
+module LargeFile :
+  sig
+    val seek_out : out_channel -> int64 -> unit
+    val pos_out : out_channel -> int64
+    val out_channel_length : out_channel -> int64
+    val seek_in : in_channel -> int64 -> unit
+    val pos_in : in_channel -> int64
+    val in_channel_length : in_channel -> int64
+  end
+(** This sub-module provides 64-bit variants of the channel functions
+  that manipulate file positions and file sizes.  By representing
+  positions and sizes by 64-bit integers (type [int64]) instead of
+  regular integers (type [int]), these alternate functions allow
+  operating on files whose sizes are greater than [max_int]. *)
 
 (** {6 References} *)
 
@@ -834,21 +854,19 @@ external decr : int ref -> unit = "%decr"
 
 
 val exit : int -> 'a
-(** Flush all pending writes on {!Pervasives.stdout} and
-   {!Pervasives.stderr},
-   and terminate the process, returning the given status code
-   to the operating system (usually 0 to indicate no errors,
-   and a small positive integer to indicate failure.) 
+(** Terminate the process, returning the given status code
+   to the operating system: usually 0 to indicate no errors,
+   and a small positive integer to indicate failure. 
+   All opened output channels are flushed.
    An implicit [exit 0] is performed each time a program
-   terminates normally (but not if it terminates because of
-   an uncaught exception). *)
+   terminates normally.  An implicit [exit 2] is performed if the program
+   terminates early because of an uncaught exception. *)
 
 val at_exit : (unit -> unit) -> unit
 (** Register the given function to be called at program
    termination time. The functions registered with [at_exit]
-   will be called when the program executes {!Pervasives.exit}. 
-   They will not be called if the program
-   terminates because of an uncaught exception.
+   will be called when the program executes {!Pervasives.exit},
+   or terminates, either normally or because of an uncaught exception.
    The functions are called in ``last in, first out'' order:
    the function most recently added with [at_exit] is called first. *)
 

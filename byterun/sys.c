@@ -143,20 +143,23 @@ CAMLprim value sys_exit(value retcode)
 #endif
 
 static int sys_open_flags[] = {
-  O_RDONLY, O_WRONLY, O_APPEND, O_CREAT, O_TRUNC, O_EXCL,
+  O_RDONLY, O_WRONLY, O_APPEND | O_WRONLY, O_CREAT, O_TRUNC, O_EXCL,
   O_BINARY, O_TEXT, O_NONBLOCK
 };
 
 CAMLprim value sys_open(value path, value flags, value perm)
 {
-  int ret;
-  ret = open(String_val(path), convert_flag_list(flags, sys_open_flags)
+  int fd;
+  fd = open(String_val(path), convert_flag_list(flags, sys_open_flags)
 #if !macintosh
              , Int_val(perm)
 #endif
                                        );
-  if (ret == -1) sys_error(path);
-  return Val_long(ret);
+  if (fd == -1) sys_error(path);
+#if defined(F_SETFD) && defined(FD_CLOEXEC)
+  fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
+  return Val_long(fd);
 }
 
 CAMLprim value sys_close(value fd)
@@ -211,11 +214,19 @@ CAMLprim value sys_getcwd(value unit)
   return copy_string(buff);
 }
 
+#ifdef _WIN32
+extern char * win32_getenv(char * command);
+#endif
+
 CAMLprim value sys_getenv(value var)
 {
   char * res;
 
+#ifndef _WIN32
   res = getenv(String_val(var));
+#else
+  res = win32_getenv(String_val(var));
+#endif
   if (res == 0) raise_not_found();
   return copy_string(res);
 }

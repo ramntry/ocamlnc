@@ -45,12 +45,20 @@ CAMLprim value md5_chan(value vchan, value len)
   Lock(chan);
   MD5Init(&ctx);
   toread = Long_val(len);
-  while (toread > 0) {
-    read = getblock(chan, buffer,
-                    toread > sizeof(buffer) ? sizeof(buffer) : toread);
-    if (read == 0) raise_end_of_file();
-    MD5Update(&ctx, (unsigned char *) buffer, read);
-    toread -= read;
+  if (toread < 0){
+    while (1){
+      read = getblock (chan, buffer, sizeof(buffer));
+      if (read == 0) break;
+      MD5Update (&ctx, (unsigned char *) buffer, read);
+    }
+  }else{
+    while (toread > 0) {
+      read = getblock(chan, buffer,
+                      toread > sizeof(buffer) ? sizeof(buffer) : toread);
+      if (read == 0) raise_end_of_file();
+      MD5Update(&ctx, (unsigned char *) buffer, read);
+      toread -= read;
+    }
   }
   res = alloc_string(16);
   MD5Final(&Byte_u(res, 0), &ctx);
@@ -94,7 +102,7 @@ static void byteReverse(unsigned char * buf, unsigned longs)
  * Start MD5 accumulation.  Set bit count to 0 and buffer to mysterious
  * initialization constants.
  */
-void MD5Init(struct MD5Context *ctx)
+CAMLexport void MD5Init(struct MD5Context *ctx)
 {
     ctx->buf[0] = 0x67452301;
     ctx->buf[1] = 0xefcdab89;
@@ -109,7 +117,8 @@ void MD5Init(struct MD5Context *ctx)
  * Update context to reflect the concatenation of another buffer full
  * of bytes.
  */
-void MD5Update(struct MD5Context *ctx, unsigned char *buf, unsigned int len)
+CAMLexport void MD5Update(struct MD5Context *ctx, unsigned char *buf,
+                          unsigned long len)
 {
     uint32 t;
 
@@ -157,7 +166,7 @@ void MD5Update(struct MD5Context *ctx, unsigned char *buf, unsigned int len)
  * Final wrapup - pad to 64-byte boundary with the bit pattern 
  * 1 0* (64-bit count of bits processed, MSB-first)
  */
-void MD5Final(unsigned char *digest, struct MD5Context *ctx)
+CAMLexport void MD5Final(unsigned char *digest, struct MD5Context *ctx)
 {
     unsigned count;
     unsigned char *p;
@@ -215,7 +224,7 @@ void MD5Final(unsigned char *digest, struct MD5Context *ctx)
  * reflect the addition of 16 longwords of new data.  MD5Update blocks
  * the data and converts bytes into longwords for this routine.
  */
-void MD5Transform(uint32 *buf, uint32 *in)
+CAMLexport void MD5Transform(uint32 *buf, uint32 *in)
 {
     register uint32 a, b, c, d;
 

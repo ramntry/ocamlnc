@@ -181,7 +181,7 @@ static void mark_slice (long work)
       header_t hd;
 
       cur = *weak_prev;
-      if (cur != NULL){
+      if (cur != (value) NULL){
         hd = Hd_val (cur);
         if (Color_hd (hd) == Caml_white){
           /* The whole array is dead, remove it from the list. */
@@ -205,7 +205,6 @@ static void mark_slice (long work)
         }
         work -= Whsize_hd (hd);
       }else{
-        Assert (weak_prev == NULL);
         /* Subphase_weak is done.  Handle finalised values. */
         gray_vals_cur = gray_vals_ptr;
         final_update ();

@@ -20,9 +20,11 @@
 
 
 #include "config.h"
+/* <private> */
 #include "gc.h"
 #include "major_gc.h"
 #include "minor_gc.h"
+/* </private> */
 #include "misc.h"
 #include "mlvalues.h"
 
@@ -40,6 +42,8 @@ int add_to_heap (header_t *mem);
 color_t allocation_color (void *hp);
 
 /* void shrink_heap (char *);        Only used in compact.c */
+
+/* <private> */
 
 #ifdef DEBUG
 #define DEBUG_clear(result, wosize) do{ \
@@ -94,6 +98,8 @@ color_t allocation_color (void *hp);
   }                                                                         \
 }while(0)
 
+/* </private> */
+
 struct caml__roots_block {
   struct caml__roots_block *next;
   long ntables;
@@ -122,7 +128,7 @@ CAMLextern struct caml__roots_block *local_roots;  /* defined in roots.c */
    Use [CAMLlocalN] to declare an array of [value]s.
 
    Your function may raise and exception or return a [value] with the
-   [CAMLreturn1] macro.  Its argument is simply the [value] returned by
+   [CAMLreturn] macro.  Its argument is simply the [value] returned by
    your function.  Do NOT directly return a [value] with the [return]
    keyword.  If your function returns void, use [CAMLreturn0].
 

@@ -174,15 +174,15 @@ let fprintf chan fmt =
 let printf fmt = fprintf stdout fmt
 let eprintf fmt = fprintf stderr fmt
 
-let sprintf fmt =
+let kprintf kont fmt =
   let fmt = (Obj.magic fmt : string) in
   let len = String.length fmt in
   let dest = Buffer.create (len + 16) in
   let rec doprn i =
     if i >= len then begin
       let res = Buffer.contents dest in
-      Buffer.clear dest;  (* just in case sprintf is partially applied *)
-      Obj.magic res
+      Buffer.clear dest;  (* just in case kprintf is partially applied *)
+      Obj.magic (kont res)
     end else
     match String.unsafe_get fmt i with
     | '%' -> scan_format fmt i cont_s cont_a cont_t
@@ -194,6 +194,8 @@ let sprintf fmt =
   and cont_t printer i =
     Buffer.add_string dest (printer ()); doprn i
   in doprn 0
+
+let sprintf fmt = kprintf (fun x -> x) fmt;;
 
 let bprintf dest fmt =
   let fmt = (Obj.magic fmt : string) in

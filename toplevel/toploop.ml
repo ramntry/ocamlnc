@@ -219,7 +219,8 @@ let execute_phrase print_outcome ppf phr =
                     let ty = Printtyp.tree_of_type_scheme exp.exp_type in
                     Ophr_eval (outv, ty)
                 | [] -> Ophr_signature []
-                | _ -> Ophr_signature (item_list newenv sg)
+                | _ -> Ophr_signature (item_list newenv
+                                             (Typemod.simplify_signature sg))
               else Ophr_signature []
           | Exception exn ->
               toplevel_env := oldenv;
@@ -327,12 +328,12 @@ let refill_lexbuf buffer len =
     | Exit -> !i
   end
 
-(* Discard everything already in a lexer buffer *)
+(* Discard data left in lexer buffer. *)
 
 let empty_lexbuf lb =
-  let l = String.length lb.lex_buffer in
-  lb.lex_abs_pos <- (-l);
-  lb.lex_curr_pos <- l
+  lb.lex_curr_pos <- 0;
+  lb.lex_abs_pos <- 0;
+  lb.lex_buffer_end <- 0
 
 (* Toplevel initialization. Performed here instead of at the
    beginning of loop() so that user code linked in with ocamlmktop
