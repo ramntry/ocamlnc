@@ -129,6 +129,10 @@ let restore_global_level () =
     gl::rem -> global_level := gl; saved_global_level := rem
   | []      -> assert false
 
+(* Abbreviations without parameters *)
+(* Shall reset after generalizing *)
+let simple_abbrevs = ref Mnil
+
 (**** Some type creators ****)
 
 (* Re-export generic type creators *)
@@ -503,7 +507,11 @@ let rec iter_generalize tyl ty =
   end else
     tyl := ty :: !tyl
 
-let rec generalize ty =
+let iter_generalize tyl ty =
+  simple_abbrevs := Mnil;
+  iter_generalize tyl ty
+
+let generalize ty =
   iter_generalize (ref []) ty
 
 (* Efficient repeated generalisation of the same type *)
@@ -530,6 +538,10 @@ let rec generalize_structure var_level ty =
       iter_type_expr (generalize_structure var_level) ty
     end
   end
+
+let generalize_structure var_level ty =
+  simple_abbrevs := Mnil;
+  generalize_structure var_level ty
 
 let generalize_expansive ty = generalize_structure !nongen_level ty
 let generalize_global ty = generalize_structure !global_level ty
@@ -686,7 +698,10 @@ let rec copy ty =
     t.desc <-
       begin match desc with
       | Tconstr (p, tl, _) ->
-          begin match find_repr p !(!abbreviations) with
+          let abbrevs =
+            if tl = [] && not !Clflags.principal then simple_abbrevs
+            else !abbreviations in
+          begin match find_repr p !abbrevs with
             Some ty when repr ty != t -> (* XXX Commentaire... *)
               Tlink ty
           | _ ->
@@ -918,8 +933,11 @@ let rec subst env level abbrev ty params args body =
     let body0 = newvar () in          (* Stub *)
     begin match ty with
       None      -> ()
-    | Some ({desc = Tconstr (path, _, _)} as ty) ->
-        memorize_abbrev abbrev path ty body0
+    | Some ({desc = Tconstr (path, tl, _)} as ty) ->
+        if tl = [] && not !Clflags.principal then
+          simple_abbrevs := Mcons (path, ty, body0, !simple_abbrevs)
+        else
+          memorize_abbrev abbrev path ty body0
     | _ ->
         assert false
     end;
@@ -999,11 +1017,15 @@ let expand_abbrev env ty =
   *)
   if env != !previous_env then begin
     cleanup_abbrev ();
+    simple_abbrevs := Mnil;
     previous_env := env
   end;
   match ty with
     {desc = Tconstr (path, args, abbrev); level = level} ->
-      begin match find_expans path !abbrev with
+      let lookup_abbrev =
+        if args = [] && not !Clflags.principal then simple_abbrevs
+        else abbrev in
+      begin match find_expans path !lookup_abbrev with
         Some ty ->
           if level <> generic_level then
             begin try

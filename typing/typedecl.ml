@@ -132,11 +132,7 @@ let transl_declaration env (name, sdecl) id =
             let lbls' =
               List.map
                 (fun (name, mut, arg) ->
-                  let ty =
-                    match arg.ptyp_desc with
-                      Ptyp_poly ([],sty) -> transl_simple_type_univars env sty
-                    | _                  -> transl_simple_type env true arg
-                  in
+                  let ty = transl_simple_type env true arg in
                   name, mut, match ty.desc with Tpoly(t,[]) -> t | _ -> ty)
                 lbls in
             let rep =
