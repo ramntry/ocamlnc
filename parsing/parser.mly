@@ -1315,7 +1315,7 @@ meth_list:
   | DOTDOT                                      { [mkfield Pfield_var] }
 ;
 field:
-    label COLON core_type                       { mkfield(Pfield($1, $3)) }
+    label COLON poly_type                       { mkfield(Pfield($1, $3)) }
 ;
 label:
     LIDENT                                      { $1 }

@@ -381,8 +381,7 @@ let rec free_vars_rec real ty =
     | Tvariant row ->
         let row = row_repr row in
         iter_row (free_vars_rec true) {row with row_bound = []};
-        if not (static_row row) then
-          free_variables := (row_more row, false) :: !free_variables
+        if not (static_row row) then free_vars_rec false row.row_more
     | _    ->
         iter_type_expr (free_vars_rec true) ty
     end;
@@ -900,7 +899,7 @@ let instance_poly univars sch =
   List.iter Lazy.force !delayed_copy;
   delayed_copy := [];
   cleanup_types ();
-  ty
+  vars, ty
 
 (**** Instantiation with parameter substitution ****)
 
@@ -1188,9 +1187,9 @@ let occur_univar ty =
   let rec occur_rec bound ty =
     let ty = repr ty in
     if ty.level >= lowest_level &&
-      if TypeSet.is_empty bound then begin
+      if TypeSet.is_empty bound then
         (ty.level <- pivot_level - ty.level; true)
-      end else try
+      else try
         let bound' = TypeMap.find ty !visited in
         if TypeSet.exists (fun x -> not (TypeSet.mem x bound)) bound' then
           (visited := TypeMap.add ty (TypeSet.inter bound bound') !visited;
@@ -1209,8 +1208,8 @@ let occur_univar ty =
   in
   try
     occur_rec TypeSet.empty ty; unmark_type ty
-  with exn ->
-    unmark_type ty; raise exn
+  with Occur ->
+    unmark_type ty; raise (Unify [])
 
 let univar_pairs = ref []
 

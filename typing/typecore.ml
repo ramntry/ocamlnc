@@ -55,6 +55,7 @@ type error =
   | Masked_instance_variable of Longident.t
   | Not_a_variant_type of Longident.t
   | Incoherent_label_order
+  | Less_general_method of (type_expr * type_expr) list
 
 exception Error of Location.t * error
 
@@ -1009,6 +1010,22 @@ let rec type_exp env sexp =
               (Texp_send(obj, Tmeth_name met),
                filter_method env met Public obj.exp_type)
         in
+        let typ =
+          match repr typ with
+            {desc = Tpoly (ty, [])} ->
+              ty
+          | {desc = Tpoly (ty, tl)} ->
+              let tl = List.map repr tl in
+              snd (instance_poly tl ty)
+          |     {desc = Tvar} as ty ->
+              let ty' = newvar () in
+              unify env ty (newty(Tpoly(ty',[])));
+              (* if not !Clflags.nolabels then
+                 Location.print_warning loc (Warnings.Unknown_method met); *)
+              ty'
+          | _ ->
+              assert false
+        in
           { exp_desc = exp;
             exp_loc = sexp.pexp_loc;
             exp_type = typ;
@@ -1431,6 +1448,44 @@ and type_expect ?in_function env sexp ty_expected =
         exp_loc = sexp.pexp_loc;
         exp_type = newty (Tarrow(l, ty_arg, ty_res, Cok));
         exp_env = env }
+  | Pexp_poly(sbody, sty) ->
+      let ty =
+        match sty with None -> repr ty_expected
+        | Some sty ->
+            let ty = Typetexp.transl_simple_type env false sty in
+            repr ty
+      in            
+      let set_type ty =
+        unify_exp env
+          { exp_desc = Texp_tuple []; exp_loc = sexp.pexp_loc;
+            exp_type = ty; exp_env = env } ty_expected in
+      begin
+        match ty.desc with
+          Tpoly (ty', []) ->
+            if sty <> None then set_type ty;
+            let exp = type_expect env sbody ty' in
+            { exp with exp_type = ty }
+        | Tpoly (ty', tl) ->
+            if sty <> None then set_type ty;
+            (* One more level to generalize locally *)
+            begin_def ();
+            let tl',ty'' = instance_poly tl ty' in
+            let exp = type_expect env sbody ty'' in
+            end_def ();
+            generalize exp.exp_type;
+            List.iter
+              (fun t ->
+                let t = repr t in
+                if t.desc <> Tvar or t.level <> generic_level then
+                  raise (Error(sexp.pexp_loc,
+                               Less_general_method
+                                 [exp.exp_type, full_expand env exp.exp_type;
+                                  ty_expected, full_expand env ty_expected ]));
+                t.desc <- Tunivar)
+              tl';
+            { exp with exp_type = ty }
+        | _ -> assert false
+      end
   | _ ->
       let exp = type_exp env sexp in
       unify_exp env exp ty_expected;
@@ -1677,3 +1732,7 @@ let report_error ppf = function
       fprintf ppf "This function is applied to arguments@ ";
       fprintf ppf "in an order different from other calls.@ ";
       fprintf ppf "This is only allowed when the real type is known."
+  | Less_general_method trace ->
+      report_unification_error ppf trace
+        (fun ppf -> fprintf ppf "This method has type")
+        (fun ppf -> fprintf ppf "which is less general than")

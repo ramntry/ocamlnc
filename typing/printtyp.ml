@@ -101,6 +101,7 @@ let print_name_of_type sch ppf t =
 
 let visited_objects = ref ([] : type_expr list)
 let aliased = ref ([] : type_expr list)
+let delayed = ref ([] : type_expr list)
 
 let is_aliased ty = List.memq ty !aliased
 let add_alias ty =
@@ -110,6 +111,14 @@ let proxy ty =
   let ty = repr ty in
   match ty.desc with
   | Tvariant row -> Btype.row_more row
+  | Tobject (ty, _) ->
+      let rec proxy_obj ty =
+        let ty = repr ty in
+        match ty.desc with
+          Tfield (_, _, _, ty)  -> proxy_obj ty
+        | Tvar | Tnil | Tunivar -> ty
+        | _ -> assert false
+      in proxy_obj ty
   | _ -> ty
 
 let namable_row row =
@@ -153,9 +162,14 @@ let rec mark_loops_rec visited ty =
             visited_objects := px :: !visited_objects;
           begin match !nm with
           | None ->
-              mark_loops_rec visited fi
+              let fields, _ = flatten_fields fi in
+              List.iter
+                (fun (_, kind, ty) ->
+                  if field_kind_repr kind = Fpresent then
+                    mark_loops_rec visited ty)
+                fields
           | Some (_, l) ->
-              List.iter (mark_loops_rec visited) l
+              List.iter (mark_loops_rec visited) (List.tl l)
           end
         end
     | Tfield(_, kind, ty1, ty2) when field_kind_repr kind = Fpresent ->
@@ -175,16 +189,16 @@ let mark_loops ty =
   mark_loops_rec [] ty;;
 
 let reset_loop_marks () =
-  visited_objects := []; aliased := []
+  visited_objects := []; aliased := []; delayed := []
 
 let reset () =
   reset_names (); reset_loop_marks ()
 
 let reset_and_mark_loops ty =
-  reset (); mark_loops ty;;
+  reset (); mark_loops ty
 
 let reset_and_mark_loops_list tyl =
- reset (); List.iter mark_loops tyl;;
+  reset (); List.iter mark_loops tyl
 
 (* Disabled in classic mode when printing an unification error *)
 let print_labels = ref true
@@ -203,12 +217,12 @@ let rec print_list pr sep ppf = function
 let rec tree_of_typexp sch ty =
   let ty = repr ty in
   let px = proxy ty in
-  if List.mem_assq px !names then
+  if List.mem_assq px !names && not (List.memq px !delayed) then
    let mark = if ty.desc = Tvar then is_non_gen sch px else false in
    Otyp_var (mark, name_of_type px) else
 
   let pr_typ () =
-   (match ty.desc with
+    match ty.desc with
     | Tvar ->
         Otyp_var (is_non_gen sch ty, name_of_type ty)
     | Tarrow(l, ty1, ty2, _) ->
@@ -274,11 +288,14 @@ let rec tree_of_typexp sch ty =
     | Tpoly (ty, []) ->
 	tree_of_typexp sch ty
     | Tpoly (ty, tyl) ->
-        Otyp_poly (List.map name_of_type tyl, tree_of_typexp sch ty)
+        let tl = List.map name_of_type tyl in
+        delayed := tyl @ !delayed;
+        Otyp_poly (tl, tree_of_typexp sch ty)
     | Tunivar ->
         Otyp_var (false, name_of_type ty)
-   ) in
-  if is_aliased px then begin
+  in
+  if List.memq px !delayed then delayed := List.filter ((!=) px) !delayed;
+  if is_aliased px && ty.desc <> Tvar && ty.desc <> Tunivar then begin
     check_name_of_type px;
     Otyp_alias (pr_typ (), name_of_type px) end
   else pr_typ ()
@@ -333,6 +350,7 @@ and tree_of_typfields sch rest = function
         match rest.desc with
         | Tvar -> Some (is_non_gen sch rest)
         | Tnil -> None
+        | Tunivar -> Some false
         | _ -> fatal_error "typfields (1)"
       in
       ([], rest)
@@ -356,7 +374,7 @@ let rec print_out_type ppf =
   | Otyp_alias (ty, s) ->
       fprintf ppf "@[%a as '%s@]" print_out_type ty s
   | Otyp_poly (sl, ty) ->
-      fprintf ppf "@[<hov 2>%a.@ %a]"
+      fprintf ppf "@[<hov 2>%a.@ %a@]"
         (pr_names "'%s") sl
         print_out_type ty
   | ty ->

@@ -107,6 +107,9 @@ val instance_parameterized_type_2:
         type_expr list * type_expr list * type_expr
 val instance_class:
         type_expr list -> class_type -> type_expr list * class_type
+val instance_poly:
+        type_expr list -> type_expr -> type_expr list * type_expr
+        (* Take an instance of a type scheme containing free univars *)
 val apply:
         Env.t -> type_expr list -> type_expr -> type_expr list -> type_expr
         (* [apply [p1...pN] t [a1...aN]] match the arguments [ai] to

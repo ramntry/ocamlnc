@@ -233,6 +233,19 @@ let virtual_method val_env meths self_type lab priv sty loc =
   try Ctype.unify val_env ty ty' with Ctype.Unify trace ->
     raise(Error(loc, Method_type_mismatch (lab, trace)))
 
+let declare_method val_env meths self_type lab priv sty loc =
+  let (_, ty') =
+     Ctype.filter_self_method val_env lab priv meths self_type
+  in
+  let ty =
+    match sty.ptyp_desc with
+      Ptyp_poly ([],sty) -> transl_simple_type_univars val_env sty
+    | _                  -> transl_simple_type val_env false sty
+  in
+  begin try Ctype.unify val_env ty ty' with Ctype.Unify trace ->
+    raise(Error(loc, Method_type_mismatch (lab, trace)))
+  end
+
 let type_constraint val_env sty sty' loc =
   let ty  = transl_simple_type val_env false sty in
   let ty' = transl_simple_type val_env false sty' in
@@ -279,11 +292,11 @@ let rec class_type_field env self_type meths (val_sig, concr_meths) =
       (Vars.add lab (mut, ty) val_sig, concr_meths)
 
   | Pctf_virt (lab, priv, sty, loc) ->
-      virtual_method env meths self_type lab priv sty loc;
+      declare_method env meths self_type lab priv sty loc;
       (val_sig, concr_meths)
 
   | Pctf_meth (lab, priv, sty, loc)  ->
-      virtual_method env meths self_type lab priv sty loc;
+      declare_method env meths self_type lab priv sty loc;
       (val_sig, Concr.add lab concr_meths)
 
   | Pctf_cstr (sty, sty', loc) ->
@@ -414,21 +427,37 @@ let rec class_field cl_num self_type meths vars
       (val_env, met_env, par_env, fields, concr_meths, inh_vals)
 
   | Pcf_meth (lab, priv, expr, loc)  ->
-      let meth_expr = make_method cl_num expr in
       Ctype.raise_nongen_level ();
       let (_, ty) =
         Ctype.filter_self_method val_env lab priv meths self_type
       in
-      let meth_type = Ctype.newvar () in
-      let (obj_ty, res_ty) = Ctype.filter_arrow val_env meth_type "" in
-      Ctype.unify val_env obj_ty self_type;
-      Ctype.unify val_env res_ty ty;
-      let ty' = type_approx met_env expr in
-      begin try Ctype.unify met_env ty' res_ty with Ctype.Unify trace ->
-        raise(Typecore.Error(expr.pexp_loc, Expr_type_clash(trace)))
+      begin try match expr.pexp_desc with
+	Pexp_poly (sbody, sty) ->
+	  begin match sty with None -> ()
+	  | Some sty ->
+	      Ctype.unify val_env
+		(Typetexp.transl_simple_type val_env false sty) ty
+	  end;
+	  begin match (Ctype.repr ty).desc with
+	    Tvar ->
+	      let ty' = Ctype.newvar () in
+	      Ctype.unify val_env (Ctype.newty (Tpoly (ty', []))) ty;
+	      Ctype.unify val_env (type_approx val_env sbody) ty'
+	  | Tpoly (ty1, tl) ->
+	      let _, ty1' = Ctype.instance_poly tl ty1 in
+	      let ty2 = type_approx val_env sbody in
+	      Ctype.unify val_env ty2 ty1'
+	  | _ -> assert false
+	  end
+      |	_ -> assert false
+      with Ctype.Unify trace ->
+	raise(Error(loc, Method_type_mismatch (lab, trace)))
       end;
-      Ctype.end_def ();
+      let meth_expr = make_method cl_num expr in
+      let meth_type = Ctype.newty (Tarrow("", self_type, ty, Cok)) in
       let vars_local = !vars in
+      Ctype.end_def ();
+
       let field =
         lazy begin
           Ctype.raise_nongen_level ();
@@ -480,10 +509,9 @@ let rec class_field cl_num self_type meths vars
       let field =
         lazy begin
           Ctype.raise_nongen_level ();
-          let meth_type = Ctype.newvar () in
-          let (obj_ty, res_ty) = Ctype.filter_arrow val_env meth_type "" in
-          Ctype.unify val_env obj_ty self_type;
-          Ctype.unify val_env res_ty (Ctype.instance Predef.type_unit);
+          let meth_type =
+            Ctype.newty
+              (Tarrow ("", self_type, Ctype.instance Predef.type_unit, Cok)) in
           vars := vars_local;
           let texp = type_expect met_env expr meth_type in
           Ctype.end_def ();
@@ -518,6 +546,7 @@ and class_structure cl_num val_env met_env (spat, str) =
       (val_env, meth_env, par_env, [], Concr.empty, StringSet.empty)
       str
   in
+  Ctype.unify val_env self_type (Ctype.newvar ());
   let vars_final = !vars in
   let fields = List.map Lazy.force (List.rev fields) in
   vars := vars_final;

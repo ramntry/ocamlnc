@@ -259,13 +259,22 @@ let rec transl_type env policy rowvar styp =
           ty
       end
   | Ptyp_alias(st, alias) ->
-      if Tbl.mem alias !type_variables then
+      if List.mem_assoc alias !univars then
+        match List.assoc alias !univars with
+	  {desc=Tlink({desc=Tunivar} as tc)} as tr ->
+	    let ty = transl_type env policy (Some tc) st in
+	    tr.desc <- Tlink ty;
+            ty
+        | _ ->
+            raise(Error(styp.ptyp_loc, Bound_type_variable alias))
+      else if Tbl.mem alias !type_variables then
         raise(Error(styp.ptyp_loc, Bound_type_variable alias))
       else
         let ty' = new_global_var () in
         type_variables := Tbl.add alias ty' !type_variables;
         let ty = transl_type env policy None st in
-        begin try unify env ty ty' with Unify trace ->
+        begin try unify_var env ty' ty with Unify trace ->
+          let trace = swap_list trace in
           raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
         end;
         ty
@@ -365,18 +374,19 @@ let rec transl_type env policy rowvar styp =
 	        if policy = Univars then new_pre_univar () else
                 if policy = Fixed && not static then
                   raise(Error(styp.ptyp_loc, Unbound_type_variable "[..]"))
-	        else newvar ()
+	        else row.row_more
         } in
       newty (Tvariant row)
   | Ptyp_poly(vars, st) ->
       (* aliases are stubs, in case one wants to redefine them *)
-      let ty_list =
-        List.map (fun name -> name, newty (Tlink (newty Tunivar))) vars in
+      let ty_list = List.map (fun _ -> newty Tunivar) vars in
+      let new_univars =
+        List.map2 (fun name ty -> name, newty (Tlink ty)) vars ty_list in
       let old_univars = !univars in
-      univars := ty_list @ !univars;
+      univars := new_univars @ !univars;
       let ty = transl_type env policy None st in
       univars := old_univars;
-      newty (Tpoly(ty, List.map snd ty_list))
+      newty (Tpoly(ty, ty_list))
 
 and transl_fields env policy rowvar =
   function
@@ -499,10 +509,8 @@ let report_error ppf = function
       fprintf ppf "@[The type %a@ is not a polymorphic variant type@]"
         Printtyp.type_expr ty
   | No_row_variable s ->
-      print_string "This ";
-      print_string s;
-      print_string "type has no row variable"
+      fprintf ppf "This %stype has no row variable" s
   | Bad_alias name ->
-      print_string "The alias ";
-      print_string name;
-      print_string " cannot be used here. It captures universal variables."
+      fprintf ppf
+        "The alias %s cannot be used here. It captures universal variables."
+        name
