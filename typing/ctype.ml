@@ -834,6 +834,8 @@ let conflicts free bound =
 let delayed_copy = ref []
     (* copying to do later *)
 
+(* Copy without sharing until there are no free univars left *)
+(* all free univars must be included in [visited]            *)
 let rec copy_sep free bound visited ty =
   let ty = repr ty in
   let univars = free ty in
@@ -847,7 +849,7 @@ let rec copy_sep free bound visited ty =
   else try
     let t, bound_t = List.assq ty visited in
     let dl = diff_list bound bound_t in
-    if dl <> [] & conflicts univars dl then raise Not_found;
+    if dl <> [] && conflicts univars dl then raise Not_found;
     t
   with Not_found -> begin
     let t = newvar() in          (* Stub *)
@@ -888,9 +890,11 @@ let rec copy_sep free bound visited ty =
     t
   end
 
-let instance_sep sch =
+let instance_poly univars sch =
+  let vars = List.map (fun _ -> newvar ()) univars in
+  let pairs = List.map2 (fun u v -> repr u, (v, [])) univars vars in
   delayed_copy := [];
-  let ty = copy_sep (compute_univars sch) [] [] sch in
+  let ty = copy_sep (compute_univars sch) [] pairs sch in
   List.iter Lazy.force !delayed_copy;
   delayed_copy := [];
   cleanup_types ();
