@@ -1158,8 +1158,8 @@ type_kind:
       { (Ptype_variant(List.rev $6, $4), Some $2) }
   | EQUAL core_type EQUAL private_flag LBRACE label_declarations opt_semi RBRACE
       { (Ptype_record(List.rev $6, $4), Some $2) }
-  | AS core_type
-      { (Ptype_fixed, Some $2) }
+  | EQUAL PRIVATE core_type
+      { (Ptype_private, Some $3) }
 ;
 type_parameters:
     /*empty*/                                   { [] }
@@ -1218,8 +1218,8 @@ with_constraint:
       { ($2, Pwith_module $4) }
 ;
 with_type_binder:
-    EQUAL { Ptype_abstract }
-  | AS    { Ptype_fixed }
+    EQUAL          { Ptype_abstract }
+  | EQUAL PRIVATE  { Ptype_private }
 ;
 
 /* Polymorphic types */

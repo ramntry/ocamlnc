@@ -531,9 +531,13 @@ let rec tree_of_type_decl id decl =
   let type_defined decl =
     let abstr =
       match decl.type_kind with
-        Type_abstract -> decl.type_manifest = None
-      | Type_variant(_,Private) | Type_record(_,_,Private) -> true
-      | _ -> false
+        Type_abstract ->
+          begin match decl.type_manifest with
+            None -> true
+          | Some ty -> has_constr_row ty
+          end
+      | Type_variant(_,p) | Type_record(_,_,p) ->
+          p = Private
     in
     let vari =
       List.map2
@@ -552,19 +556,21 @@ let rec tree_of_type_decl id decl =
   in
   let (name, args) = type_defined decl in
   let constraints = tree_of_constraints params in
-  let ty =
+  let ty, priv =
     match decl.type_kind with
     | Type_abstract ->
         begin match ty_manifest with
-        | None -> Otyp_abstract
-        | Some ty -> tree_of_typexp false ty
+        | None -> (Otyp_abstract, Public)
+        | Some ty ->
+            tree_of_typexp false ty, 
+            (if has_constr_row ty then Private else Public)
         end
     | Type_variant(cstrs, priv) ->
-        tree_of_manifest (Otyp_sum (List.map tree_of_constructor cstrs, priv))
+        tree_of_manifest (Otyp_sum (List.map tree_of_constructor cstrs)), priv
     | Type_record(lbls, rep, priv) ->
-        tree_of_manifest (Otyp_record (List.map tree_of_label lbls, priv))
+        tree_of_manifest (Otyp_record (List.map tree_of_label lbls)), priv
   in
-  (name, args, ty, constraints)
+  (name, args, ty, priv, constraints)
 
 and tree_of_constructor (name, args) =
   (name, tree_of_typlist false args)
@@ -778,6 +784,8 @@ and tree_of_signature = function
   | [] -> []
   | Tsig_value(id, decl) :: rem ->
       tree_of_value_description id decl :: tree_of_signature rem
+  | Tsig_type(id, _, _) :: rem when is_row_name (Ident.name id) ->
+      tree_of_signature rem
   | Tsig_type(id, decl, rs) :: rem ->
       Osig_type(tree_of_type_decl id decl, tree_of_rec rs) ::
       tree_of_signature rem

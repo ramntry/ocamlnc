@@ -2663,19 +2663,8 @@ let find_cltype_for_path env p =
       end
   | None -> assert false
 
-let has_constr_row env t =
-  match (expand_abbrev env t).desc with
-    Tobject(t,_) ->
-      let rec check_row t =
-        match (repr t).desc with
-          Tfield(_,_,_,t) -> check_row t
-        | Tconstr _ -> true
-        | _ -> false
-      in check_row t
-  | Tvariant row ->
-      (match row_more row with {desc=Tconstr _} -> true | _ -> false)
-  | _ ->
-      false
+let has_constr_row' env t =
+  has_constr_row (expand_abbrev env t)
 
 let rec build_subtype env visited loops posi level t =
   let t = repr t in
@@ -2708,7 +2697,7 @@ let rec build_subtype env visited loops posi level t =
       if c > Unchanged then (newty (Ttuple (List.map fst tlist')), c)
       else (t, Unchanged)
   | Tconstr(p, tl, abbrev)
-    when level > 0 && generic_abbrev env p && not (has_constr_row env t) ->
+    when level > 0 && generic_abbrev env p && not (has_constr_row' env t) ->
       let t' = repr (expand_abbrev env t) in
       let level' = pred_expand level in
       begin try match t'.desc with
@@ -2748,7 +2737,7 @@ let rec build_subtype env visited loops posi level t =
       let visited = t :: visited in
       begin try
         let decl = Env.find_type p env in
-        if level = 0 && generic_abbrev env p && not (has_constr_row env t)
+        if level = 0 && generic_abbrev env p && not (has_constr_row' env t)
         then warn := true;
         let tl' =
           List.map2
@@ -2882,10 +2871,10 @@ let rec subtype_rec env trace t1 t2 cstrs =
     | (Tconstr(p1, [], _), Tconstr(p2, [], _)) when Path.same p1 p2 ->
         cstrs
     | (Tconstr(p1, tl1, abbrev1), _)
-      when generic_abbrev env p1 && not (has_constr_row env t1) ->
+      when generic_abbrev env p1 && not (has_constr_row' env t1) ->
         subtype_rec env trace (expand_abbrev env t1) t2 cstrs
     | (_, Tconstr(p2, tl2, abbrev2))
-      when generic_abbrev env p2 && not (has_constr_row env t2) ->
+      when generic_abbrev env p2 && not (has_constr_row' env t2) ->
         subtype_rec env trace t1 (expand_abbrev env t2) cstrs
     | (Tconstr(p1, tl1, _), Tconstr(p2, tl2, _)) when Path.same p1 p2 ->
         begin try

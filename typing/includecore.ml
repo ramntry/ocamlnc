@@ -45,9 +45,7 @@ let private_flags priv1 priv2 =
 let is_absrow env ty =
   match ty.desc with
     Tconstr(Pident id, _, _) ->
-      let s = Ident.name id in
-      let l = String.length s in
-      l >= 4 && String.sub s (l-4) 4 = "#row" &&
+      Btype.is_row_name (Ident.name id) &&
       begin match Ctype.expand_head env ty with
         {desc=Tobject _|Tvariant _} -> true
       | _ -> false
