@@ -463,7 +463,7 @@ let rec components_of_module env sub path mty =
             let decl' = Subst.modtype_declaration sub decl in
             c.comp_modtypes <-
               Tbl.add (Ident.name id) (decl', nopos) c.comp_modtypes;
-            env := store_modtype id path decl' !env
+            env := store_modtype id path decl !env
         | Tsig_class(id, decl) ->
             let decl' = Subst.class_declaration sub decl in
             c.comp_classes <-
