@@ -166,12 +166,15 @@ let transl_declaration env (name, sdecl) id =
     let tm =
       match decl.type_manifest with
         None -> assert false
-      | Some t -> t
+      | Some t -> Ctype.expand_head env t
     in
     let rv =
-      match (Ctype.expand_head env tm).desc with
-        Tvariant row -> Btype.row_more row
-      | Tobject (ty, _) -> snd (Ctype.flatten_fields ty)
+      match tm.desc with
+        Tvariant row ->
+	  tm.desc <- Tvariant {row with row_fixed = true};
+	  Btype.row_more row
+      | Tobject (ty, _) ->
+	  snd (Ctype.flatten_fields ty)
       | _ ->
           raise (Error (sdecl.ptype_loc,
                         Bad_fixed_type "is not an object or variant"))

@@ -778,10 +778,15 @@ let rec copy ty =
               (* If the row variable is not generic, we must keep it *)
               let keep = more.level <> generic_level in
               let more' =
-                match more.desc with Tsubst ty -> ty
-                | _ ->
+                match more.desc with
+		  Tsubst ty -> ty
+		| Tconstr _ ->
+		    if keep then save_desc more more.desc;
+		    copy more
+                | Tvar | Tunivar ->
                     save_desc more more.desc;
                     if keep then more else newty more.desc
+		|  _ -> assert false
               in
               (* Register new type first for recursion *)
               more.desc <- Tsubst(newgenty(Ttuple[more';t]));
@@ -931,7 +936,8 @@ let rec copy_sep fixed free bound visited ty =
           (* We shall really check the level on the row variable *)
           let keep = more.desc = Tvar && more.level <> generic_level in
           let more' = copy_rec more in
-          let row = copy_row copy_rec fixed row keep more' in
+	  let fixed' = fixed && (repr more').desc = Tvar in
+          let row = copy_row copy_rec fixed' row keep more' in
           Tvariant row
       | Tpoly (t1, tl) ->
           let tl = List.map repr tl in

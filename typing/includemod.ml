@@ -222,7 +222,14 @@ and signatures env subst sig1 sig2 =
           pair_components new_subst
             ((item1, item2, pos1) :: paired) unpaired rem
         with Not_found ->
-          pair_components subst paired (Missing_field id2 :: unpaired) rem
+	  let unpaired =
+	    let s2 = Ident.name id2 in
+	    let len2 = String.length s2 in
+	    if len2 >= 4 && String.sub s2 (len2-4) 4 = "#row" then
+	      unpaired
+	    else Missing_field id2 :: unpaired
+	  in
+          pair_components subst paired unpaired rem
         end in
   (* Do the pairing and checking, and return the final coercion *)
   simplify_structure_coercion (pair_components subst [] [] sig2)
