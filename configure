@@ -368,7 +368,7 @@ byteccrpath=''
 
 if test $withsharedlibs = "yes"; then
   case "$host" in
-    *-*-linux-gnu|*-*-linux)
+    *-*-linux-gnu|*-*-linux|*-*-freebsd[3-9]*)
       sharedcccompopts="-fPIC"
       mksharedlib="gcc -shared -o"
       bytecclinkopts="$bytecclinkopts -Wl,-E"
