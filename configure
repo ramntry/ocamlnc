@@ -384,7 +384,7 @@ if test $withsharedlibs = "yes"; then
       shared_libraries_supported=true;;
     sparc-sun-solaris2*)
       case "$bytecc" in
-        *gcc*)
+        gcc*)
 	  if sh ./solaris-ld; then :; else
           sharedcccompopts="-fPIC"
 	  mksharedlib="$bytecc -shared -o"
