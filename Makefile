@@ -19,8 +19,8 @@ include stdlib/StdlibModules
 
 CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
 CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib
-COMPFLAGS=-warn-error A $(INCLUDES)
-LINKFLAGS=
+COMPFLAGS=-warn-error A $(INCLUDES) -g
+LINKFLAGS=-g
 CAMLYACC=boot/ocamlyacc
 YACCFLAGS=-v
 CAMLLEX=boot/ocamlrun boot/ocamllex
