@@ -48,7 +48,7 @@ all: libunix.dll unix.cma
 allopt: libunix.lib unix.cmxa
 
 libunix.dll: copy_unix_files io.h $(C_OBJS:.obj=.dobj)
-	$(MKDLL) -o libunix.dll $(C_OBJS:.obj=.dobj) ..\..\byterun\ocamlrun.lib wsock32.lib /link /implib:tmp.lib
+	link /nologo /dll /out:libunix.dll /implib:tmp.lib $(C_OBJS:.obj=.dobj) ..\..\byterun\ocamlrun.lib wsock32.lib
 	rm tmp.*
 
 libunix.lib: copy_unix_files io.h $(C_OBJS:.obj=.sobj)

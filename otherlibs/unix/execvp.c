@@ -17,7 +17,9 @@
 #include "unixsupport.h"
 
 extern char ** cstringvect();
+#ifndef _WIN32
 extern char ** environ;
+#endif
 
 CAMLprim value unix_execvp(value path, value args)
 {

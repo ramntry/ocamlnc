@@ -15,7 +15,9 @@
 #include <mlvalues.h>
 #include <alloc.h>
 
+#ifndef _WIN32
 extern char ** environ;
+#endif
 
 CAMLprim value unix_environment(void)
 {
