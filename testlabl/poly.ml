@@ -2,6 +2,8 @@
 
 open StdLabels;;
 
+type 'a t = { t : 'a }
+;;
 class ['b] ilist l = object
   val l = l
   method add x = {< l = x :: l >}
