@@ -334,7 +334,7 @@ and tree_of_typobject sch ty fi nm =
         tree_of_typfields sch rest sorted_fields in
       let (fields, rest) = pr_fields fi in
       Otyp_object (fields, rest)
-  | Some (p, {desc=Tvar|Tunivar} :: tyl) ->
+  | Some (p, _ :: tyl) ->
       let non_gen = is_non_gen sch ty in
       let args = tree_of_typlist sch tyl in
       Otyp_class (non_gen, tree_of_path p, args)

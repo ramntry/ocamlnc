@@ -1355,8 +1355,8 @@ and unify3 env t1 t1' t2 t2' =
         (* XXX One should do some kind of unification... *)
         begin match (repr t2').desc with
           Tobject (_, {contents = Some (_, va::_)})
-                when (repr va).desc = Tvar ->
-            ()  
+          when let va = repr va in va.desc = Tvar || va.desc = Tunivar ->
+            ()
         | Tobject (_, nm2) ->
             nm2 := !nm1
         | _ ->
@@ -1512,12 +1512,15 @@ and unify_row env row1 row2 =
   begin try
     rm1.desc <- Tlink (more row1 r2);
     rm2.desc <- Tlink (more row2 r1);
-    List.iter (fun (l,f1,f2) -> unify_row_field env f1 f2) pairs
+    List.iter
+      (fun (l,f1,f2) ->
+        unify_row_field env row1.row_fixed row2.row_fixed f1 f2)
+      pairs
   with exn ->
     rm1.desc <- md1; rm2.desc <- md2; raise exn
   end
 
-and unify_row_field env f1 f2 =
+and unify_row_field env fixed1 fixed2 f1 f2 =
   let f1 = row_field_repr f1 and f2 = row_field_repr f2 in
   if f1 == f2 then () else
   match f1, f2 with
@@ -1541,19 +1544,19 @@ and unify_row_field env f1 f2 =
       let f1 = Reither(c1 || c2, tl1', m1 || m2, e)
       and f2 = Reither(c1 || c2, tl2', m1 || m2, e) in
       e1 := Some f1; e2 := Some f2
-  | Reither(false, tl, _, e1), Rpresent(Some t2) ->
-      e1 := Some f2;
-      (try List.iter (fun t1 -> unify env t1 t2) tl
-      with exn -> e1 := None; raise exn)
-  | Rpresent(Some t1), Reither(false, tl, _, e2) ->
-      e2 := Some f1;
-      (try List.iter (unify env t1) tl
-      with exn -> e2 := None; raise exn)
-  | Reither(true, [], _, e1), Rpresent None -> e1 := Some f2
-  | Rpresent None, Reither(true, [], _, e2) -> e2 := Some f1
   | Reither(_, _, false, e1), Rabsent -> e1 := Some f2
   | Rabsent, Reither(_, _, false, e2) -> e2 := Some f1
   | Rabsent, Rabsent -> ()
+  | Reither(false, tl, _, e1), Rpresent(Some t2) when not fixed1 ->
+      e1 := Some f2;
+      (try List.iter (fun t1 -> unify env t1 t2) tl
+      with exn -> e1 := None; raise exn)
+  | Rpresent(Some t1), Reither(false, tl, _, e2) when not fixed2 ->
+      e2 := Some f1;
+      (try List.iter (unify env t1) tl
+      with exn -> e2 := None; raise exn)
+  | Reither(true, [], _, e1), Rpresent None when not fixed1 -> e1 := Some f2
+  | Rpresent None, Reither(true, [], _, e2) when not fixed2 -> e2 := Some f1
   | _ -> raise (Unify [])
 
 let unify env ty1 ty2 =
@@ -2713,7 +2716,7 @@ let rec normalize_type_rec env ty =
         | Some (n, v :: l) ->
             let v' = repr v in
             begin match v'.desc with
-            | Tvar -> if v' != v then nm := Some (n, v' :: l)
+            | Tvar|Tunivar -> if v' != v then nm := Some (n, v' :: l)
             | Tnil -> ty.desc <- Tconstr (n, l, ref Mnil)
             | _ -> nm := None
             end
