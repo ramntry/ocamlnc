@@ -281,6 +281,8 @@ let rec tree_of_typexp sch ty =
 	tree_of_typexp sch ty
     | Tpoly (ty, tyl) ->
         let tyl = List.map repr tyl in
+        let tyl = List.filter is_aliased tyl in
+        if tyl = [] then tree_of_typexp sch ty else
         let tl = List.map name_of_type tyl in
         delayed := tyl @ !delayed;
         Otyp_poly (tl, tree_of_typexp sch ty)
@@ -528,6 +530,12 @@ let tree_of_metho sch concrete csil (lab, kind, ty) =
   end
   else csil
 
+let prepare_class_field ty =
+  let ty = repr ty in
+  match ty.desc with
+    Tpoly(ty, _) -> mark_loops ty
+  | _ -> mark_loops ty
+
 let rec prepare_class_type params = function
   | Tcty_constr (p, tyl, cty) ->
       let sty = Ctype.self_type cty in
@@ -548,7 +556,7 @@ let rec prepare_class_type params = function
       let (fields, _) =
         Ctype.flatten_fields (Ctype.object_fields sign.cty_self)
       in
-      List.iter (fun (_, _, ty) -> mark_loops ty) fields;
+      List.iter (fun (_, _, ty) -> prepare_class_field ty) fields;
       Vars.iter (fun _ (_, ty) -> mark_loops ty) sign.cty_vars
   | Tcty_fun (_, ty, cty) ->
       mark_loops ty;
