@@ -102,6 +102,8 @@ and expression_desc =
   | Pexp_setinstvar of string * expression
   | Pexp_override of (string * expression) list
   | Pexp_letmodule of string * module_expr * expression
+  | Pexp_assert of expression
+  | Pexp_assertfalse
   | Pexp_poly of expression * core_type option
 
 (* Value descriptions *)
@@ -246,7 +248,7 @@ and structure_item_desc =
   | Pstr_open of Longident.t
   | Pstr_class of class_declaration list
   | Pstr_class_type of class_type_declaration list
-
+  | Pstr_include of module_expr
 
 (* Toplevel phrases *)
 

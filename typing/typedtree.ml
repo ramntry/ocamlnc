@@ -74,6 +74,8 @@ and expression_desc =
   | Texp_setinstvar of Path.t * Path.t * expression
   | Texp_override of Path.t * (Path.t * expression) list
   | Texp_letmodule of Ident.t * module_expr * expression
+  | Texp_assert of expression
+  | Texp_assertfalse
 
 and meth =
     Tmeth_name of string
@@ -136,6 +138,7 @@ and structure_item =
   | Tstr_open of Path.t
   | Tstr_class of (Ident.t * int * string list * class_expr) list
   | Tstr_cltype of (Ident.t * cltype_declaration) list
+  | Tstr_include of module_expr * Ident.t list
 
 and module_coercion =
     Tcoerce_none

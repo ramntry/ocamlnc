@@ -270,6 +270,11 @@ and expression i ppf x =
       line i ppf "Pexp_letmodule \"%s\"\n" s;
       module_expr i ppf me;
       expression i ppf e;
+  | Pexp_assert (e) ->
+      line i ppf "Pexp_assert";
+      expression i ppf e;
+  | Pexp_assertfalse ->
+      line i ppf "Pexp_assertfalse";
   | Pexp_poly (e, cto) ->
       line i ppf "Pexp_poly\n";
       expression i ppf e;
@@ -558,6 +563,9 @@ and structure_item i ppf x =
   | Pstr_class_type (l) ->
       line i ppf "Pstr_class_type\n";
       list i class_type_declaration ppf l;
+  | Pstr_include me ->
+      line i ppf "Pstr_include";
+      module_expr i ppf me
 
 and string_x_type_declaration i ppf (s, td) =
   string i ppf s;

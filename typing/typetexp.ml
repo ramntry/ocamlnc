@@ -41,7 +41,7 @@ exception Error of Location.t * error
 
 let type_variables = ref (Tbl.empty : (string, type_expr) Tbl.t)
 let saved_type_variables = ref ([] : (string, type_expr) Tbl.t list)
-let univars        = ref ([] : (string * type_expr) list)
+let univars        = ref ([] : (string * type_expr ref) list)
 let pre_univars    = ref ([] : type_expr list)
 
 let used_variables = ref (Tbl.empty : (string, type_expr) Tbl.t)
@@ -85,7 +85,9 @@ let rec transl_type env policy styp =
   match styp.ptyp_desc with
     Ptyp_any -> Ctype.newvar ()
   | Ptyp_var name ->
-      begin
+      begin try
+	List.assoc name !univars
+      with Not_found ->
         match policy with
           Fixed ->
             begin try
@@ -100,6 +102,14 @@ let rec transl_type env policy styp =
               let v = new_global_var () in
               type_variables := Tbl.add name v !type_variables;
               v
+            end
+        | Univars ->
+            begin try
+              Tbl.find name !type_variables
+            with Not_found ->
+	      let v = new_pre_univar () in
+              type_variables := Tbl.add name v !type_variables;
+	      v
             end
         | Delayed ->
             begin try
@@ -264,27 +274,21 @@ let rec transl_type env policy styp =
       if policy = Fixed && not (Btype.static_row row) then
         raise(Error(styp.ptyp_loc, Unbound_type_variable "[..]"));
       newty (Tvariant row)
-(*
   | Ptyp_poly(vars, st) ->
-      let ty_list = List.map (fun _ -> newty Tunivar) vars in
+      (* aliases are stubs, in case one wants to redefine them *)
+      let ty_list =
+        List.map (fun name -> name, newty (Tlink (newty Tunivar))) vars in
       let old_univars = !univars in
       univars := ty_list @ !univars;
-      begin_def ();
-      List.iter2
-	(fun alias ty ->
+      List.iter
+	(fun (alias, ty) ->
 	  if Tbl.mem alias !type_variables then
             raise(Error(styp.ptyp_loc, Bound_type_variable alias));
-	  if Tbl.mem alias !aliases then
-            raise(Error(styp.ptyp_loc, Bound_type_variable alias));
-	  (* aliases are stubs, in case one wants to redefine them *)
           aliases := Tbl.add alias (newty (Tlink ty)) !aliases)
 	vars ty_list;
-      end_def ();
       let ty = transl_type env policy None st in
-      aliases := List.fold_right Tbl.remove vars !aliases;
       univars := old_univars;
       newty (Tpoly(ty,ty_list))
-*)
 
 and transl_fields env policy =
   function
