@@ -424,6 +424,9 @@ CAMLexport void caml_startup_code(code_t code, asize_t code_size,
 #ifdef THREADED_CODE
   thread_code(start_code, code_size);
 #endif
+  /* Use the builtin table of primitives */
+  prim_table.size = prim_table.capacity = -1;
+  prim_table.contents = (void **) builtin_cprim;
   /* Load the globals */
   global_data = input_val_from_string((value)data, 0);
   /* Ensure that the globals are in the major heap. */
