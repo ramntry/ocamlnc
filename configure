@@ -398,6 +398,14 @@ if test $withsharedlibs = "yes"; then
 	  mksharedlib="/usr/ccs/bin/ld -G -o"
 	  shared_libraries_supported=true;;
       esac;;
+    mips-sgi-irix[56]*)
+      case "$bytecc" in
+        cc*) sharedcccompopts="";;
+        gcc*) sharedcccompopts="-fPIC";;
+      esac
+      mksharedlib="ld -shared -rdata_shared -o"
+      byteccrpath="-Wl,-rpath,"
+      shared_libraries_supported=true;;
   esac
 fi
 
