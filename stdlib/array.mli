@@ -109,11 +109,11 @@ val mapi: f:(int -> 'a -> 'b) -> 'a array -> 'b array
         (* Same as [Array.iter] and [Array.map] respectively, but the
            function is applied to the index of the element as first argument,
            and the element itself as second argument. *)
-val fold_left: f:('a -> 'b -> 'a) -> acc:'a -> 'b array -> 'a
+val fold_left: f:('a -> 'b -> 'a) -> init:'a -> 'b array -> 'a
         (* [Array.fold_left f x a] computes
            [f (... (f (f x a.(0)) a.(1)) ...) a.(n-1)],
            where [n] is the length of the array [a]. *)
-val fold_right: f:('b -> 'a -> 'a) -> 'b array -> acc:'a -> 'a
+val fold_right: f:('b -> 'a -> 'a) -> 'b array -> init:'a -> 'a
         (* [Array.fold_right f a x] computes
            [f a.(0) (f a.(1) ( ... (f a.(n-1) x) ...))],
            where [n] is the length of the array [a]. *)

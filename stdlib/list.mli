@@ -66,10 +66,10 @@ val rev_map : f:('a -> 'b) -> 'a list -> 'b list
         (* [List.rev_map f l] gives the same result as
            [List.rev (List.map f l)], but is tail-recursive and
            more efficient. *)
-val fold_left : f:('a -> 'b -> 'a) -> acc:'a -> 'b list -> 'a
+val fold_left : f:('a -> 'b -> 'a) -> init:'a -> 'b list -> 'a
         (* [List.fold_left f a [b1; ...; bn]] is
            [f (... (f (f a b1) b2) ...) bn]. *)
-val fold_right : f:('a -> 'b -> 'b) -> 'a list -> acc:'b -> 'b
+val fold_right : f:('a -> 'b -> 'b) -> 'a list -> init:'b -> 'b
         (* [List.fold_right f [a1; ...; an] b] is
            [f a1 (f a2 (... (f an b) ...))].  Not tail-recursive. *)
 
@@ -90,13 +90,13 @@ val rev_map2 : f:('a -> 'b -> 'c) -> 'a list -> 'b list -> 'c list
            [List.rev (List.map2 f l)], but is tail-recursive and
            more efficient. *)
 val fold_left2 :
-        f:('a -> 'b -> 'c -> 'a) -> acc:'a -> 'b list -> 'c list -> 'a
+        f:('a -> 'b -> 'c -> 'a) -> init:'a -> 'b list -> 'c list -> 'a
         (* [List.fold_left2 f a [b1; ...; bn] [c1; ...; cn]] is
            [f (... (f (f a b1 c1) b2 c2) ...) bn cn].
            Raise [Invalid_argument] if the two lists have
            different lengths. *)
 val fold_right2 :
-        f:('a -> 'b -> 'c -> 'c) -> 'a list -> 'b list -> acc:'c -> 'c
+        f:('a -> 'b -> 'c -> 'c) -> 'a list -> 'b list -> init:'c -> 'c
         (* [List.fold_right2 f [a1; ...; an] [b1; ...; bn] c] is
            [f a1 b1 (f a2 b2 (... (f an bn c) ...))].
            Raise [Invalid_argument] if the two lists have
