@@ -1,9 +1,11 @@
 (* my own tests *)
-
 open StdLabels;;
 
-type 'a t = { t : 'a }
-;;
+type 'a t = { t : 'a };;
+type 'a fold = { fold : 'b. f:('b -> 'a -> 'b) -> init:'b -> 'b };;
+let f l = { fold = List.fold_left l };;
+(f [1;2;3]).fold ~f:(+) ~init:0;;
+
 class ['b] ilist l = object
   val l = l
   method add x = {< l = x :: l >}
@@ -96,6 +98,10 @@ class vari = object
   method m = function `a -> 1 | _ -> 0
 end
 ;;
+class vari = object
+  method m : 'a. ([< `a|`b|`c] as 'a) -> int = function `a -> 1 | _ -> 0
+end
+;;
 module V =
   struct
     type v = [`a | `b | `c]
@@ -107,6 +113,23 @@ class varj = object
   method m = V.m
 end
 ;;
+
+module type T = sig
+  class vari : object method m : 'a. ([< `a | `b | `c] as 'a) -> int end
+end
+;;
+module M0 = struct
+  class vari = object
+    method virtual m : 'a. ([< `a|`b|`c] as 'a) -> int
+    method m = function `a -> 1 | _ -> 0
+  end
+end
+;;
+module M : T = M0
+;;
+let v = new M.vari;;
+v#m `a;;
+
 class point ~x ~y = object
   val x : int = x
   val y : int = y
