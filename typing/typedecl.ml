@@ -211,6 +211,9 @@ let rec check_constraints_rec env loc visited ty =
       if not (List.for_all2 (Ctype.moregeneral env false) args' args) then
         raise (Error(loc, Constraint_failed (ty, ty')));
       List.iter (check_constraints_rec env loc visited) args
+  | Tpoly (ty, tl) ->
+      let _, ty = Ctype.instance_poly false tl ty in
+      check_constraints_rec env loc visited ty
   | _ ->
       Btype.iter_type_expr (check_constraints_rec env loc visited) ty
   end

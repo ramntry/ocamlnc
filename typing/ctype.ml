@@ -1757,6 +1757,8 @@ let moregen_occur env level ty =
   with Occur ->
     unmark_type ty; raise (Unify [])
   end;
+  (* also check for free univars *)
+  occur_univar ty;
   update_level env level ty
 
 let rec moregen inst_nongen type_pairs env t1 t2 =
