@@ -696,7 +696,7 @@ let rec copy ty =
               more.desc <- ty.desc;
               (* Return a new copy *)
               let more' = if keep then more else newvar () in
-              Tvariant (copy_row copy row keep more')
+              Tvariant (copy_row copy true row keep more')
           end
       | _ -> copy_type_desc copy desc
       end;
@@ -815,7 +815,7 @@ let delayed_copy = ref []
 
 (* Copy without sharing until there are no free univars left *)
 (* all free univars must be included in [visited]            *)
-let rec copy_sep free bound visited ty =
+let rec copy_sep fixed free bound visited ty =
   let ty = repr ty in
   let univars = free ty in
   if TypeSet.is_empty univars then 
@@ -837,6 +837,7 @@ let rec copy_sep free bound visited ty =
 	Tarrow _ | Ttuple _ | Tvariant _ | Tconstr _ | Tobject _ ->
           (ty,(t,bound)) :: visited
       |	_ -> visited in
+    let copy_rec = copy_sep fixed free bound visited in
     t.desc <-
       begin match ty.desc with
       | Tconstr (p, tl, _) ->
@@ -844,7 +845,7 @@ let rec copy_sep free bound visited ty =
             Some ty when repr ty != t ->
               Tlink ty
           | _ ->
-              Tconstr (p, List.map (copy_sep free bound visited) tl,
+              Tconstr (p, List.map copy_rec tl,
                        ref (match !(!abbreviations) with
                               Mcons _ -> Mlink !abbreviations
                             | abbrev  -> abbrev))
@@ -854,8 +855,8 @@ let rec copy_sep free bound visited ty =
           let more = repr row.row_more in
           (* We shall really check the level on the row variable *)
           let keep = more.desc = Tvar && more.level <> generic_level in
-          let more' = copy_sep free bound visited more in
-          let row = copy_row (copy_sep free bound visited) row keep more' in
+          let more' = copy_rec more in
+          let row = copy_row copy_rec fixed row keep more' in
           Tvariant row
       |	Tpoly (t1, tl) ->
 	  let tl = List.map repr tl in
@@ -863,17 +864,17 @@ let rec copy_sep free bound visited ty =
 	  let bound = tl @ bound in
 	  let visited =
 	    List.map2 (fun ty t -> ty,(t,bound)) tl tl' @ visited in
-	  Tpoly (copy_sep free bound visited t1, tl')
-      | _ -> copy_type_desc (copy_sep free bound visited) ty.desc
+	  Tpoly (copy_rec t1, tl')
+      | _ -> copy_type_desc copy_rec ty.desc
       end;
     t
   end
 
-let instance_poly univars sch =
+let instance_poly fixed univars sch =
   let vars = List.map (fun _ -> newvar ()) univars in
   let pairs = List.map2 (fun u v -> repr u, (v, [])) univars vars in
   delayed_copy := [];
-  let ty = copy_sep (compute_univars sch) [] pairs sch in
+  let ty = copy_sep fixed (compute_univars sch) [] pairs sch in
   List.iter Lazy.force !delayed_copy;
   delayed_copy := [];
   cleanup_types ();
@@ -1465,6 +1466,7 @@ and unify_row env row1 row2 =
             (List.map (fun (l,_) -> (hash_variant l, l)) row1.row_fields)
             (List.map fst r2));
   let more = newty2 (min rm1.level rm2.level) Tvar
+  and fixed = row1.row_fixed || row2.row_fixed
   and closed = row1.row_closed || row2.row_closed in
   let keep switch =
     List.for_all
@@ -1493,18 +1495,16 @@ and unify_row env row1 row2 =
   in
   let bound = row1.row_bound @ row2.row_bound in
   let row0 = {row_fields = []; row_more = more; row_bound = bound;
-              row_closed = closed; row_name = name} in
+              row_closed = closed; row_fixed = fixed; row_name = name} in
   let more row rest =
     let rest =
       if closed then
         filter_row_fields row.row_closed rest
       else rest in
-    if rest <> [] && row.row_closed then raise (Unify []);
-    let ty =
-      if rest = [] && row.row_closed = closed && name == row.row_name
-      && List.length row.row_bound = List.length bound
-      then more
-      else newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
+    if rest <> [] && (row.row_closed || row.row_fixed)
+    || closed && row.row_fixed && not row.row_closed
+    then raise (Unify []);
+    let ty = newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
     update_level env (repr row.row_more).level ty;
     ty
   in
@@ -2443,13 +2443,9 @@ let rec build_subtype env visited loops posi onlyloop t =
       in
       if posi && fields = [] then (t, false) else
       let row =
-        if posi then
-          {row_fields = List.map fst fields; row_more = newvar();
-           row_bound = !bound; row_closed = true;
-           row_name = if List.exists snd fields then None else row.row_name }
-        else
-          {row_fields = List.map fst fields; row_more = newvar ();
-           row_bound = !bound; row_closed = false; row_name = None}
+        { row_fields = List.map fst fields; row_more = newvar();
+          row_bound = !bound; row_closed = posi; row_fixed = false;
+          row_name = if List.exists snd fields then None else row.row_name }
       in
       (newty (Tvariant row), true)
   | Tobject (t1, _) when opened_object t1 ->
@@ -2800,7 +2796,8 @@ let rec nondep_type_rec env id ty =
               more.desc <- ty.desc;
               let more' = if static then newgenvar () else more in
               (* Return a new copy *)
-              let row = copy_row (nondep_type_rec env id) row true more' in
+              let row =
+                copy_row (nondep_type_rec env id) true row true more' in
               match row.row_name with
                 Some (p, tl) when Path.isfree id p ->
                   Tvariant {row with row_name = None}

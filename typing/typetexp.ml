@@ -239,6 +239,7 @@ let rec transl_type env policy rowvar styp =
               raise(Error(styp.ptyp_loc, Present_has_no_type l)))
             present;
           let bound = ref row.row_bound in
+          let fixed = rowvar <> None || policy = Univars in
           let fields =
             List.map
               (fun (l,f) -> l,
@@ -246,9 +247,9 @@ let rec transl_type env policy rowvar styp =
                 match Btype.row_field_repr f with
                 | Rpresent (Some ty) ->
                     bound := ty :: !bound;
-                    Reither(false, [ty], false, ref None)
+                    Reither(false, [ty], fixed, ref None)
                 | Rpresent None ->
-                    Reither (true, [], false, ref None)
+                    Reither (true, [], fixed, ref None)
                 | _ -> f)
               row.row_fields
           in
@@ -256,6 +257,7 @@ let rec transl_type env policy rowvar styp =
                       row_fields = fields;
                       row_bound = !bound;
                       row_name = Some (path, args);
+                      row_fixed = fixed;
                       row_more = match rowvar with Some v -> v
                       | None ->
 	                  if policy = Univars then new_pre_univar ()
@@ -298,9 +300,11 @@ let rec transl_type env policy rowvar styp =
         ty
   | Ptyp_variant(fields, closed, present) ->
       let bound = ref [] and name = ref None in
+      let fixed = rowvar <> None || policy = Univars in
       let mkfield l f =
         newty (Tvariant {row_fields=[l,f]; row_more=newty Tnil;
-                         row_bound=[]; row_closed=true; row_name=None}) in
+                         row_bound=[]; row_closed=true;
+                         row_fixed=fixed; row_name=None}) in
       let add_typed_field loc l f fields =
         try
           let f' = List.assoc l fields in
@@ -317,7 +321,7 @@ let rec transl_type env policy rowvar styp =
               Some present when not (List.mem l present) ->
                 let tl = List.map (transl_type env policy None) stl in
                 bound := tl @ !bound;
-                Reither(c, tl, false, ref None)
+                Reither(c, tl, fixed, ref None)
             | _ ->
                 if List.length stl > 1 || c && stl <> [] then
                   raise(Error(styp.ptyp_loc, Present_has_conjunction l));
@@ -349,9 +353,9 @@ let rec transl_type env policy rowvar styp =
                     begin match f with
                       Rpresent(Some ty) ->
                         bound := ty :: !bound;
-                        Reither(false, [ty], false, ref None)
+                        Reither(false, [ty], fixed, ref None)
                     | Rpresent None ->
-                        Reither(true, [], false, ref None)
+                        Reither(true, [], fixed, ref None)
                     | _ ->
                         assert false
                     end
@@ -382,7 +386,8 @@ let rec transl_type env policy rowvar styp =
       end;
       let row =
         { row_fields = List.rev fields; row_more = newvar ();
-          row_bound = !bound; row_closed = closed; row_name = !name } in
+          row_bound = !bound; row_closed = closed;
+          row_fixed = fixed; row_name = !name } in
       let static = Btype.static_row row in
       let row =
         { row with row_more =

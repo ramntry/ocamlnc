@@ -101,7 +101,7 @@ let rec typexp s ty =
               more.desc <- ty.desc;
               let more' = if static then newgenvar () else more in
               (* Return a new copy *)
-              let row = copy_row (typexp s) row true more' in
+              let row = copy_row (typexp s) true row true more' in
               match row.row_name with
                 Some (p, tl) ->
                   Tvariant {row with row_name = Some (type_path s p, tl)}

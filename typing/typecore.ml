@@ -175,7 +175,8 @@ let rec build_as_type env p =
   | Tpat_variant(l, p', _) ->
       let ty = may_map (build_as_type env) p' in
       newty (Tvariant{row_fields=[l, Rpresent ty]; row_more=newvar();
-                      row_bound=[]; row_name=None; row_closed=false})
+                      row_bound=[]; row_name=None;
+                      row_fixed=false; row_closed=false})
   | Tpat_record lpl ->
       let lbl = fst(List.hd lpl) in
       let ty = newvar () in
@@ -240,7 +241,7 @@ let build_or_pat env loc lid =
       ([],[]) fields in
   let row =
     { row_fields = List.rev fields; row_more = newvar(); row_bound = !bound;
-      row_closed = false; row_name = Some (path, tyl) }
+      row_closed = false; row_fixed = false; row_name = Some (path, tyl) }
   in
   let ty = newty (Tvariant row) in
   let pats =
@@ -324,6 +325,7 @@ let rec type_pat env sp =
                   row_bound = arg_type;
                   row_closed = false;
                   row_more = newvar ();
+                  row_fixed = false;
                   row_name = None } in
       { pat_desc = Tpat_variant(l, arg, row);
         pat_loc = sp.ppat_loc;
@@ -468,7 +470,7 @@ let check_unused_variant pat =
           begin match opat with None -> assert false
           | Some pat -> List.iter (unify_pat pat.pat_env pat) (ty::tl)
           end
-      | Reither (c, l, true, e) ->
+      | Reither (c, l, true, e) when not row.row_fixed ->
           e := Some (Reither (c, [], false, ref None))
       | _ -> ()
       end
@@ -767,6 +769,7 @@ let rec type_exp env sexp =
                                   row_more = newvar ();
                                   row_bound = [];
                                   row_closed = false;
+                                  row_fixed = false;
                                   row_name = None});
         exp_env = env }
   | Pexp_record(lid_sexp_list, opt_sexp) ->
@@ -1016,7 +1019,7 @@ let rec type_exp env sexp =
               ty
           | {desc = Tpoly (ty, tl)} ->
               let tl = List.map repr tl in
-              snd (instance_poly tl ty)
+              snd (instance_poly false tl ty)
           |     {desc = Tvar} as ty ->
               let ty' = newvar () in
               unify env ty (newty(Tpoly(ty',[])));
@@ -1469,18 +1472,22 @@ and type_expect ?in_function env sexp ty_expected =
             if sty <> None then set_type ty;
             (* One more level to generalize locally *)
             begin_def ();
-            let tl',ty'' = instance_poly tl ty' in
+            let tl',ty'' = instance_poly true tl ty' in
             let exp = type_expect env sbody ty'' in
             end_def ();
             List.iter
               (fun t ->
-                let t = repr t in
+                let t =
+                  match repr t with
+                  | {desc=Tvariant row} -> row_more row
+                  | t -> t
+                in
                 generalize t;
-                if t.desc <> Tvar or t.level <> generic_level then
-                  raise (Error(sexp.pexp_loc,
-                               Less_general_method
-                                 [exp.exp_type, full_expand env exp.exp_type;
-                                  ty_expected, full_expand env ty_expected ]));
+                if t.desc <> Tvar or t.level <> generic_level then raise
+                    (Error
+                       (sexp.pexp_loc, Less_general_method
+                          [repr exp.exp_type, full_expand env exp.exp_type;
+                           repr ty_expected, full_expand env ty_expected ]));
                 t.desc <- Tunivar)
               tl';
             { exp with exp_type = ty }

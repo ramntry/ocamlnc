@@ -42,6 +42,7 @@ and row_desc =
       row_more: type_expr;
       row_bound: type_expr list;
       row_closed: bool;
+      row_fixed: bool;
       row_name: (Path.t * type_expr list) option }
 
 and row_field =

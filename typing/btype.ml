@@ -143,14 +143,15 @@ let iter_type_expr f ty =
   | Tunivar             -> ()
   | Tpoly (ty, tyl)     -> f ty; List.iter f tyl
 
-let copy_row f row keep more =
+let copy_row f fixed row keep more =
   let fields = List.map
       (fun (l, fi) -> l,
         match row_field_repr fi with
         | Rpresent(Some ty) -> Rpresent(Some(f ty))
         | Reither(c, tl, m, e) ->
             let e = if keep then e else ref None in
-            Reither(c, List.map f tl, m, e)
+            let m = if row.row_fixed then fixed else m in
+            Reither(c, List.map f tl, m , e)
         | _ -> fi)
       row.row_fields in
   let name =
@@ -158,6 +159,7 @@ let copy_row f row keep more =
     | Some (path, tl) -> Some (path, List.map f tl) in
   { row_fields = fields; row_more = more;
     row_bound = List.map f row.row_bound;
+    row_fixed = row.row_fixed && fixed;
     row_closed = row.row_closed; row_name = name; }
 
 let rec copy_kind = function
@@ -179,7 +181,7 @@ let rec copy_type_desc f = function
   | Tobject (ty, _)     -> Tobject (f ty, ref None)
   | Tvariant row        ->
       let row = row_repr row in
-      Tvariant (copy_row f row false (f row.row_more))
+      Tvariant (copy_row f true row false (f row.row_more))
   | Tfield (p, k, ty1, ty2) -> Tfield (p, copy_kind k, f ty1, f ty2)
   | Tnil                -> Tnil
   | Tlink ty            -> copy_type_desc f ty.desc
