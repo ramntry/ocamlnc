@@ -58,7 +58,7 @@ external nextkey : t -> string = "caml_dbm_nextkey"
            [firstkey db] returns the first key, and repeated calls
            to [nextkey db] return the remaining keys. [Not_found] is raised
            when all keys have been enumerated. *)
-val iter : fun:(key:string -> data:string -> 'a) -> t -> unit
+val iter : f:(key:string -> data:string -> 'a) -> t -> unit
         (* [iter f db] applies [f] to each ([key], [data]) pair in
            the database [db]. [f] receives [key] as first argument
            and [data] as second argument. *)
