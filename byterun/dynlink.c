@@ -150,7 +150,7 @@ void build_primitive_table(char * lib_path,
     c_primitive prim = lookup_primitive(p);
     if (prim == NULL)
       fatal_error_arg("Fatal error: unknown C primitive `%s'\n", p);
-    ext_table_add(&prim_table, prim);
+    ext_table_add(&prim_table, (void *) prim);
   }
   /* Clean up */
   stat_free(tofree1);
