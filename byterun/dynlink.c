@@ -114,7 +114,7 @@ static void open_shared_lib(char * name)
   handle = caml_dlopen(realname);
   if (handle == NULL)
     fatal_error_arg2("Fatal error: cannot load shared library %s\n", name,
-                     "(Reason: %s.)\n", caml_dlerror());
+                     "Reason: %s\n", caml_dlerror());
   ext_table_add(&shared_libs, handle);
   stat_free(realname);
 }

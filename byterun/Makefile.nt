@@ -15,7 +15,7 @@
 !include ..\config\Makefile.nt
 
 CC=$(BYTECC)
-CFLAGS=$(BYTECCCOMPOPTS) -DIN_OCAMLRUN
+CFLAGS=-DIN_OCAMLRUN
 
 OBJS=interp.obj misc.obj stacks.obj fix_code.obj startup.obj main.obj \
   fail.obj signals.obj freelist.obj major_gc.obj minor_gc.obj \
@@ -32,7 +32,7 @@ PRIMS=alloc.c array.c compare.c extern.c floats.c gc_ctrl.c hash.c \
 
 PUBLIC_INCLUDES=mlvalues.h alloc.h misc.h callback.h fail.h custom.h
 
-all: ocamlrun.exe
+all: ocamlrun.exe libcamlrun.lib
 	if not exist ..\stdlib\caml mkdir ..\stdlib\caml
 	cp $(PUBLIC_INCLUDES) ..\stdlib\caml
 	sed -e "/#include .*\/m.h/r ..\config\m.h" \
@@ -42,12 +42,15 @@ all: ocamlrun.exe
 	    -e "/#define Alloc_small/,/^}/d" \
 	    -e "/Modify/,/^}/d" memory.h > ..\stdlib\caml\memory.h
 
-ocamlrun.exe: libcamlrun.lib prims.obj
-	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrun.exe prims.obj main.obj libcamlrun.lib $(CCLIBS)
+ocamlrun.exe: $(OBJS:.obj=.dobj) prims.dobj
+	link /nologo /out:ocamlrun.exe $(OBJS:.obj=.dobj) prims.dobj $(CCLIBS)
+
+libcamlrun.lib: $(OBJS:.obj=.sobj)
+	$(MKLIB)libcamlrun.lib $(OBJS:.obj=.sobj)
 
 install:
 	cp ocamlrun.exe $(BINDIR)\ocamlrun.exe
-	cp libcamlrun.dll $(LIBDIR)\libcamlrun.dll
+	cp ocamlrun.lib $(LIBDIR)\ocamlrun.lib
 	cp libcamlrun.lib $(LIBDIR)\libcamlrun.lib
 	if not exist $(LIBDIR)\caml mkdir $(LIBDIR)\caml
 	cp $(PUBLIC_INCLUDES) $(LIBDIR)\caml
@@ -58,11 +61,8 @@ install:
 	    -e "/#define Alloc_small/,/^}/d" \
 	    -e "/Modify/,/^}/d" memory.h > $(LIBDIR)\caml\memory.h
 
-libcamlrun.lib: $(OBJS)
-	$(MKLIB)libcamlrun.lib $(OBJS)
-
 clean:
-	rm -f ocamlrun.exe *.obj *.lib
+	rm -f *.exe *.dobj *.sobj *.lib
 	rm -f primitives prims.c opnames.h jumptbl.h
 
 primitives : $(PRIMS)
@@ -91,7 +91,17 @@ jumptbl.h : instruct.h
 	sed -n -e "/^  /s/ \([A-Z]\)/ \&\&lbl_\1/gp" \
 	       -e "/^}/q" instruct.h > jumptbl.h
 
+.SUFFIXES: .dobj .sobj
+
+.c.dobj:
+	$(CC) $(CFLAGS) $(DLLCCCOMPOPTS) -c $<
+	mv $*.obj $*.dobj
+.c.sobj:
+	$(CC) $(CFLAGS) $(BYTECCCOMPOPTS) -c $<
+	mv $*.obj $*.sobj
+
 depend:
-	sed -e "s/\.o/.obj/g" .depend > .depend.nt
+	sed -e "s/\.o/.dobj/g" .depend > .depend.nt
+	sed -e "s/\.o/.sobj/g" .depend >> .depend.nt
 
 !include .depend.nt

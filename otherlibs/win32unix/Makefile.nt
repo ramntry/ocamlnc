@@ -43,7 +43,7 @@ C_OBJS=$(WIN_OBJS) $(UNIX_OBJS)
 CAML_OBJS=unix.cmo
 CAMLOPT_OBJS=unix.cmx
 
-all: libunix.dll unix.cma
+all: libunix.dll libunix.lib unix.cma
 
 allopt: libunix.lib unix.cmxa
 
@@ -75,11 +75,12 @@ partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.lib *.obj
+	rm -f *.lib *.dll *.exp *.sobj *.dobj
 	rm -f $(UNIX_FILES)
 	rm -f io.h
 
 install:
+	cp libunix.dll $(LIBDIR)/libunix.dll
 	cp libunix.lib $(LIBDIR)/libunix.lib
 	cp unix.cmi unix.cma $(LIBDIR)
 
@@ -98,16 +99,14 @@ installopt:
 	$(CAMLOPT) -c $(COMPFLAGS) $<
 
 .c.dobj:
-	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
+	$(BYTECC) $(DLLCCCOMPOPTS) $(CFLAGS) -c $<
 	mv $*.obj $*.dobj
 
 .c.sobj:
-	$(NATIVECC) $(NATIVECCCOMPOPTS) -DNATIVE_CODE $(CFLAGS) -c $<
+	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
 	mv $*.obj $*.sobj
 
 depend:
-	gcc -MM -I../../byterun *.c > .depend
-	..\..\boot\ocamlrun ../../tools/ocamldep *.mli *.ml >> .depend
 
 unix.cmi: unix.mli
 unix.cmo: unix.cmi

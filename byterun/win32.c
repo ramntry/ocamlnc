@@ -70,10 +70,12 @@ char * search_in_path(struct ext_table * path, char * name)
     strcpy(fullname, (char *)(path->contents[i]));
     strcat(fullname, "\\");
     strcat(fullname, name);
+    gc_message(0x100, "Searching %s\n", (unsigned long) fullname);
     if (stat(fullname, &st) == 0 && S_ISREG(st.st_mode)) return fullname;
     stat_free(fullname);
   }
  not_found:
+  gc_message(0x100, "%s not found in search path\n", (unsigned long) name);
   fullname = stat_alloc(strlen(name) + 1);
   strcpy(fullname, name);
   return fullname;

@@ -206,6 +206,7 @@ install: installbyt installopt
 
 installbyt:
 	cd byterun & $(MAKEREC) install
+	echo $(LIBDIR)> $(LIBDIR)\ld.conf
 	cp ocamlc $(BINDIR)\ocamlc.exe
 	cp ocaml $(BINDIR)\ocaml.exe
 	cd stdlib & $(MAKEREC) install
