@@ -418,7 +418,7 @@ let build_custom_runtime prim_name exec_name =
                       !load_path))
           (String.concat " "
             (List.map (fun dir -> if dir = "" then "" else
-                                  Config.bytecomp_c_rpath ^ " " ^ dir)
+                                  Config.bytecomp_c_rpath ^ dir)
                       (!Clflags.dllpaths @
                        Dll.ld_library_path_contents() @
                        Dll.ld_conf_contents())))

@@ -246,7 +246,7 @@ let call_linker file_list startup_file =
                         !load_path))
             (String.concat " "
               (List.map (fun dir -> if dir = "" then "" else
-                                    Config.native_c_rpath ^ " " ^ dir)
+                                    Config.native_c_rpath ^ dir)
                         (!Clflags.dllpaths @
                          Dll.ld_library_path_contents() @
                          Dll.ld_conf_contents())))
