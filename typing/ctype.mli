@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(* ctype.mli,v 1.38.14.5 2002/02/15 14:26:04 garrigue Exp *)
 
 (* Operations on core types *)
 
@@ -86,6 +86,8 @@ val iterative_generalization: int -> type_expr list -> type_expr list
 val generalize_expansive: type_expr -> unit
         (* Generalize the structure of a type, making variables
            non-generalizable *)
+val generalize_global: type_expr -> unit
+        (* Same, but variables are lowered to !global_level *)
 val generalize_structure: type_expr -> unit
         (* Same, but variables are only lowered to !current_level *)
 val generalize_spine: type_expr -> unit

@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(* ctype.ml,v 1.115.2.13 2002/02/15 14:26:04 garrigue Exp *)
 
 (* Operations on core types *)
 
@@ -532,6 +532,7 @@ let rec generalize_structure var_level ty =
   end
 
 let generalize_expansive ty = generalize_structure !nongen_level ty
+let generalize_global ty = generalize_structure !global_level ty
 let generalize_structure ty = generalize_structure !current_level ty
 
 (* Generalize the spine of a function, if the level >= !current_level *)
@@ -676,7 +677,6 @@ let rec copy ty =
   let ty = repr ty in
   match ty.desc with
     Tsubst ty -> ty
-  | Tunivar -> ty
   | _ ->
     if ty.level <> generic_level then ty else
     let desc = ty.desc in
@@ -709,19 +709,23 @@ let rec copy ty =
           let more = repr row.row_more in
           (* We must substitute in a subtle way *)
           begin match more.desc with
-            Tsubst ty2 ->
+            Tsubst ({desc=Tvariant _} as ty2) ->
               (* This variant type has been already copied *)
               ty.desc <- Tsubst ty2; (* avoid Tlink in the new type *)
               Tlink ty2
           | _ ->
               (* If the row variable is not generic, we must keep it *)
               let keep = more.level <> generic_level in
-              let not_var = more.desc <> Tvar in
+              let desc = more.desc in
               (* Register new type first for recursion *)
               save_desc more more.desc;
               more.desc <- ty.desc;
               (* Return a new copy *)
-              let more' = if keep || not_var then more else newvar () in
+              let more' =
+                if keep then more else
+                match desc with Tsubst ty -> ty
+                | _ -> newty desc
+              in
               Tvariant (copy_row copy true row keep more')
           end
       | _ -> copy_type_desc copy desc

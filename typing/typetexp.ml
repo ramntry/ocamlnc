@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(* typetexp.ml,v 1.34.4.9 2002/01/07 08:39:16 garrigue Exp *)
 
 (* Typechecking of type expressions for the core language *)
 
@@ -114,13 +114,13 @@ let rec transl_type env policy rowvar styp =
         match policy with
           Fixed ->
             begin try
-              Tbl.find name !type_variables
+              instance (Tbl.find name !type_variables)
             with Not_found ->
               raise(Error(styp.ptyp_loc, Unbound_type_variable ("'" ^ name)))
             end
         | Extensible ->
             begin try
-              Tbl.find name !type_variables
+              instance (Tbl.find name !type_variables)
             with Not_found ->
               let v = new_global_var () in
               type_variables := Tbl.add name v !type_variables;
@@ -128,7 +128,7 @@ let rec transl_type env policy rowvar styp =
             end
         | Univars ->
             begin try
-              Tbl.find name !type_variables
+              instance (Tbl.find name !type_variables)
             with Not_found ->
 	      let v = new_pre_univar () in
               type_variables := Tbl.add name v !type_variables;
@@ -138,7 +138,7 @@ let rec transl_type env policy rowvar styp =
             begin try
               Tbl.find name !used_variables
             with Not_found -> try
-              let v1 = Tbl.find name !type_variables in
+              let v1 = instance (Tbl.find name !type_variables) in
               let v2 = new_global_var () in
               used_variables := Tbl.add name v2 !used_variables;
               bindings := (styp.ptyp_loc, v1, v2)::!bindings;
@@ -291,20 +291,28 @@ let rec transl_type env policy rowvar styp =
             ty
         | _ ->
             raise(Error(styp.ptyp_loc, Bound_type_variable alias))
-      else
-        let ty' =
-          try Tbl.find alias !type_variables
-          with Not_found ->
-            let t = new_global_var () in
-            type_variables := Tbl.add alias t !type_variables;
-            t
-        in
-        let ty = transl_type env policy None st in
-        begin try unify_var env ty' ty with Unify trace ->
-          let trace = swap_list trace in
-          raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
-        end;
-        ty
+      else begin
+        try
+          let t = instance (Tbl.find alias !type_variables) in
+          let ty = transl_type env policy None st in
+          begin try unify_var env t ty with Unify trace ->
+            let trace = swap_list trace in
+            raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
+          end;
+          ty
+        with Not_found ->
+          begin_def ();
+          let t = newvar () in
+          type_variables := Tbl.add alias t !type_variables;
+          let ty = transl_type env policy None st in
+          begin try unify_var env t ty with Unify trace ->
+            let trace = swap_list trace in
+            raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
+          end;
+          end_def ();
+          generalize_global t;
+          instance t
+      end
   | Ptyp_variant(fields, closed, present) ->
       let bound = ref [] and name = ref None in
       let fixed = rowvar <> None || policy = Univars in
