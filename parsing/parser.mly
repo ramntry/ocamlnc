@@ -1197,8 +1197,8 @@ core_type2:
 simple_core_type:
     simple_core_type2
       { $1 }
-  | LPAREN core_type RPAREN
-      { $2 }
+  | LPAREN core_type_comma_list RPAREN
+      { match $2 with [sty] -> sty | _ -> raise Parse_error }
 ;
 simple_core_type2:
     QUOTE ident

@@ -1003,11 +1003,13 @@ let rec filter_trace = function
       else (t1, t1') :: (t2, t2') :: rem'
   | _ -> []
 
-(* Hide variant name, to force printing the expanded type *)
+(* Hide variant name and var, to force printing the expanded type *)
 let hide_variant_name t =
   match repr t with
   | {desc = Tvariant row} as t when (row_repr row).row_name <> None ->
-      newty2 t.level (Tvariant {(row_repr row) with row_name = None})
+      newty2 t.level
+        (Tvariant {(row_repr row) with row_name = None;
+                   row_more = newty2 (row_more row).level Tvar})
   | _ -> t
 
 let prepare_expansion (t, t') =
