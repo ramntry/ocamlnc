@@ -120,7 +120,7 @@ let delayed = ref ([] : type_expr list)
 let is_aliased ty = List.memq (proxy ty) !aliased
 let add_alias ty =
   let px = proxy ty in
-  if not (is_aliased px) then aliased := ty :: !aliased
+  if not (is_aliased px) then aliased := px :: !aliased
 
 let namable_row row =
   row.row_name <> None &&
@@ -289,6 +289,7 @@ let rec tree_of_typexp sch ty =
     | Tpoly (ty, []) ->
 	tree_of_typexp sch ty
     | Tpoly (ty, tyl) ->
+        let tyl = List.map repr tyl in
         let tl = List.map name_of_type tyl in
         delayed := tyl @ !delayed;
         Otyp_poly (tl, tree_of_typexp sch ty)
@@ -941,7 +942,7 @@ let tree_of_cltype_declaration id cl =
   List.iter mark_loops params;
 
   List.iter check_name_of_type (List.map proxy params);
-  if is_aliased sty then check_name_of_type sty;
+  if is_aliased sty then check_name_of_type (proxy sty);
 
   let sign = Ctype.signature_of_class_type cl.clty_type in
 

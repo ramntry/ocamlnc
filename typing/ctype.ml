@@ -652,6 +652,7 @@ let rec copy ty =
   let ty = repr ty in
   match ty.desc with
     Tsubst ty -> ty
+  | Tunivar -> ty
   | _ ->
     if ty.level <> generic_level then ty else
     let desc = ty.desc in
@@ -691,11 +692,12 @@ let rec copy ty =
           | _ ->
               (* If the row variable is not generic, we must keep it *)
               let keep = more.level <> generic_level in
+              let not_var = more.desc <> Tvar in
               (* Register new type first for recursion *)
               save_desc more more.desc;
               more.desc <- ty.desc;
               (* Return a new copy *)
-              let more' = if keep then more else newvar () in
+              let more' = if keep || not_var then more else newvar () in
               Tvariant (copy_row copy true row keep more')
           end
       | _ -> copy_type_desc copy desc
@@ -1515,10 +1517,12 @@ and unify_row env row1 row2 =
     || closed && row.row_fixed && not row.row_closed
     then raise (Unify []);
     let rm = row_more row in
-    if row.row_fixed && row0.row_more == rm then () else
-    let ty = newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
-    update_level env rm.level ty;
-    rm.desc <- Tlink ty
+    if row.row_fixed then
+      if row0.row_more == rm then () else rm.desc <- Tlink row0.row_more
+    else
+      let ty = newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
+      update_level env rm.level ty;
+      rm.desc <- Tlink ty
   in
   let md1 = rm1.desc and md2 = rm2.desc in
   begin try
@@ -2763,7 +2767,7 @@ let normalize_type env ty =
 let rec nondep_type_rec env id ty =
   let ty = repr ty in
   match ty.desc with
-    Tvar     -> ty
+    Tvar | Tunivar -> ty
   | Tsubst ty -> ty
   | _ ->
     let desc = ty.desc in

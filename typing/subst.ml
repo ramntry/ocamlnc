@@ -62,7 +62,7 @@ let type_path s = function
 let rec typexp s ty =
   let ty = repr ty in
   match ty.desc with
-    Tvar ->
+    Tvar | Tunivar ->
       ty
   | Tsubst ty ->
       ty

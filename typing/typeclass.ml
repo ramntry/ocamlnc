@@ -427,7 +427,6 @@ let rec class_field cl_num self_type meths vars
       (val_env, met_env, par_env, fields, concr_meths, inh_vals)
 
   | Pcf_meth (lab, priv, expr, loc)  ->
-      Ctype.raise_nongen_level ();
       let (_, ty) =
         Ctype.filter_self_method val_env lab priv meths self_type
       in
@@ -456,7 +455,6 @@ let rec class_field cl_num self_type meths vars
       let meth_expr = make_method cl_num expr in
       let meth_type = Ctype.newty (Tarrow("", self_type, ty, Cok)) in
       let vars_local = !vars in
-      Ctype.end_def ();
 
       let field =
         lazy begin

@@ -1046,9 +1046,8 @@ let rec type_exp env sexp =
             {desc = Tpoly (ty, [])} ->
               ty
           | {desc = Tpoly (ty, tl)} ->
-              let tl = List.map repr tl in
               snd (instance_poly false tl ty)
-          |     {desc = Tvar} as ty ->
+          | {desc = Tvar} as ty ->
               let ty' = newvar () in
               unify env ty (newty(Tpoly(ty',[])));
               (* if not !Clflags.nolabels then
