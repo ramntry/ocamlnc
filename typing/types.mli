@@ -60,6 +60,13 @@ and field_kind =
   | Fpresent
   | Fabsent
 
+module TypeOps : sig
+  type t = type_expr
+  val compare : t -> t -> int
+  val equal : t -> t -> bool
+  val hash : t -> int
+end
+
 (* Maps of methods and instance variables *)
 
 module Meths : Map.S with type key = string

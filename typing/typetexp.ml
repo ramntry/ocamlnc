@@ -262,6 +262,25 @@ let rec transl_type env policy styp =
       if policy = Fixed && not (Btype.static_row row) then
         raise(Error(styp.ptyp_loc, Unbound_type_variable "[..]"));
       newty (Tvariant row)
+  | Ptyp_poly(st, vars) ->
+      let ty_list = List.map (fun _ -> newty Tunivar) vars in
+      let old_univars = !univars in
+      univars := ty_list @ !univars;
+      begin_def ();
+      List.iter2
+	(fun alias ty ->
+	  if Tbl.mem alias !type_variables then
+            raise(Error(styp.ptyp_loc, Bound_type_variable alias));
+	  if Tbl.mem alias !aliases then
+            raise(Error(styp.ptyp_loc, Bound_type_variable alias));
+	  (* aliases are stubs, in case one wants to redefine them *)
+          aliases := Tbl.add alias (newty (Tlink ty)) !aliases)
+	vars ty_list;
+      end_def ();
+      let ty = transl_type env policy None st in
+      aliases := List.fold_right Tbl.remove vars !aliases;
+      univars := old_univars;
+      newty (Tpoly(ty,ty_list))
 
 and transl_fields env policy =
   function

@@ -703,6 +703,7 @@ let rec copy ty =
       end;
     t
 
+
 (**** Variants of instantiations ****)
 
 let instance sch =
@@ -758,6 +759,142 @@ let instance_class params cty =
   let cty' = copy_class_type cty in
   cleanup_types ();
   (params', cty')
+
+(**** Instanciation for types with free universal variables ****)
+
+module TypeHash = Hashtbl.Make(TypeOps)
+module TypeSet = Set.Make(TypeOps)
+
+let rec close_cycle ty cy = function
+    [] -> false
+  | (t, q, r) :: tl ->
+      if t == ty then (r := List.rev cy :: !r; true) else
+      close_cycle ty ((t, q)::cy) tl
+
+let type_hash_union ht ty s =
+  if TypeSet.is_empty s then () else
+  let s' =
+    try
+      let s0 = TypeHash.find ht ty in
+      TypeHash.remove ht ty;
+      TypeSet.union s0 s
+    with Not_found -> s
+  in
+  TypeHash.add ht ty s'
+
+let compute_univars ty =
+  let node_univars : TypeSet.t TypeHash.t = TypeHash.create 17 in
+  let rec free_rec visited ty =
+    let ty = repr ty in
+    if close_cycle ty [] visited then TypeSet.empty else
+    let cyr = ref [] in
+    let univars =
+      match ty.desc with
+	Tunivar ->
+          TypeSet.singleton ty
+      | Tpoly (ty, tyl) ->
+          let tyl = List.map repr tyl in
+          let visited = (ty, tyl, cyr) :: visited in
+          List.fold_right TypeSet.remove tyl (free_rec visited ty)
+      | _ ->
+          let visited = (ty, [], cyr) :: visited in
+          let r = ref TypeSet.empty in
+	  iter_type_expr
+            (fun t -> r := TypeSet.union !r (free_rec visited t))
+            ty;
+          !r
+    in
+    if not (TypeSet.is_empty univars) then begin
+      type_hash_union node_univars ty univars;
+      List.iter
+        (fun cy ->
+          ignore
+            (List.fold_left
+               (fun univars (ty, tyl) ->
+                 let univars = List.fold_right TypeSet.remove tyl univars in
+                 type_hash_union node_univars ty univars;
+                 univars)
+               univars cy))
+        !cyr
+    end;
+    univars
+  in
+  ignore (free_rec [] ty);
+  fun ty -> try TypeHash.find node_univars ty with Not_found -> TypeSet.empty
+
+let rec diff_list l1 l2 =
+  if l1 == l2 then [] else
+  match l1 with [] -> invalid_arg "Ctype.diff_list"
+  | a :: l1 -> a :: diff_list l1 l2
+
+let conflicts free bound =
+  let bound = List.map repr bound in
+  TypeSet.exists (fun t -> List.memq (repr t) bound) free
+
+let delayed_copy = ref []
+    (* copying to do later *)
+
+let rec copy_sep free bound visited ty =
+  let ty = repr ty in
+  let univars = free ty in
+  if TypeSet.is_empty univars then 
+    if ty.level <> generic_level then ty else
+    let t = newvar () in
+    delayed_copy :=
+      lazy (t.desc <- Tlink (copy ty))
+      :: !delayed_copy;
+    t
+  else try
+    let t, bound_t = List.assq ty visited in
+    let dl = diff_list bound bound_t in
+    if dl <> [] & conflicts univars dl then raise Not_found;
+    t
+  with Not_found -> begin
+    let t = newvar() in          (* Stub *)
+    let visited =
+      match ty.desc with
+	Tarrow _ | Ttuple _ | Tvariant _ | Tconstr _ | Tobject _ ->
+          (ty,(t,bound)) :: visited
+      |	_ -> visited in
+    t.desc <-
+      begin match ty.desc with
+      | Tconstr (p, tl, _) ->
+          begin match find_repr p !(!abbreviations) with
+            Some ty when repr ty != t ->
+              Tlink ty
+          | _ ->
+              Tconstr (p, List.map (copy_sep free bound visited) tl,
+                       ref (match !(!abbreviations) with
+                              Mcons _ -> Mlink !abbreviations
+                            | abbrev  -> abbrev))
+          end
+      | Tvariant row0 ->
+          let row = row_repr row0 in
+          (* We shall really check the level on the row variable *)
+          if (row_more row).level <> generic_level then Tvariant row else
+          Tvariant (copy_row (copy_sep free bound visited) row)
+      |	Tpoly (t1, tl) ->
+	  let tl = List.map repr tl in
+	  let tl' =
+	    List.map
+	      (fun t -> if t.level <> generic_level then t else newty Tunivar)
+	      tl in
+	  let bound = tl @ bound in
+	  let visited =
+	    List.map2 (fun ty t -> ty,(t,bound)) tl tl' @ visited in
+	  Tpoly (copy_sep free bound visited t1, tl')
+      | _ -> copy_type_desc (copy_sep free bound visited) ty.desc
+      end;
+    t
+  end
+
+let instance_sep sch =
+  delayed_copy := [];
+  let ty = copy_sep (compute_univars sch) [] [] sch in
+  List.iter Lazy.force !delayed_copy;
+  delayed_copy := [];
+  cleanup_types ();
+  ty
 
 (**** Instantiation with parameter substitution ****)
 
@@ -2179,6 +2316,12 @@ let rec build_subtype env visited posi t =
         (t, false)
   | Tsubst _ | Tlink _ ->
       assert false
+  | Tpoly(t1, tl) ->
+      let (t1', c) = build_subtype env visited posi t1 in
+      if c then (new_global_ty (Tpoly(t1', tl)), true)
+      else (t, false)
+  | Tunivar ->
+      (t, false)
 
 let enlarge_type env ty =
   subtypes := [];

@@ -23,6 +23,16 @@ open Asttypes
 open Types
 open Btype
 
+(* Redefine it here since goal differs *)
+
+let rec opened_object ty =
+  match (repr ty).desc with
+    Tobject (t, _)     -> opened_object t
+  | Tfield(_, _, _, t) -> opened_object t
+  | Tvar               -> true
+  | Tunivar            -> true
+  | _                  -> false
+
 (* Print a long identifier *)
 
 let rec longident ppf = function
@@ -72,7 +82,11 @@ let name_of_type t =
 
 let check_name_of_type t = ignore(name_of_type t)
 
-let print_name_of_type ppf t = fprintf ppf "%s" (name_of_type t)
+let non_gen_mark sch ty =
+  if sch && ty.desc = Tvar && ty.level <> generic_level then "_" else "" 
+
+let print_name_of_type sch ppf t =
+  fprintf ppf "'%s%s" (non_gen_mark sch t) (name_of_type t)
 
 let visited_objects = ref ([] : type_expr list)
 let aliased = ref ([] : type_expr list)
@@ -139,6 +153,10 @@ let rec mark_loops_rec visited ty =
     | Tnil -> ()
     | Tsubst ty -> mark_loops_rec visited ty
     | Tlink _ -> fatal_error "Printtyp.mark_loops_rec (2)"
+    | Tpoly (ty, tyl) ->
+	List.iter (fun t -> add_alias (repr t)) tyl;
+	mark_loops_rec visited ty
+    | Tunivar -> ()
 
 let mark_loops ty =
   normalize_type Env.empty ty;
@@ -174,13 +192,12 @@ let rec typexp sch prio0 ppf ty =
   let ty = repr ty in
   let px = proxy ty in
   if List.mem_assq px !names then
-   let mark = if ty.desc = Tvar then non_gen_mark sch px else "" in
-   fprintf ppf "'%s%a" mark print_name_of_type px else
+    print_name_of_type sch ppf px else
 
   let pr_typ ppf prio =
    (match ty.desc with
     | Tvar ->
-        fprintf ppf "'%s%a" (non_gen_mark sch ty) print_name_of_type ty
+        print_name_of_type sch ppf ty
     | Tarrow(l, ty1, ty2) ->
         let pr_arrow l ty1 ppf ty2 =
           print_label ppf l;
@@ -258,12 +275,25 @@ let rec typexp sch prio0 ppf ty =
         typexp sch prio ppf ty
     | Tlink _ | Tnil | Tfield _ ->
         fatal_error "Printtyp.typexp"
+    | Tpoly (ty, []) ->
+	typexp sch prio ppf ty
+    | Tpoly (ty, tyl) ->
+        let pr_poly ppf =
+          fprintf ppf "%a.@ %a"
+            (print_list (print_name_of_type sch) (fun ppf -> fprintf ppf " "))
+            tyl
+            (typexp sch 3) ty in
+	if prio >= 1 then fprintf ppf "@[<1>(%t)@]" pr_poly
+        else fprintf ppf "@[%t@]" pr_poly
+    | Tunivar ->
+	print_name_of_type sch ppf ty
    ) in
   if is_aliased px then begin
     check_name_of_type px;
     if prio0 >= 1
-    then fprintf ppf "@[<1>(%a as '%a)@]" pr_typ 0 print_name_of_type px
-    else fprintf ppf "@[%a as '%a@]" pr_typ prio0 print_name_of_type px end
+    then fprintf ppf "@[<1>(%a as %a)@]" pr_typ 0 (print_name_of_type false) px
+    else fprintf ppf "@[%a as %a@]" pr_typ prio0 (print_name_of_type false) px
+  end
   else pr_typ ppf prio0
 
 and row_field sch ppf (l, f) =
@@ -306,26 +336,23 @@ and typobject sch ty fi ppf nm =
           Sort.list (fun (n, _) (n', _) -> n <= n') present_fields in
         typfields sch rest ppf sorted_fields in
       fprintf ppf "@[<2>< %a >@]" pr_fields fi
-  | Some (p, {desc = Tvar} :: tyl) ->
+  | Some (p, {desc = Tvar|Tunivar} :: tyl) ->
       fprintf ppf "@[%a%s#%a@]" (typargs sch) tyl (non_gen_mark sch ty) path p
   | _ ->
         fatal_error "Printtyp.typobject"
   end
 
-and non_gen_mark sch ty =
-    if sch && ty.level <> generic_level then "_" else "" 
-
 and typfields sch rest ppf = function
   | [] ->
       begin match rest.desc with
-      | Tvar -> fprintf ppf "%s.." (non_gen_mark sch rest)
+      | Tvar|Tunivar -> fprintf ppf "%s.." (non_gen_mark sch rest)
       | Tnil -> ()
       | _ -> fatal_error "typfields (1)"
       end
   | [(s, t)] ->
       fprintf ppf "%s : %a" s (typexp sch 0) t;
       begin match rest.desc with
-      | Tvar -> fprintf ppf ";@ "
+      | Tvar|Tunivar -> fprintf ppf ";@ "
       | Tnil -> ()
       | _ -> fatal_error "typfields (2)"
       end;
@@ -519,7 +546,7 @@ let rec perform_class_type sch params ppf = function
       let sty = repr sign.cty_self in
       let pr_param ppf sty =
        if is_aliased sty then
-        fprintf ppf "@ @[('%a)@]" print_name_of_type sty in
+        fprintf ppf "@ @[(%a)@]" (print_name_of_type false) sty in
 
       fprintf ppf "@[<hv 2>@[<2>object%a@]%a"
               pr_param sty

@@ -60,6 +60,13 @@ and field_kind =
   | Fpresent
   | Fabsent
 
+module TypeOps = struct
+  type t = type_expr
+  let compare t1 t2 = t1.id - t2.id
+  let hash t = t.id
+  let equal t1 t2 = t1 == t2
+end
+
 (* Maps of methods and instance variables *)
 
 module OrderedString = struct type t = string let compare = compare end
