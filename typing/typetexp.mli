@@ -18,6 +18,8 @@ open Format;;
 
 val transl_simple_type:
         Env.t -> bool -> Parsetree.core_type -> Types.type_expr
+val transl_simple_type_univars:
+        Env.t -> Parsetree.core_type -> Types.type_expr
 val transl_simple_type_delayed:
         Env.t -> Parsetree.core_type -> Types.type_expr * (unit -> unit)
         (* Translate a type, but leave type variables unbound. Returns
@@ -45,6 +47,8 @@ type error =
   | Present_has_conjunction of string
   | Present_has_no_type of string
   | Multiple_constructor of string
+  | No_row_variable of string
+  | Bad_alias of string
 
 exception Error of Location.t * error
 

@@ -122,6 +122,9 @@ val unify: Env.t -> type_expr -> type_expr -> unit
         (* Unify the two types given. Raise [Unify] if not possible. *)
 val unify_strict: Env.t -> type_expr -> type_expr -> unit
         (* Same as [unify], but do not allow conjunctive types in variants. *)
+val unify_var: Env.t -> type_expr -> type_expr -> unit
+        (* Same as [unify], but allow free univars when first type
+           is a variable. *)
 val filter_arrow: Env.t -> type_expr -> label -> type_expr * type_expr
         (* A special case of unification (with l:'a -> 'b). *)
 val filter_method: Env.t -> string -> private_flag -> type_expr -> type_expr
