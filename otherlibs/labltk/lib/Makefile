@@ -18,6 +18,11 @@ include ./modules
 WIDGETOBJSX = $(WIDGETOBJS:.cmo=.cmx)
 
 labltk.cma : $(SUPPORT) $(WIDGETOBJS) tk.cmo 
+	@ $(MAKE) labltk.cma.$(SO)
+labltk.cma.so:
+	$(LABLLIBR) -o labltk.cma $(SUPPORT) tk.cmo $(WIDGETOBJS) \
+          -cclib -llabltk41
+labltk.cma.a:
 	$(LABLLIBR) -custom -o labltk.cma $(SUPPORT) tk.cmo $(WIDGETOBJS) \
           -cclib -llabltk41 $(TK_LINK) $(X11_LINK)
 
@@ -26,7 +31,7 @@ labltk.cmxa : $(SUPPORTX) $(WIDGETOBJSX) tk.cmx
           -cclib -llabltk41 $(TK_LINK) $(X11_LINK)
 
 labltktop$(EXE) : $(TOPDEPS) $(WIDGETOBJS) $(SUPPORT) ../support/liblabltk41.a
-	$(LABLC) -custom -linkall -o labltktop$(EXE) -I ../support \
+	$(LABLC) -linkall -o labltktop$(EXE) -I ../support \
 	       -I $(TOPDIR)/toplevel toplevellib.cma labltk.cma \
 	       -I $(OTHERS)/unix unix.cma \
 	       -I $(OTHERS)/str str.cma \

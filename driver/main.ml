@@ -34,7 +34,8 @@ let process_file ppf name =
        || Filename.check_suffix name ".cma" then
     objfiles := name :: !objfiles
   else if Filename.check_suffix name ext_obj
-       || Filename.check_suffix name ext_lib then
+       || Filename.check_suffix name ext_lib
+       || Filename.check_suffix name ext_dll then
     ccobjs := name :: !ccobjs
   else if Filename.check_suffix name ".c" then begin
     Compile.c_file name;

@@ -87,3 +87,5 @@ val ext_asm: string
         (* Extension for assembler files, e.g. [.s] under Unix. *)
 val ext_lib: string
         (* Extension for library files, e.g. [.a] under Unix. *)
+val ext_dll: string
+        (* Extension for dynamically-loaded libraries, e.g. [.so] under Unix.*)

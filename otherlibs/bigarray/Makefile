@@ -15,7 +15,7 @@
 include ../../config/Makefile
 
 CC=$(BYTECC)
-CFLAGS=-I../../byterun -g -O $(BYTECCCOMPOPTS)
+CFLAGS=-I../../byterun -g -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -I ../unix
 CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -I ../unix
 
@@ -23,17 +23,20 @@ C_OBJS=bigarray_stubs.o mmap_unix.o
 
 CAML_OBJS=bigarray.cmo
 
-all: libbigarray.a bigarray.cma
+all: libbigarray.a libbigarray.$(SO) bigarray.cma
 
-allopt: libbigarray.a bigarray.cmxa
+allopt: libbigarray.a libbigarray.$(SO) bigarray.cmxa
 
 libbigarray.a: $(C_OBJS)
 	rm -f libbigarray.a
 	ar rc libbigarray.a $(C_OBJS)
 	$(RANLIB) libbigarray.a
 
+libbigarray.so: $(C_OBJS)
+	$(MKSHAREDLIB) libbigarray.so $(C_OBJS)
+
 bigarray.cma: $(CAML_OBJS)
-	$(CAMLC) -a -linkall -custom -o bigarray.cma \
+	$(CAMLC) -a -linkall $(CUSTOM_IF_NOT_SHARED) -o bigarray.cma \
            $(CAML_OBJS) -cclib -lbigarray
 
 bigarray.cmxa: $(CAML_OBJS:.cmo=.cmx)
@@ -43,6 +46,7 @@ bigarray.cmxa: $(CAML_OBJS:.cmo=.cmx)
 install:
 	cp bigarray.cmi bigarray.mli libbigarray.a bigarray.cma $(LIBDIR)
 	cd $(LIBDIR); $(RANLIB) libbigarray.a
+	if test -f libbigarray.so; then cp libbigarray.so $(LIBDIR)
 	cp bigarray.h $(LIBDIR)/caml/bigarray.h
 
 installopt:
@@ -53,7 +57,7 @@ partialclean:
 	rm -f *.cm* 
 
 clean: partialclean
-	rm -f libbigarray.a *.o bigarray.a
+	rm -f libbigarray.* *.o bigarray.a
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 

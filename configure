@@ -25,6 +25,7 @@ ccoption=''
 cclibs=''
 curseslibs=''
 mathlib='-lm'
+dllib=''
 x11_include_dir=''
 x11_lib_dir=''
 tk_defs=''
@@ -493,6 +494,7 @@ fi
 # Write the OS type (Unix or Cygwin)
 
 echo "#define OCAML_OS_TYPE \"$ostype\"" >> s.h
+echo "#define OCAML_STDLIB_DIR \"$libdir\"" >> s.h
 
 # Check the semantics of signal handlers
 
@@ -735,6 +737,7 @@ fi
 
 if sh ./hasgot -ldl dlopen; then
   echo "dlopen() found."
+  echo "#define HAS_DLOPEN" >> s.h
   dllib=-ldl
 fi
 
@@ -1035,7 +1038,7 @@ cclibs="$cclibs $mathlib"
 echo "BYTECC=$bytecc" >> Makefile
 echo "BYTECCCOMPOPTS=$bytecccompopts" >> Makefile
 echo "BYTECCLINKOPTS=$bytecclinkopts" >> Makefile
-echo "BYTECCLIBS=$cclibs $curseslibs" >> Makefile
+echo "BYTECCLIBS=$cclibs $dllib $curseslibs" >> Makefile
 echo "EXE=$exe" >> Makefile
 
 echo "ARCH=$arch" >> Makefile
@@ -1072,7 +1075,7 @@ echo "        manual pages.............. $mandir (with extension .$manext)"
 echo "Configuration for the bytecode compiler:"
 echo "        C compiler used........... $bytecc"
 echo "        options for compiling..... $bytecccompopts"
-echo "        options for linking....... $bytecclinkopts $cclibs $curseslibs"
+echo "        options for linking....... $bytecclinkopts $cclibs $dllib $curseslibs"
 
 echo "Configuration for the native-code compiler:"
 if test "$arch" = "none"; then

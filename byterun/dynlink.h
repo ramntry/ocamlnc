@@ -4,7 +4,7 @@
 /*                                                                     */
 /*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
 /*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
+/*  Copyright 2000 Institut National de Recherche en Informatique et   */
 /*  en Automatique.  All rights reserved.  This file is distributed    */
 /*  under the terms of the GNU Library General Public License.         */
 /*                                                                     */
@@ -12,18 +12,17 @@
 
 /* $Id$ */
 
-/* Interface with C primitives. */
+/* Dynamic loading of C primitives. */
 
-#ifndef _prims_
-#define _prims_
+#ifndef _dynlink_
+#define _dynlink_
 
-typedef value (*c_primitive)();
+/* Build the table of primitives, given a search path, a list
+   of shared libraries, and a list of primitive names
+   (all three 0-separated in char arrays).
+   Abort the runtime system on error. */
+extern void build_primitive_table(char * lib_path,
+                                  char * libs,
+                                  char * req_prims);
 
-extern c_primitive builtin_cprim[];
-extern char * names_of_builtin_cprim[];
-
-extern struct ext_table prim_table;
-
-#define Primitive(n) ((c_primitive)(prim_table.contents[n]))
-
-#endif /* _prims_ */
+#endif

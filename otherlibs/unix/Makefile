@@ -18,7 +18,7 @@ include ../../config/Makefile
 
 # Compilation options
 CC=$(BYTECC)
-CFLAGS=-I../../byterun -O $(BYTECCCOMPOPTS)
+CFLAGS=-I../../byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib
 CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib
 
@@ -38,7 +38,7 @@ OBJS=accept.o access.o addrofstr.o alarm.o bind.o chdir.o chmod.o \
   time.o times.o truncate.o umask.o unixsupport.o unlink.o \
   utimes.o wait.o write.o
 
-all: libunix.a unix.cmi unix.cma
+all: libunix.a libunix.$(SO) unix.cmi unix.cma
 
 allopt: libunix.a unix.cmi unix.cmxa
 
@@ -47,8 +47,11 @@ libunix.a: $(OBJS)
 	ar rc libunix.a $(OBJS)
 	$(RANLIB) libunix.a
 
+libunix.so: $(OBJS)
+	$(MKSHAREDLIB) libunix.so $(OBJS)
+
 unix.cma: unix.cmo
-	$(CAMLC) -a -linkall -custom -o unix.cma unix.cmo -cclib -lunix
+	$(CAMLC) -a -linkall $(CUSTOM_IF_NOT_SHARED) -o unix.cma unix.cmo -cclib -lunix
 
 unix.cmxa: unix.cmx
 	$(CAMLOPT) -a -linkall -o unix.cmxa unix.cmx -cclib -lunix
@@ -59,9 +62,10 @@ partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.a *.o
+	rm -f *.a *.o *.so
 
 install:
+	if test -f libunix.so; then cp libunix.so $(LIBDIR)/libunix.so; fi
 	cp libunix.a $(LIBDIR)/libunix.a
 	cd $(LIBDIR); $(RANLIB) libunix.a
 	cp unix.cmi unix.cma unix.mli $(LIBDIR)

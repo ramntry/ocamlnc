@@ -17,7 +17,7 @@
 include ../../config/Makefile
 
 CC=$(BYTECC)
-CFLAGS=-I../../byterun $(X11_INCLUDES) -O $(BYTECCCOMPOPTS)
+CFLAGS=-I../../byterun $(X11_INCLUDES) -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)
 
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib
 CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib
@@ -28,7 +28,7 @@ OBJS=open.o draw.o fill.o color.o text.o \
 
 CAMLOBJS=graphics.cmo graphicsX11.cmo
 
-all: libgraphics.a graphics.cmi graphics.cma
+all: libgraphics.a libgraphics.$(SO) graphics.cmi graphics.cma
 
 allopt: libgraphics.a graphics.cmi graphics.cmxa
 
@@ -37,9 +37,16 @@ libgraphics.a: $(OBJS)
 	ar rc libgraphics.a $(OBJS)
 	$(RANLIB) libgraphics.a
 
+libgraphics.so: $(OBJS)
+	$(MKSHAREDLIB) libgraphics.so $(OBJS) $(X11_RAW_LINK)
+
 graphics.cma: $(CAMLOBJS)
-	$(CAMLC) -a -o graphics.cma -custom \
-          $(CAMLOBJS) -cclib -lgraphics $(X11_LINK)
+	@ $(MAKE) graphics.cma.$(SO)
+graphics.cma.so:
+	$(CAMLC) -a -o graphics.cma $(CAMLOBJS) -cclib -lgraphics
+graphics.cma.a:
+	$(CAMLC) -a -o graphics.cma -custom
+		$(CAMLOBJS) -cclib -lgraphics $(X11_LINK)
 
 graphics.cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(CAMLOPT) -a -o graphics.cmxa \
@@ -49,9 +56,10 @@ partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.a *.o
+	rm -f *.a *.so *.o
 
 install:
+	if test -f libgraphics.so; then cp libgraphics.so $(LIBDIR)/libgraphics.so; fi
 	cp libgraphics.a $(LIBDIR)/libgraphics.a
 	cd $(LIBDIR); $(RANLIB) libgraphics.a
 	cp graphics.cm[ia] graphicsX11.cmi graphics.mli graphicsX11.mli $(LIBDIR)

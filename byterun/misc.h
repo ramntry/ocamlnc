@@ -51,8 +51,22 @@ void caml_failed_assert (char *, char *, int) Noreturn;
 #define CAMLassert(x)
 #endif
 
-void fatal_error (char *) Noreturn;
-void fatal_error_arg (char *, char *) Noreturn;
+void fatal_error (char *msg) Noreturn;
+void fatal_error_arg (char *fmt, char *arg) Noreturn;
+void fatal_error_arg2 (char *fmt1, char *arg1, 
+                       char *fmt2, char *arg2) Noreturn;
+
+/* Data structures */
+
+struct ext_table {
+  int size;
+  int capacity;
+  void ** contents;
+};
+
+extern void ext_table_init(struct ext_table * tbl, int init_capa);
+extern int ext_table_add(struct ext_table * tbl, void * data);
+extern void ext_table_free(struct ext_table * tbl, int free_entries);
 
 /* GC flags and messages */
 

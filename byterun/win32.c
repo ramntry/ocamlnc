@@ -26,25 +26,100 @@
 #include <ctype.h>
 #include <string.h>
 #include <signal.h>
+#include "memory.h"
+#include "misc.h"
+#include "osdeps.h"
 #include "signals.h"
 
-/* Path searching function */
-
-char * searchpath(char * name)
+char * decompose_path(struct ext_table * tbl, char * path)
 {
-#define MAX_PATH_LENGTH 1024
-  static char fullname[MAX_PATH_LENGTH];
+  char * p, * q;
+  int n;
+
+  if (path == NULL) return NULL;
+  p = stat_alloc(strlen(path) + 1);
+  strcpy(p, path);
+  q = p;
+  while (1) {
+    for (n = 0; q[n] != 0 && q[n] != ';'; n++) /*nothing*/;
+    ext_table_add(tbl, q);
+    q = q + n;
+    if (*q == 0) break;
+    *q = 0;
+    q += 1;
+  }
+  return p;
+}
+
+char * search_in_path(struct ext_table * path, char * name)
+{
+  char * p, * fullname;
+  int i;
+  struct stat st;
+
+  for (p = name; *p != 0; p++) {
+    if (*p == '/' || *p == '\\') goto not_found;
+  }
+  for (i = 0; i < path->size; i++) {
+    fullname = stat_alloc(strlen((char *)(path->contents[i])) +
+                          strlen(name) + 2);
+    strcpy(fullname, (char *)(path->contents[i]));
+    strcat(fullname, "/");
+    strcat(fullname, name);
+    if (stat(fullname, &st) == 0 && S_ISREG(st.st_mode)) return fullname;
+    stat_free(fullname);
+  }
+ not_found:
+  fullname = stat_alloc(strlen(name) + 1);
+  strcpy(fullname, name);
+  return fullname;
+}
+  
+char * search_exe_in_path(char * name)
+{
+#define MAX_PATH_LENGTH 512
+  char * fullname = stat_alloc(512);
   char * filepart;
 
-  if (SearchPath(NULL,              /* use system search path */
-                 name,
-                 ".exe",            /* add .exe extension if needed */
-                 MAX_PATH_LENGTH,   /* size of buffer */
-                 fullname,
-                 &filepart))
-    return fullname;
-  else
-    return name;
+  if (! SearchPath(NULL,              /* use system search path */
+                   name,
+                   ".exe",            /* add .exe extension if needed */
+                   MAX_PATH_LENGTH,   /* size of buffer */
+                   fullname,
+                   &filepart))
+    strcpy(fullname, name);
+  return fullname;
+}
+
+char * search_dll_in_path(struct ext_table * path, char * name)
+{
+  char * dllname = stat_alloc(strlen(name) + 5);
+  char * res;
+  strcpy(dllname, name);
+  strcat(dllname, ".dll");
+  res = search_in_path(path, dllname);
+  stat_free(dllname);
+  return res;
+}
+
+void * caml_dlopen(char * libname)
+{
+
+}
+
+void caml_dlclose(void * handle)
+{
+
+}
+
+void * caml_dlsym(void * handle, char * name)
+{
+
+}
+
+char * caml_dlerror(void)
+{
+
 }
 
 /* Expansion of @responsefile and *? file patterns in the command line */

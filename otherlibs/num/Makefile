@@ -18,7 +18,7 @@ include ../../config/Makefile
 
 # Compilation options
 CC=$(BYTECC)
-CFLAGS=-O -I./bignum/h -I../../byterun $(BYTECCCOMPOPTS)
+CFLAGS=-O -I./bignum/h -I../../byterun $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -w s
 CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s
 
@@ -29,9 +29,9 @@ CMIFILES=big_int.cmi nat.cmi num.cmi ratio.cmi arith_status.cmi
 
 COBJS=nat_stubs.o
 
-all: libnums.a nums.cma $(CMIFILES)
+all: libnums.a libnums.$(SO) nums.cma $(CMIFILES)
 
-allopt: libnums.a nums.cmxa $(CMIFILES)
+allopt: libnums.a libnums.$(SO) nums.cmxa $(CMIFILES)
 
 nums.cma: $(CAMLOBJS)
 	$(CAMLC) -a -o nums.cma -custom $(CAMLOBJS) -cclib -lnums
@@ -44,14 +44,18 @@ libnums.a: bignum/libbignum.a $(COBJS)
 	ar r libnums.a $(COBJS)
 	$(RANLIB) libnums.a
 
+libnums.so: bignum/libbignum.a $(COBJS)
+	$(MKSHAREDLIB) libnums.so $(COBJS) bignum/libbignum.a
+
 bignum/libbignum.a:
-	cd bignum; $(MAKE) $(BIGNUM_ARCH) CC="$(CC) $(BYTECCCOMPOPTS)"
+	cd bignum; $(MAKE) $(BIGNUM_ARCH) CC="$(CC) $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)"
 
 $(CAMLOBJS:.cmo=.cmx): ../../ocamlopt
 
 install:
 	cp libnums.a $(LIBDIR)/libnums.a
 	cd $(LIBDIR); $(RANLIB) libnums.a
+	if test -f libnums.so; then cp libnums.so $(LIBDIR); fi
 	cp nums.cma $(CMIFILES) $(CMIFILES:.cmi=.mli) $(LIBDIR)
 
 installopt:
@@ -62,7 +66,7 @@ partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.a *.o
+	rm -f *.a *.o *.so
 	cd bignum; $(MAKE) scratch
 	cd test; $(MAKE) clean
 
