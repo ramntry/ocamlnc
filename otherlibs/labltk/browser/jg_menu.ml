@@ -16,15 +16,9 @@
 
 open Tk
 
-class c ~parent ?underline:(n=0) text = object (self)
-  val pair =
-    let button =
-      Menubutton.create parent ~text ~underline:n in
-    let menu =  Menu.create button in
-    Menubutton.configure button ~menu;
-    button, menu
-  method button = fst pair
-  method menu = snd pair
+class c ~parent ?underline:(n=0) label = object (self)
+  val menu = Menu.create parent
+  method menu = menu
   method virtual add_command :
       ?underline:int ->
       ?accelerator:string ->     ?activebackground:color ->
@@ -39,4 +33,6 @@ class c ~parent ?underline:(n=0) text = object (self)
     Menu.add_command (self#menu) ~label ~underline:n ?accelerator
       ?activebackground ?activeforeground ?background ?bitmap
       ?command ?font ?foreground ?image ?state
+  initializer
+    Menu.add_cascade parent ~label ~underline:n ~menu
 end

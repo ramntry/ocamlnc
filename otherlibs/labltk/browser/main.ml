@@ -88,7 +88,7 @@ let _ =
         \032    X/x enable/disable all other warnings\n\
         \032    default setting is \"Al\" (all warnings but labels enabled)" ]
   and errmsg = "Command line: ocamlbrowser <options>" in
-  if not (check ~spec Sys.argv) then fatal_error (usage ~spec errmsg);
+  if (check ~spec Sys.argv) then
   Arg.parse spec
     (fun name -> raise(Arg.Bad("don't know what to do with " ^ name)))
     errmsg;

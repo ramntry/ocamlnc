@@ -328,7 +328,8 @@ let f ?(dir=Unix.getcwd()) ?on () =
       pack [tl] ~expand:true ~fill:`Both;
       coe tl
   in
-  let menus = Frame.create tl ~name:"menubar" in
+  let menus = Menu.create tl ~name:"menubar" in
+  Toplevel.configure (Winfo.toplevel tl) ~menu:menus;
   let filemenu = new Jg_menu.c "File" ~parent:menus
   and modmenu = new Jg_menu.c "Modules" ~parent:menus in
   let fmbox, mbox, msb = Jg_box.create_with_scrollbar tl in
@@ -366,8 +367,6 @@ let f ?(dir=Unix.getcwd()) ?on () =
     ~command:(fun () -> reset_modules mbox; Env.reset_cache ());
   modmenu#add_command "Search symbol..." ~command:search_symbol;
 
-  pack [filemenu#button; modmenu#button] ~side:`Left ~ipadx:5 ~anchor:`W;
-  pack [menus] ~side:`Top ~fill:`X;      
   pack [close; search] ~fill:`X ~side:`Right ~expand:true;
   pack [coe buttons; coe ew] ~fill:`X ~side:`Bottom;
   pack [msb] ~side:`Right ~fill:`Y;
@@ -390,7 +389,7 @@ class st_viewer ?(dir=Unix.getcwd()) ?on () =
       pack [tl] ~expand:true ~fill:`Both;
       coe tl
   in
-  let menus = Frame.create tl ~name:"menubar" in
+  let menus = Menu.create tl ~name:"menubar" in
   let filemenu = new Jg_menu.c "File" ~parent:menus
   and modmenu = new Jg_menu.c "Modules" ~parent:menus
   and viewmenu = new Jg_menu.c "View" ~parent:menus
@@ -490,10 +489,7 @@ object (self)
     (* Help menu *)
     helpmenu#add_command "Manual..." ~command:show_help;
 
-    pack [filemenu#button; viewmenu#button; modmenu#button]
-      ~side:`Left ~ipadx:5 ~anchor:`W;
-    pack [helpmenu#button] ~side:`Right ~anchor:`E ~ipadx:5;
-    pack [menus] ~fill:`X;      
+    Toplevel.configure (Winfo.toplevel tl) ~menu:menus;
     pack [search_frame] ~fill:`X;      
     pack [boxes_frame] ~fill:`Both ~expand:true;
     pack [buttons] ~fill:`X ~side:`Bottom;

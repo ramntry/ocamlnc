@@ -287,9 +287,8 @@ class editor ~top ~menus = object (self)
   val compiler_menu = new Jg_menu.c "Compiler" ~parent:menus
   val module_menu = new Jg_menu.c "Modules" ~parent:menus
   val window_menu = new Jg_menu.c "Windows" ~parent:menus
-  val label =
-    Checkbutton.create menus ~state:`Disabled
-      ~onvalue:"modified" ~offvalue:"unchanged"
+  val label = Menu.add_checkbutton menus ~state:`Disabled
+            ~onvalue:"modified" ~offvalue:"unchanged"
   val mutable current_dir = Unix.getcwd ()
   val mutable error_messages = []
   val mutable windows = []
@@ -320,7 +319,7 @@ class editor ~top ~menus = object (self)
     windows <- txt :: exclude txt windows;
     self#reset_window_menu;
     current_tw <- txt.tw;
-    Checkbutton.configure label ~text:(Filename.basename txt.name)
+    Menu.configure_checkbutton menus `Last ~label:(Filename.basename txt.name)
       ~variable:txt.modified;
     Textvariable.set vwindow txt.number;
     Text.yview txt.tw ~scroll:(`Page 0);
@@ -381,7 +380,7 @@ class editor ~top ~menus = object (self)
     pack [sb] ~fill:`Y ~side:`Right;
     pack [tw] ~fill:`Both ~expand:true ~side:`Left;
     self#set_edit txt;
-    Checkbutton.deselect label;
+    (* Checkbutton.deselect label; *)
     Lexical.init_tags txt.tw
 
   method clear_errors () =
@@ -429,8 +428,8 @@ class editor ~top ~menus = object (self)
       let text = Text.get txt.tw ~start:tstart ~stop:(tposend 1) in
       output_string file text;
       close_out file;
-      Checkbutton.configure label ~text:(Filename.basename name);
-      Checkbutton.deselect label;
+      Menu.configure_checkbutton menus `Last ~label:(Filename.basename name);
+      (* Checkbutton.deselect label; *)
       txt.name <- name
     with
       Sys_error _ ->
@@ -453,7 +452,7 @@ class editor ~top ~menus = object (self)
             | `No -> ()
             | `Cancel -> raise Exit
             end;
-          Checkbutton.deselect label;
+          (* Checkbutton.deselect label; *)
           (Text.index current_tw ~index:(`Mark"insert", []), [])
         with Not_found -> self#new_window name; tstart
       in
@@ -629,13 +628,6 @@ class editor ~top ~menus = object (self)
       ~command:Viewer.search_symbol;
     module_menu#add_command "Close all"
       ~command:Viewer.close_all_views;
-
-    (* pack everything *)
-    pack (List.map ~f:(fun m -> coe m#button)
-            [file_menu; edit_menu; compiler_menu; module_menu; window_menu]
-          @ [coe label])
-      ~side:`Left ~ipadx:5 ~anchor:`W;
-    pack [menus] ~before:(List.hd windows).frame ~side:`Top ~fill:`X
 end
 
 (* The main function starts here ! *)
@@ -658,7 +650,8 @@ let editor ?file ?(pos=0) ?(reuse=false) () =
       false
   then () else
     let top = Jg_toplevel.titled "Editor" in
-    let menus = Frame.create top ~name:"menubar" in
+    let menus = Menu.create top ~name:"menubar" in
+    Toplevel.configure top ~menu:menus;
     let ed = new editor ~top ~menus in
     already_open := !already_open @ [ed];
     if file <> None then ed#reopen ~file ~pos
