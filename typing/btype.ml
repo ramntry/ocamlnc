@@ -140,6 +140,8 @@ let iter_type_expr f ty =
   | Tnil                -> ()
   | Tlink ty            -> f ty
   | Tsubst ty           -> f ty
+  | Tunivar             -> ()
+  | Tpoly (ty, tyl)     -> f ty; List.iter f tyl
 
 let copy_row f row keep more =
   let fields = List.map
@@ -182,6 +184,8 @@ let rec copy_type_desc f = function
   | Tnil                -> Tnil
   | Tlink ty            -> copy_type_desc f ty.desc
   | Tsubst ty           -> assert false
+  | Tunivar             -> Tunivar
+  | Tpoly (ty, tyl)     -> Tpoly (f ty, List.map f tyl)
 
 let saved_desc = ref []
   (* Saved association of generic nodes with their description. *)

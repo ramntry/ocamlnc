@@ -24,6 +24,16 @@ open Types
 open Btype
 open Outcometree
 
+(* Redefine it here since goal differs *)
+
+let rec opened_object ty =
+  match (repr ty).desc with
+    Tobject (t, _)     -> opened_object t
+  | Tfield(_, _, _, t) -> opened_object t
+  | Tvar               -> true
+  | Tunivar            -> true
+  | _                  -> false
+
 (* Print a long identifier *)
 
 let rec longident ppf = function
@@ -83,7 +93,11 @@ let name_of_type t =
 
 let check_name_of_type t = ignore(name_of_type t)
 
-let print_name_of_type ppf t = fprintf ppf "%s" (name_of_type t)
+let non_gen_mark sch ty =
+  if sch && ty.desc = Tvar && ty.level <> generic_level then "_" else "" 
+
+let print_name_of_type sch ppf t =
+  fprintf ppf "'%s%s" (non_gen_mark sch t) (name_of_type t)
 
 let visited_objects = ref ([] : type_expr list)
 let aliased = ref ([] : type_expr list)
@@ -151,6 +165,10 @@ let rec mark_loops_rec visited ty =
     | Tnil -> ()
     | Tsubst ty -> mark_loops_rec visited ty
     | Tlink _ -> fatal_error "Printtyp.mark_loops_rec (2)"
+    | Tpoly (ty, tyl) ->
+	List.iter (fun t -> add_alias (repr t)) tyl;
+	mark_loops_rec visited ty
+    | Tunivar -> ()
 
 let mark_loops ty =
   normalize_type Env.empty ty;
@@ -253,6 +271,12 @@ let rec tree_of_typexp sch ty =
         tree_of_typexp sch ty
     | Tlink _ | Tnil | Tfield _ ->
         fatal_error "Printtyp.tree_of_typexp"
+    | Tpoly (ty, []) ->
+	tree_of_typexp sch ty
+    | Tpoly (ty, tyl) ->
+        Otyp_poly (List.map name_of_type tyl, tree_of_typexp sch ty)
+    | Tunivar ->
+        Otyp_var (false, name_of_type ty)
    ) in
   if is_aliased px then begin
     check_name_of_type px;
@@ -292,7 +316,7 @@ and tree_of_typobject sch ty fi nm =
         tree_of_typfields sch rest sorted_fields in
       let (fields, rest) = pr_fields fi in
       Otyp_object (fields, rest)
-  | Some (p, {desc = Tvar} :: tyl) ->
+  | Some (p, {desc = Tvar|Tunivar} :: tyl) ->
       let non_gen = is_non_gen sch ty in
       let args = tree_of_typlist sch tyl in
       Otyp_class (non_gen, tree_of_path p, args)
@@ -324,13 +348,17 @@ let rec print_ident ppf =
   | Oide_apply (id1, id2) ->
       fprintf ppf "%a(%a)" print_ident id1 print_ident id2
 
-let pr_present =
-  print_list (fun ppf s -> fprintf ppf "`%s" s) (fun ppf -> fprintf ppf "@ ")
+let pr_names fmt =
+  print_list (fun ppf s -> fprintf ppf fmt s) (fun ppf -> fprintf ppf "@ ")
 
 let rec print_out_type ppf =
   function
   | Otyp_alias (ty, s) ->
       fprintf ppf "@[%a as '%s@]" print_out_type ty s
+  | Otyp_poly (sl, ty) ->
+      fprintf ppf "@[<hov 2>%a.@ %a]"
+        (pr_names "'%s") sl
+        print_out_type ty
   | ty ->
       print_out_type_1 ppf ty
 
@@ -367,7 +395,7 @@ and print_simple_out_type ppf =
       let print_present ppf =
         function
         | None | Some [] -> ()
-        | Some l -> fprintf ppf "@;<1 -2>> @[<hov>%a@]" pr_present l
+        | Some l -> fprintf ppf "@;<1 -2>> @[<hov>%a@]" (pr_names "`%s") l
       in
       let print_fields ppf = function
           Ovar_fields fields ->
@@ -382,12 +410,11 @@ and print_simple_out_type ppf =
          else if tags = None then "> " else "? ")
         print_fields row_fields
         print_present tags
-  | Otyp_alias (_, _) | Otyp_arrow (_, _, _) | Otyp_tuple _ as ty ->
+  | Otyp_alias _ | Otyp_poly _ | Otyp_arrow _ | Otyp_tuple _ as ty ->
       fprintf ppf "@[<1>(%a)@]" print_out_type ty
   | Otyp_abstract | Otyp_sum _ | Otyp_record _ | Otyp_manifest (_, _) -> ()
 
-and print_fields rest ppf =
-  function
+and print_fields rest ppf = function
   | [] ->
       begin match rest with
       | Some non_gen -> fprintf ppf "%s.." (if non_gen then "_" else "")

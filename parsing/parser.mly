@@ -591,14 +591,18 @@ value:
             symbol_rloc () }
 ;
 virtual_method:
-    METHOD PRIVATE VIRTUAL label COLON core_type
+    METHOD PRIVATE VIRTUAL label COLON poly_type
       { $4, Private, $6, symbol_rloc () }
-  | METHOD VIRTUAL private_flag label COLON core_type
+  | METHOD VIRTUAL private_flag label COLON poly_type
       { $4, $3, $6, symbol_rloc () }
 ;
 concrete_method :
-    METHOD private_flag label fun_binding
-      { $3, $2, $4, symbol_rloc () }
+    METHOD private_flag label strict_binding
+      { $3, $2, mkexp(Pexp_poly ($4, None)), symbol_rloc () }
+  | METHOD private_flag label COLON poly_type EQUAL seq_expr
+      { $3, $2, mkexp(Pexp_poly($7,Some $5)), symbol_rloc () }
+  | METHOD private_flag LABEL poly_type EQUAL seq_expr
+      { $3, $2, mkexp(Pexp_poly($6,Some $4)), symbol_rloc () }
 ;
 
 /* Class types */
@@ -659,7 +663,7 @@ XXX Should be removed
 */
 ;
 method_type:
-    METHOD private_flag label COLON core_type
+    METHOD private_flag label COLON poly_type
       { $3, $2, $5, symbol_rloc () }
 ;
 constrain:
@@ -943,10 +947,20 @@ let_binding:
       { ($1, $3) }
 ;
 fun_binding:
+/*
     EQUAL seq_expr %prec prec_let
       { $2 }
+  | labeled_simple_pattern fun_binding
+      { let (l, o, p) = $1 in mkexp(Pexp_function(l, o, [p, $2])) }
+*/
+    strict_binding
+      { $1 }
   | type_constraint EQUAL seq_expr %prec prec_let
       { let (t, t') = $1 in mkexp(Pexp_constraint($3, t, t')) }
+;
+strict_binding:
+    EQUAL seq_expr %prec prec_let
+      { $2 }
   | labeled_simple_pattern fun_binding
       { let (l, o, p) = $1 in mkexp(Pexp_function(l, o, [p, $2])) }
 ;
@@ -1166,6 +1180,19 @@ with_constraint:
        functor applications in type path */
   | MODULE mod_longident EQUAL mod_ext_longident
       { ($2, Pwith_module $4) }
+;
+
+/* Polymorphic types */
+
+typevar_list:
+	QUOTE ident				{ [$2] }
+      | typevar_list QUOTE ident		{ $3 :: $1 }
+;
+poly_type:
+	core_type
+	  { mktyp(Ptyp_poly([], $1)) }
+      |	typevar_list DOT core_type
+	  { mktyp(Ptyp_poly(List.rev $1, $3)) }
 ;
 
 /* Core types */

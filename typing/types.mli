@@ -34,6 +34,8 @@ and type_desc =
   | Tlink of type_expr
   | Tsubst of type_expr         (* for copying *)
   | Tvariant of row_desc
+  | Tunivar
+  | Tpoly of type_expr * type_expr list
 
 and row_desc =
     { row_fields: (label * row_field) list;
@@ -64,6 +66,13 @@ and commutable =
     Cok
   | Cunknown
   | Clink of commutable ref
+
+module TypeOps : sig
+  type t = type_expr
+  val compare : t -> t -> int
+  val equal : t -> t -> bool
+  val hash : t -> int
+end
 
 (* Maps of methods and instance variables *)
 
