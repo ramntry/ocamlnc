@@ -150,6 +150,7 @@ let rec add_expr bv exp =
       add_module bv m; add_expr (StringSet.add id bv) e
   | Pexp_assert (e) -> add_expr bv e
   | Pexp_assertfalse -> ()
+  | Pexp_lazy (e) -> add_expr bv e
   | Pexp_poly (e, t) -> add_expr bv e; add_opt add_type bv t
 
 and add_pat_expr_list bv pel =

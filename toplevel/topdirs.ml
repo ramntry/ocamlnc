@@ -93,17 +93,18 @@ let load_compunit ic filename ppf compunit =
     raise Load_failed
   end
 
-let dir_load ppf name =
+let load_file ppf name =
   try
     let filename = find_in_path !Config.load_path name in
     let ic = open_in_bin filename in
     let buffer = String.create (String.length Config.cmo_magic_number) in
     really_input ic buffer 0 (String.length Config.cmo_magic_number);
-    begin try
+    let success = try
       if buffer = Config.cmo_magic_number then begin
         let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
         seek_in ic compunit_pos;
-        load_compunit ic filename ppf (input_value ic : compilation_unit)
+        load_compunit ic filename ppf (input_value ic : compilation_unit);
+        true
       end else
       if buffer = Config.cma_magic_number then begin
         let toc_pos = input_binary_int ic in  (* Go to table of contents *)
@@ -115,12 +116,18 @@ let dir_load ppf name =
           fprintf ppf "Cannot load required shared library: %s.@." reason;
           raise Load_failed
         end;
-        List.iter (load_compunit ic filename ppf) lib.lib_units
-      end else fprintf ppf "File %s is not a bytecode object file.@." name
-    with Load_failed -> ()
-    end;
-    close_in ic
-  with Not_found -> fprintf ppf "Cannot find file %s.@." name
+        List.iter (load_compunit ic filename ppf) lib.lib_units;
+        true
+      end else begin
+        fprintf ppf "File %s is not a bytecode object file.@." name;
+        false
+      end
+    with Load_failed -> false in
+    close_in ic;
+    success
+  with Not_found -> fprintf ppf "Cannot find file %s.@." name; false
+
+let dir_load ppf name = ignore (load_file ppf name)
 
 let _ = Hashtbl.add directive_table "load" (Directive_string (dir_load std_out))
 
@@ -216,8 +223,7 @@ let dir_trace ppf lid =
     | _ ->
         let clos = eval_path path in
         (* Nothing to do if it's not a closure *)
-        if Obj.is_block clos &&
-           (Obj.tag clos = 250 || Obj.tag clos = 249) then begin
+        if Obj.is_block clos && Obj.tag clos = Obj.closure_tag then begin
         match is_traced clos with
         | Some opath ->
             fprintf ppf "%a is already traced (under the name %a).@."

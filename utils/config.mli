@@ -41,6 +41,10 @@ val native_partial_linker: string
         (* The linker to use for partial links (-output-obj option) *)
 val ranlib: string
         (* Command to randomize a library, or "" if not needed *)
+val binutils_nm: string
+        (* The "nm" command from GNU binutils, or "" if not available *)
+val binutils_objcopy: string
+        (* The "objcopy" command from GNU binutils, or "" if not available *)
 
 val load_path: string list ref
         (* Directories in the search path for .cmi and .cmo files *)
@@ -66,7 +70,7 @@ val ast_impl_magic_number: string
         (* Magic number for file holding an implementation syntax tree *)
 
 val max_tag: int
-        (* Biggest tag that can be stored in the header of a block. *)
+        (* Biggest tag that can be stored in the header of a regular block. *)
 val max_young_wosize: int
         (* Maximal size of arrays that are directly allocated in the
            minor heap *)

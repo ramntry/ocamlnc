@@ -285,6 +285,8 @@ and rw_exp iflag sexp =
   | Pexp_assert (cond) -> rewrite_exp iflag cond
   | Pexp_assertfalse -> ()
 
+  | Pexp_lazy (expr) -> rewrite_exp iflag expr
+
   | Pexp_poly (sexp, _) -> rewrite_exp iflag sexp
 
 and rewrite_ifbody iflag ghost sifbody =
