@@ -57,7 +57,7 @@ module type S =
     val mem:  key -> 'a t -> bool
         (* [mem x m] returns [true] if [m] contains a binding for [m],
            and [false] otherwise. *)
-    val iter: f:(key -> 'a -> unit) -> 'a t -> unit
+    val iter: f:(key:key -> data:'a -> unit) -> 'a t -> unit
         (* [iter f m] applies [f] to all bindings in map [m].
            [f] receives the key as first argument, and the associated value
            as second argument. The order in which the bindings are passed to
@@ -72,7 +72,7 @@ module type S =
     val mapi: f:(key -> 'a -> 'b) -> 'a t -> 'b t
         (* Same as [map], but the function receives as arguments both the
            key and the associated value for each binding of the map. *)
-    val fold: f:(key -> 'a -> 'b -> 'b) -> 'a t -> init:'b -> 'b
+    val fold: f:(key:key -> data:'a -> 'b -> 'b) -> 'a t -> init:'b -> 'b
         (* [fold f m a] computes [(f kN dN ... (f k1 d1 a)...)],
            where [k1 ... kN] are the keys of all bindings in [m],
            and [d1 ... dN] are the associated data.

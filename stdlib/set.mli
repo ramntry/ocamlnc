@@ -69,7 +69,7 @@ module type S =
     val subset: t -> t -> bool
         (* [subset s1 s2] tests whether the set [s1] is a subset of
            the set [s2]. *)
-    val iter: fun:(elt -> unit) -> t -> unit
+    val iter: f:(elt -> unit) -> t -> unit
         (* [iter f s] applies [f] in turn to all elements of [s].
            The order in which the elements of [s] are presented to [f]
            is unspecified. *)
