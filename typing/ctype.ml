@@ -934,10 +934,10 @@ let rec subst env level abbrev ty params args body =
     begin match ty with
       None      -> ()
     | Some ({desc = Tconstr (path, tl, _)} as ty) ->
-        if tl = [] && not !Clflags.principal then
-          simple_abbrevs := Mcons (path, ty, body0, !simple_abbrevs)
-        else
-          memorize_abbrev abbrev path ty body0
+        let abbrev =
+          if tl = [] && not !Clflags.principal then simple_abbrevs else abbrev
+        in
+        memorize_abbrev abbrev path ty body0
     | _ ->
         assert false
     end;
@@ -1017,7 +1017,6 @@ let expand_abbrev env ty =
   *)
   if env != !previous_env then begin
     cleanup_abbrev ();
-    simple_abbrevs := Mnil;
     previous_env := env
   end;
   match ty with
