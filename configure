@@ -366,26 +366,28 @@ sharedcccompopts=''
 mksharedlib=''
 byteccrpath=''
 
-if sh ./hasgot -ldl dlopen; then
-  echo "dlopen() found."
-  echo "#define HAS_DLOPEN" >> s.h
-  dllib=-ldl
+if test $withsharedlibs = "yes"; then
+  case "$host" in
+    *-*-linux-gnu|*-*-linux)
+      sharedcccompopts="-fPIC"
+      mksharedlib="gcc -shared -o"
+      bytecclinkopts="$bytecclinkopts -Wl,-E"
+      byteccrpath="-Wl,-rpath"
+      shared_libraries_supported=true;;
+    alpha*-*-osf*)
+      case "$bytecc" in
+        cc*) sharedcccompopts="";;
+        gcc*) sharedcccompopts="-fPIC";;
+      esac
+      mksharedlib="ld -shared -expect_unresolved '*' -o"
+      byteccrpath="-Wl,-rpath"
+      shared_libraries_supported=true;;
+  esac
+fi
 
-  if test $withsharedlibs = "yes"; then
-    case "$host" in
-      *-*-linux-gnu|*-*-linux)
-        sharedcccompopts="-fPIC"
-        mksharedlib="gcc -shared -o"
-        bytecclinkopts="$bytecclinkopts -Wl,-E"
-        byteccrpath="-Wl,-rpath"
-        shared_libraries_supported=true;;
-    esac
-  fi
-
-  if $shared_libraries_supported; then
-    echo "Dynamic loading of shared libraries is supported."
-    echo "#define SUPPORT_DYNAMIC_LINKING" >> s.h
-  fi
+if $shared_libraries_supported; then
+  echo "Dynamic loading of shared libraries is supported."
+  echo "#define SUPPORT_DYNAMIC_LINKING" >> s.h
 fi
 
 # Configure the native-code compiler
@@ -767,6 +769,11 @@ fi
 if sh ./hasgot -i locale.h && sh ./hasgot setlocale; then
   echo "setlocale() and <locale.h> found."
   echo "#define HAS_LOCALE" >> s.h
+fi
+
+if sh ./hasgot -ldl dlopen; then
+  echo "dlopen() found."
+  dllib=-ldl
 fi
 
 if sh ./hasgot -i sys/types.h -i sys/mman.h && sh ./hasgot mmap munmap; then
