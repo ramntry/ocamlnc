@@ -1204,30 +1204,42 @@ let rec type_exp env sexp =
   | Pexp_poly _ ->
       assert false
 
-and type_argument env sarg ty_expected =
+and type_argument env sarg ty_expected' =
+  (* ty_expected' may be generic *)
   let no_labels ty =
     let ls, tvar = list_labels env ty in
     not tvar && List.for_all ((=) "") ls
   in
-  match expand_head env ty_expected, sarg with
+  let ty_expected = instance ty_expected' in
+  match expand_head env ty_expected', sarg with
   | _, {pexp_desc = Pexp_function(l,_,_)} when not (is_optional l) ->
       type_expect env sarg ty_expected
-  | {desc = Tarrow("",ty_arg,ty_res,_)}, _ ->
+  | {desc = Tarrow("",ty_arg,ty_res,_); level = lv}, _ ->
       (* apply optional arguments when expected type is "" *)
       (* we must be very careful about not breaking the semantics *)
+      if !Clflags.principal then begin_def ();
       let texp = type_exp env sarg in
+      if !Clflags.principal then begin
+        end_def ();
+        generalize_structure texp.exp_type
+      end;
       let rec make_args args ty_fun =
         match (expand_head env ty_fun).desc with
         | Tarrow (l,ty_arg,ty_fun,_) when is_optional l ->
             make_args
-              ((Some(option_none ty_arg sarg.pexp_loc), Optional) :: args)
+              ((Some(option_none (instance ty_arg) sarg.pexp_loc), Optional)
+               :: args)
               ty_fun
         | Tarrow (l,_,ty_res',_) when l = "" || !Clflags.classic ->
             args, ty_fun, no_labels ty_res'
         | Tvar ->  args, ty_fun, false
         |  _ -> [], texp.exp_type, false
       in
-      let args, ty_fun, simple_res = make_args [] texp.exp_type in
+      let args, ty_fun', simple_res = make_args [] texp.exp_type in
+      let warn = !Clflags.principal &&
+        (lv <> generic_level || (repr ty_fun').level <> generic_level)
+      and texp = {texp with exp_type = instance texp.exp_type}
+      and ty_fun = instance ty_fun' in
       if not (simple_res || no_labels ty_res) then begin
         unify_exp env texp ty_expected;
         texp
@@ -1249,6 +1261,8 @@ and type_argument env sarg ty_expected =
                                    Texp_apply (texp, args@
                                                [Some eta_var, Required])}],
                         Total) } in
+      if warn then Location.prerr_warning texp.exp_loc
+          (Warnings.Other "Eliminated optional argument without principality");
       if is_nonexpansive texp then func texp else
       (* let-expand to have side effects *)
       let let_pat, let_var = var_pair "let" texp.exp_type in
@@ -1259,6 +1273,7 @@ and type_argument env sarg ty_expected =
       type_expect env sarg ty_expected
 
 and type_application env funct sargs =
+  (* funct.exp_type may be generic *)
   let result_type omitted ty_fun =
     List.fold_left
       (fun ty_fun (l,ty,lv) -> newty2 lv (Tarrow(l,ty,ty_fun,Cok)))
@@ -1274,7 +1289,7 @@ and type_application env funct sargs =
         (List.map
            (function None, x -> None, x | Some f, x -> Some (f ()), x)
            (List.rev args),
-         result_type omitted ty_fun)
+         instance (result_type omitted ty_fun))
     | (l1, sarg1) :: sargl ->
         let (ty1, ty2) =
           match (expand_head env ty_fun).desc with
@@ -1333,7 +1348,6 @@ and type_application env funct sargs =
             Location.prerr_warning loc (Warnings.Other msg)
           end
         in
-        let ty = instance ty in
         let name = label_name l
         and optional = if is_optional l then Optional else Required in
         let sargs, more_sargs, arg =
@@ -1382,7 +1396,7 @@ and type_application env funct sargs =
               may_warn funct.exp_loc
                 "Eliminated an optional argument without principality";
               ignored := (l,ty,lv) :: !ignored;
-              Some (fun () -> option_none ty Location.none)
+              Some (fun () -> option_none (instance ty) Location.none)
             end else begin
               may_warn funct.exp_loc
                 "Commuted an argument without principality";
@@ -1390,7 +1404,7 @@ and type_application env funct sargs =
             end
         in
         let omitted =
-          if arg = None then (l,ty,min lv ty.level) :: omitted else omitted in
+          if arg = None then (l,ty,lv) :: omitted else omitted in
         let ty_old = if sargs = [] then ty_fun else ty_old in
         type_args ((arg,optional)::args) omitted ty_fun ty_old sargs more_sargs
     | _ ->
