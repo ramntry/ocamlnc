@@ -32,6 +32,7 @@ and core_type_desc =
   | Ptyp_class of Longident.t * core_type list * label list
   | Ptyp_alias of core_type * string
   | Ptyp_variant of (label * bool * core_type list) list * bool * label list
+  | Ptyp_poly of string list * core_type
 
 and core_field_type =
   { pfield_desc: core_field_desc;
@@ -101,6 +102,7 @@ and expression_desc =
   | Pexp_setinstvar of string * expression
   | Pexp_override of (string * expression) list
   | Pexp_letmodule of string * module_expr * expression
+  | Pexp_poly of expression * core_type option
 
 (* Value descriptions *)
 

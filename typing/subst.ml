@@ -73,12 +73,6 @@ let rec typexp s ty =
     ty.desc <- Tsubst ty';
     ty'.desc <-
       begin match desc with
-        Tvar | Tlink _ ->
-          fatal_error "Subst.typexp"
-      | Tarrow(l, t1, t2) ->
-          Tarrow(l, typexp s t1, typexp s t2)
-      | Ttuple tl ->
-          Ttuple(List.map (typexp s) tl)
       | Tconstr(p, tl, abbrev) ->
           Tconstr(type_path s p, List.map (typexp s) tl, ref Mnil)
       | Tobject (t1, name) ->
@@ -98,29 +92,11 @@ let rec typexp s ty =
               Tlink ty2
           | _ ->
               (* We create a new copy *)
-              let bound = ref [] in
-              let fields =
-                List.map
-                  (fun (l,fi) -> l,
-                    match row_field_repr fi with
-                      Rpresent (Some ty) -> Rpresent(Some (typexp s ty))
-                    | Reither(c, l, _) ->
-                        let l = List.map (typexp s) l in
-                        bound := l @ !bound;
-                        Reither(c, l, ref None)
-                    | fi -> fi)
-                  row.row_fields
-              and name =
-                may_map (fun (p,l) -> p, List.map (typexp s) l) row.row_name in
-              let var =
-                Tvariant { row_fields = fields; row_more = newgenvar();
-                           row_bound = !bound;
-                           row_closed = row.row_closed; row_name = name }
-              in
+              let row = copy_row (typexp s) row in
               (* Remember it for other occurences *)
               save_desc more more.desc;
               more.desc <- ty.desc;
-              var
+              Tvariant row
           end
       | Tfield(label, kind, t1, t2) ->
           begin match field_kind_repr kind with
@@ -131,10 +107,7 @@ let rec typexp s ty =
           | Fvar _ (* {contents = None} *) as k ->
               Tfield(label, k, typexp s t1, typexp s t2)
           end
-      | Tnil ->
-          Tnil
-      | Tsubst _ ->
-          assert false
+      | _ -> copy_type_desc (typexp s) desc
       end;
     ty'
 

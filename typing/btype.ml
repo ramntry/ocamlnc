@@ -129,6 +129,46 @@ let iter_type_expr f ty =
   | Tnil                -> ()
   | Tlink ty            -> f ty
   | Tsubst ty           -> f ty
+  | Tunivar             -> ()
+  | Tpoly (ty, tyl)     -> f ty; List.iter f tyl
+
+let copy_row f row =
+  let row = row_repr row in
+  let fields = List.map
+      (fun (l, fi) -> l,
+        match row_field_repr fi with
+        | Rpresent(Some ty) -> Rpresent(Some(f ty))
+        | Reither(c, tl, _) -> Reither(c, List.map f tl, ref None)
+        | _ -> fi)
+      row.row_fields in
+  let name =
+    match row.row_name with None -> None
+    | Some (path, tl) -> Some (path, List.map f tl) in
+  { row_fields = fields; row_more = f row.row_more;
+    row_bound = List.map f row.row_bound;
+    row_closed = row.row_closed; row_name = name; }
+
+let rec copy_kind = function
+    Fvar{contents = Some k} -> copy_kind k
+  | Fvar _   -> Fvar (ref None)
+  | Fpresent -> Fpresent
+  | Fabsent  -> assert false
+
+let rec copy_type_desc f = function
+    Tvar                -> Tvar
+  | Tarrow (p, ty1, ty2)-> Tarrow (p, f ty1, f ty2)
+  | Ttuple l            -> Ttuple (List.map f l)
+  | Tconstr (p, l, _)   -> Tconstr (p, List.map f l, ref Mnil)
+  | Tobject(ty, {contents = Some (p, tl)})
+                        -> Tobject (f ty, ref (Some(p, List.map f tl)))
+  | Tobject (ty, _)     -> Tobject (f ty, ref None)
+  | Tvariant row        -> Tvariant (copy_row f row)
+  | Tfield (p, k, ty1, ty2) -> Tfield (p, copy_kind k, f ty1, f ty2)
+  | Tnil                -> Tnil
+  | Tlink ty            -> copy_type_desc f ty.desc
+  | Tsubst ty           -> assert false
+  | Tunivar             -> Tunivar
+  | Tpoly (ty, tyl)     -> Tpoly (f ty, List.map f tyl)
 
 let saved_desc = ref []
   (* Saved association of generic nodes with their description. *)
