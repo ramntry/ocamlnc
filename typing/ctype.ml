@@ -2262,8 +2262,13 @@ and eqtype_list rename type_pairs subst env tl1 tl2 =
   List.iter2 (eqtype rename type_pairs subst env) tl1 tl2
 
 and eqtype_fields rename type_pairs subst env ty1 ty2 =
-  let (fields1, rest1) = flatten_fields ty1
-  and (fields2, rest2) = flatten_fields ty2 in
+  let (fields2, rest2) = flatten_fields ty2 in
+  (* Try expansion, needed when called from Includecore.type_manifest *)
+  try match try_expand_head env rest2 with
+    {desc=Tobject(ty2,_)} -> eqtype_fields rename type_pairs subst env ty1 ty2
+  | _ -> raise Cannot_expand
+  with Cannot_expand ->
+  let (fields1, rest1) = flatten_fields ty1 in
   let (pairs, miss1, miss2) = associate_fields fields1 fields2 in
   eqtype rename type_pairs subst env rest1 rest2;
   if (miss1 <> []) || (miss2 <> []) then raise (Unify []);
@@ -2284,6 +2289,11 @@ and eqtype_kind k1 k2 =
   | _                    -> raise (Unify [])
 
 and eqtype_row rename type_pairs subst env row1 row2 =
+  (* Try expansion, needed when called from Includecore.type_manifest *)
+  try match try_expand_head env (row_more row2) with
+    {desc=Tvariant row2} -> eqtype_row rename type_pairs subst env row1 row2
+  | _ -> raise Cannot_expand
+  with Cannot_expand ->
   let row1 = row_repr row1 and row2 = row_repr row2 in
   let r1, r2, pairs = merge_row_fields row1.row_fields row2.row_fields in
   if row1.row_closed <> row2.row_closed

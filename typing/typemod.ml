@@ -86,7 +86,8 @@ let merge_constraint initial_env loc sg lid constr =
 	      List.map (fun (c,n) -> (c,n,n)) sdecl.ptype_variance }
 	and id_row = Ident.create (s^"#row") in
 	let initial_env = Env.add_type id_row decl_row initial_env in
-        let newdecl = Typedecl.transl_with_constraint initial_env id sdecl in
+        let newdecl = Typedecl.transl_with_constraint
+                        initial_env (Some(Pident id_row)) sdecl in
 	let env =
 	  match row_id with None -> env
 	  | Some id -> Env.add_type id newdecl env in
@@ -95,7 +96,7 @@ let merge_constraint initial_env loc sg lid constr =
         Tsig_type(id_row, decl_row, rs)	:: Tsig_type(id, newdecl, rs) :: rem
     | (Tsig_type(id, decl, rs) :: rem, [s], Pwith_type sdecl)
       when Ident.name id = s ->
-        let newdecl = Typedecl.transl_with_constraint initial_env id sdecl in
+        let newdecl = Typedecl.transl_with_constraint initial_env None sdecl in
 	let env =
 	  match row_id with None -> env
 	  | Some id -> Env.add_type id newdecl env in
