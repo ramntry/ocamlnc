@@ -29,6 +29,8 @@ CAMLOBJS=int_misc.cmo string_misc.cmo nat.cmo big_int.cmo arith_flags.cmo \
 CMIFILES=big_int.cmi nat.cmi num.cmi ratio.cmi arith_status.cmi
 
 COBJS=nat_stubs.o
+BIGNUM_OBJS=bignum/o/KerN.o bignum/o/bnInit.o bignum/o/bnMult.o \
+  bignum/o/bnDivide.o bignum/o/bnCmp.o bignum/o/bzf.o bignum/o/bz.o
 
 all: libnums.a nums.cma $(CMIFILES)
 
@@ -40,10 +42,10 @@ nums.cma: $(CAMLOBJS)
 nums.cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(MKLIB) -ocamlopt '$(CAMLOPT)' -o nums $(CAMLOBJS:.cmo=.cmx)
 
-libnums.a: bignum/libbignum.a $(COBJS)
-	$(MKLIB) -o nums bignum/libnums.a $(COBJS)
+libnums.a: $(BIGNUM_OBJS) $(COBJS)
+	$(MKLIB) -o nums $(BIGNUM_OBJS) $(COBJS)
 
-bignum/libbignum.a:
+$(BIGNUM_OBJS):
 	cd bignum; $(MAKE) $(BIGNUM_ARCH) CC="$(CC) $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)"
 
 $(CAMLOBJS:.cmo=.cmx): ../../ocamlopt
