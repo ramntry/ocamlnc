@@ -412,10 +412,15 @@ let rec class_field cl_num self_type meths vars
   | Pcf_val (lab, mut, sexp, loc) ->
       if StringSet.mem lab inh_vals then
         Location.prerr_warning loc (Warnings.Hide_instance_variable lab);
+      if !Clflags.principal then Ctype.begin_def ();
       let exp =
         try type_exp val_env sexp with Ctype.Unify [(ty, _)] ->
           raise(Error(loc, Make_nongen_seltype ty))
       in
+      if !Clflags.principal then begin
+        Ctype.end_def ();
+        Ctype.generalize_structure exp.exp_type
+      end;
       let (id, val_env, met_env, par_env) =
         enter_val cl_num vars lab mut exp.exp_type val_env met_env par_env
       in
@@ -453,11 +458,12 @@ let rec class_field cl_num self_type meths vars
 	raise(Error(loc, Method_type_mismatch (lab, trace)))
       end;
       let meth_expr = make_method cl_num expr in
-      let meth_type = Ctype.newty (Tarrow("", self_type, ty, Cok)) in
       let vars_local = !vars in
 
       let field =
         lazy begin
+          let meth_type =
+            Ctype.newty (Tarrow("", self_type, Ctype.instance ty, Cok)) in
           Ctype.raise_nongen_level ();
           vars := vars_local;
           let texp = type_expect met_env meth_expr meth_type in
@@ -545,9 +551,15 @@ and class_structure cl_num val_env met_env (spat, str) =
       str
   in
   Ctype.unify val_env self_type (Ctype.newvar ());
+  let methods =
+    if !Clflags.principal then
+      fst (Ctype.flatten_fields (Ctype.object_fields self_type))
+    else [] in
+  List.iter (fun (_,_,ty) -> Ctype.generalize_spine ty) methods;
   let vars_final = !vars in
   let fields = List.map Lazy.force (List.rev fields) in
   vars := vars_final;
+  List.iter (fun (_,_,ty) -> Ctype.unify val_env ty (Ctype.newvar ())) methods;
 
   {cl_field = fields;
    cl_meths = Meths.map (function (id, ty) -> id) !meths},
@@ -619,10 +631,15 @@ and class_expr cl_num val_env met_env scl =
                   Pcl_let(Default, [spat, smatch], sbody)})}
       in
       class_expr cl_num val_env met_env sfun
-  | Pcl_fun (l, _, spat, scl') ->
+  | Pcl_fun (l, None, spat, scl') ->
+      if !Clflags.principal then Ctype.begin_def ();
       let (pat, pv, val_env, met_env) =
         Typecore.type_class_arg_pattern cl_num val_env met_env l spat
       in
+      if !Clflags.principal then begin
+        Ctype.end_def ();
+        iter_pattern (fun {pat_type=ty} -> Ctype.generalize_structure ty) pat
+      end;
       let pv =
         List.map
           (function (id, id', ty) ->
@@ -652,7 +669,7 @@ and class_expr cl_num val_env met_env scl =
           (Warnings.Other "This optional argument cannot be erased");
       {cl_desc = Tclass_fun (pat, pv, cl, partial);
        cl_loc = scl.pcl_loc;
-       cl_type = Tcty_fun (l, pat.pat_type, cl.cl_type)}
+       cl_type = Tcty_fun (l, Ctype.instance pat.pat_type, cl.cl_type)}
   | Pcl_apply (scl', sargs) ->
       let cl = class_expr cl_num val_env met_env scl' in
       let rec nonopt_labels ls ty_fun =

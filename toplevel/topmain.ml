@@ -43,6 +43,7 @@ let main () =
      "-labels", Arg.Clear classic, " Labels commute (default)";
      "-noassert", Arg.Set noassert, " Do not compile assertion checks";
      "-nolabels", Arg.Set classic, " Ignore labels and do not commute";
+     "-principal", Arg.Set principal, " Check principality of type inference";
      "-rectypes", Arg.Set recursive_types, " Allow arbitrary recursive types";
      "-unsafe", Arg.Set fast, " No bound checking on array and string access";
      "-w", Arg.String (Warnings.parse_options false),

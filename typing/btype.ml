@@ -143,6 +143,11 @@ let iter_type_expr f ty =
   | Tunivar             -> ()
   | Tpoly (ty, tyl)     -> f ty; List.iter f tyl
 
+let rec iter_abbrev f = function
+    Mnil                   -> ()
+  | Mcons(_, ty, ty', rem) -> f ty; f ty'; iter_abbrev f rem
+  | Mlink rem              -> iter_abbrev f !rem
+
 let copy_row f fixed row keep more =
   let fields = List.map
       (fun (l, fi) -> l,

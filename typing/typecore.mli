@@ -53,6 +53,7 @@ val type_argument:
 val option_some: Typedtree.expression -> Typedtree.expression
 val option_none: type_expr -> Location.t -> Typedtree.expression
 val extract_option_type: Env.t -> type_expr -> type_expr
+val iter_pattern: (Typedtree.pattern -> unit) -> Typedtree.pattern -> unit
 
 val self_coercion : (Path.t * Location.t list ref) list ref
 

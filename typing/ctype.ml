@@ -496,20 +496,12 @@ let rec iter_generalize tyl ty =
     ty.level <- generic_level;
     begin match ty.desc with
       Tconstr (_, _, abbrev) ->
-        generalize_expans tyl !abbrev
+        iter_abbrev (iter_generalize tyl) !abbrev
     | _ -> ()
     end;
     iter_type_expr (iter_generalize tyl) ty
   end else
     tyl := ty :: !tyl
-
-and generalize_expans tyl =
-  function
-    Mnil                   -> ()
-  | Mcons(_, ty, ty', rem) -> iter_generalize tyl ty;
-                              iter_generalize tyl ty';
-                              generalize_expans tyl rem
-  | Mlink rem              -> generalize_expans tyl !rem
 
 let rec generalize ty =
   iter_generalize (ref []) ty
@@ -520,6 +512,38 @@ let iterative_generalization min_level tyl =
   List.iter (iter_generalize tyl') tyl;
   List.fold_right (fun ty l -> if ty.level <= min_level then l else ty::l)
     !tyl' []
+
+(* Generalize the structure and lower the variables *)
+
+let rec generalize_structure var_level ty =
+  let ty = repr ty in
+  if ty.level <> generic_level then begin
+    if ty.desc = Tvar && ty.level > var_level then
+      ty.level <- var_level
+    else if ty.level > !current_level then begin
+      ty.level <- generic_level;
+      begin match ty.desc with
+	Tconstr (_, _, abbrev) ->
+          iter_abbrev (generalize_structure var_level) !abbrev
+      | _ -> ()
+      end;
+      iter_type_expr (generalize_structure var_level) ty
+    end
+  end
+
+let generalize_expansive ty = generalize_structure !nongen_level ty
+let generalize_structure ty = generalize_structure !current_level ty
+
+(* Generalize the spine of a function, if the level >= !current_level *)
+
+let rec generalize_spine ty =
+  let ty = repr ty in
+  if ty.level < !current_level || ty.level = generic_level then () else
+  match ty.desc with
+    Tarrow (_, _, ty', _) | Tpoly (ty', _) ->
+      ty.level <- generic_level;
+      generalize_spine ty'
+  | _ -> ()
 
 let try_expand_head' = (* Forward declaration *)
   ref (fun env ty -> raise Cannot_expand)
