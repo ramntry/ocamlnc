@@ -680,19 +680,20 @@ let list_labels env ty = list_labels_aux env [] [] ty
 
 (* Check that all univars are safe in a type *)
 let check_univars env kind exp ty_expected vars =
-  List.iter
-    (fun t ->
-      let t = repr t in
-      generalize t;
-      if t.desc = Tvar && t.level = generic_level then () else
-      raise
-        (Error
-           (exp.exp_loc,
-            Less_general(kind,
-                         [repr exp.exp_type, full_expand env exp.exp_type;
-                          repr ty_expected, full_expand env ty_expected])));
-      t.desc <- Tunivar)
-    vars
+  let vars' =
+    List.filter
+      (fun t ->
+        let t = repr t in
+        generalize t;
+        if t.desc = Tvar && t.level = generic_level then
+          (t.desc <- Tunivar; true)
+        else false)
+      vars in
+  if List.length vars = List.length vars' then () else
+  let ty = newgenty (Tpoly(repr exp.exp_type, vars'))
+  and ty_expected = repr ty_expected in
+  raise (Error (exp.exp_loc,
+                Less_general(kind, [ty, ty; ty_expected, ty_expected])))
 
 (* Hack to allow coercion of self. Will clean-up later. *)
 let self_coercion = ref ([] : (Path.t * Location.t list ref) list)
