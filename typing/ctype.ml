@@ -1103,6 +1103,10 @@ let rec try_expand_head env ty =
 
 let _ = try_expand_head' := try_expand_head
 
+(* Expand once the head of a type *)
+let expand_head_once env ty =
+  try expand_abbrev env (repr ty) with Cannot_expand -> assert false
+
 (* Fully expand the head of a type. *)
 let rec expand_head env ty =
   try try_expand_head env ty with Cannot_expand -> repr ty
