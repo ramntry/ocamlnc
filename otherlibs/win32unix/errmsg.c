@@ -23,7 +23,7 @@ extern int error_table[];
 CAMLprim value unix_error_message(value err)
 {
   int errnum;
-  char buffer[256];
+  char buffer[512];
   
   errnum = Is_block(err) ? Int_val(Field(err, 0)) : error_table[Int_val(err)];
   if (errnum > 0)

@@ -33,9 +33,9 @@
 #include "sys.h"
 #include "backtrace.h"
 
-int backtrace_active = 0;
-int backtrace_pos = 0;
-code_t * backtrace_buffer = NULL;
+CAMLexport int backtrace_active = 0;
+CAMLexport int backtrace_pos = 0;
+CAMLexport code_t * backtrace_buffer = NULL;
 #define BACKTRACE_BUFFER_SIZE 1024
 
 /* Location of fields in the Instruct.debug_event record */

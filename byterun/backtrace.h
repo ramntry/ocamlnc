@@ -3,9 +3,9 @@
 
 #include "mlvalues.h"
 
-extern int backtrace_active;
-extern int backtrace_pos;
-extern code_t * backtrace_buffer;
+CAMLextern int backtrace_active;
+CAMLextern int backtrace_pos;
+CAMLextern code_t * backtrace_buffer;
 
 extern void stash_backtrace(code_t pc, value * sp);
 CAMLextern void print_exception_backtrace(void);

@@ -251,6 +251,12 @@ static int parse_command_line(char **argv)
     case 'b':
       backtrace_active = 1;
       break;
+    case 'I':
+      if (argv[i + 1] != NULL) {
+        ext_table_add(&shared_libs_path, argv[i + 1]);
+        i++;
+      }
+      break;
     default:
       fatal_error_arg("Unknown option %s.\n", argv[i]);
     }
@@ -316,6 +322,7 @@ CAMLexport void caml_main(char **argv)
      so that it behaves as much as possible as specified in IEEE */
   init_ieee_floats();
   init_custom_operations();
+  ext_table_init(&shared_libs_path, 8);
   external_raise = NULL;
   /* Determine options and position of bytecode file */
 #ifdef DEBUG

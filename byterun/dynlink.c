@@ -39,7 +39,7 @@ struct ext_table prim_table;
 static struct ext_table shared_libs;
 
 /* The search path for shared libraries */
-static struct ext_table shared_libs_path;
+struct ext_table shared_libs_path;
 
 /* Look up the given primitive name in the built-in primitive table,
    then in the opened shared libraries (shared_libs) */
@@ -130,10 +130,10 @@ void build_primitive_table(char * lib_path,
   char * p;
 
   /* Initialize the search path for dynamic libraries:
+     - directories specified on the command line with the -I option
      - directories specified in the CAML_LD_LIBRARY_PATH
      - directories specified in the executable
      - directories specified in the file <stdlib>/ld.conf */
-  ext_table_init(&shared_libs_path, 8);
   tofree1 = decompose_path(&shared_libs_path, getenv("CAML_LD_LIBRARY_PATH"));
   if (lib_path != NULL)
     for (p = lib_path; *p != 0; p += strlen(p) + 1)
