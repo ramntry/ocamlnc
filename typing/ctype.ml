@@ -1769,10 +1769,6 @@ let rec moregen inst_nongen type_pairs env t1 t2 =
     match (t1.desc, t2.desc) with
       (Tunivar, Tunivar) ->
 	unify_univar t1 t2 !univar_pairs
-    | (_, Tunivar) ->
-	raise (Unify [])
-    | (Tunivar, _) ->
-	raise (Unify [])
     | (Tvar, _) when if inst_nongen then t1.level <> generic_level - 1
                                     else t1.level =  generic_level ->
         moregen_occur env t1.level t2;
