@@ -56,7 +56,7 @@ stdlib.cma: $(LIB_OBJS)
 	$(CAMLC) -a -o stdlib.cma $(LIB_OBJS)
 
 unix.cma: $(UNIXLIB_OBJS)
-	$(MKLIB) -ocamlc '$(CAMLC)' -linkall $(UNIXLIB_OBJS)
+	$(MKLIB) -ocamlc '$(CAMLC)' -o unix -linkall $(UNIXLIB_OBJS)
 
 pervasives.cmo: pervasives.mli pervasives.cmi pervasives.ml
 	$(CAMLC) -nopervasives -c pervasives.ml
