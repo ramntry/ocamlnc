@@ -1204,18 +1204,22 @@ with_constraints:
   | with_constraints AND with_constraint        { $3 :: $1 }
 ;
 with_constraint:
-    TYPE type_parameters label_longident EQUAL core_type constraints
+    TYPE type_parameters label_longident with_type_binder core_type constraints
       { let params, variance = List.split $2 in
         ($3, Pwith_type {ptype_params = params;
-                         ptype_cstrs = List.rev $6;
-                         ptype_kind = Ptype_abstract;
-                         ptype_manifest = Some $5;
+                         ptype_cstrs = List.rev $7;
+                         ptype_kind = $5;
+                         ptype_manifest = Some $6;
                          ptype_variance = variance;
                          ptype_loc = symbol_rloc()}) }
     /* used label_longident instead of type_longident to disallow
        functor applications in type path */
   | MODULE mod_longident EQUAL mod_ext_longident
       { ($2, Pwith_module $4) }
+;
+with_type_binder:
+    EQUAL { Ptype_abstract }
+/*  | AS    { Ptype_fixed } */
 ;
 
 /* Polymorphic types */

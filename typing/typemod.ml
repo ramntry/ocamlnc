@@ -78,6 +78,10 @@ let merge_constraint initial_env loc sg lid constr =
         let newdecl = Typedecl.transl_with_constraint initial_env sdecl in
         Includemod.type_declarations env id newdecl decl;
         Tsig_type(id, newdecl, rs) :: rem
+    | (Tsig_type(id, decl, rs) :: rem, [s], Pwith_type sdecl)
+      when Ident.name id = s ^ "#row" ->
+        let newdecl = Typedecl.transl_with_constraint initial_env sdecl in
+        merge (Env.add_item (Tsig_type(id, newdecl, rs)) env) rem namelist
     | (Tsig_module(id, mty, rs) :: rem, [s], Pwith_module lid)
       when Ident.name id = s ->
         let (path, mty') = type_module_path initial_env loc lid in

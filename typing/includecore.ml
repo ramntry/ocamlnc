@@ -48,9 +48,11 @@ let type_manifest env ty1 params1 ty2 params2 =
   let ty1' = Ctype.expand_head env ty1 and ty2' = Ctype.expand_head env ty2 in
   match ty1'.desc, ty2'.desc with
     Tvariant row1, Tvariant row2 when is_constr (Btype.row_more row2) ->
-      (match Btype.row_more row1 with
-	{desc=Tvar|Tconstr _} -> true | _ -> false) &&
       let row1 = Btype.row_repr row1 and row2 = Btype.row_repr row2 in
+      Format.eprintf "@[%a@ %a@]@." Printtyp.raw_type_expr ty1
+        Printtyp.raw_type_expr row2.row_more;
+      Ctype.equal env true (ty1::params1) (row2.row_more::params2) &&
+      (match row1.row_more with	{desc=Tvar|Tconstr _} -> true | _ -> false) &&
       let r1, r2, pairs =
 	Ctype.merge_row_fields row1.row_fields row2.row_fields in
       (not row2.row_closed ||
@@ -77,8 +79,9 @@ let type_manifest env ty1 params1 ty2 params2 =
       Ctype.equal env true tl1 tl2
   | Tobject (fi1, _), Tobject (fi2, _)
     when is_constr (snd(Ctype.flatten_fields fi2)) ->
-      let (fields1,rest1) = Ctype.flatten_fields fi1
-      and (fields2,rest2) = Ctype.flatten_fields fi2 in
+      let (fields2,rest2) = Ctype.flatten_fields fi2 in
+      Ctype.equal env true (ty1::params1) (rest2::params2) &&
+      let (fields1,rest1) = Ctype.flatten_fields fi1 in
       (match rest1 with {desc=Tnil|Tvar|Tconstr _} -> true | _ -> false) &&
       let pairs, miss1, miss2 = Ctype.associate_fields fields1 fields2 in
       miss2 = [] &&

@@ -570,12 +570,12 @@ let transl_type_decl env name_sdecl_list =
   let fixed_types =
     List.filter (fun (_,sd) -> sd.ptype_kind = Ptype_fixed) name_sdecl_list in
   let name_sdecl_list =
-    name_sdecl_list @
     List.map
       (fun (name,sdecl) ->
         name^"#row",
         {sdecl with ptype_kind = Ptype_abstract; ptype_manifest = None})
       fixed_types
+    @ name_sdecl_list
   in
   (* Create identifiers. *)
   let id_list =
