@@ -15,7 +15,7 @@
 !include ..\config\Makefile.nt
 
 CC=$(BYTECC)
-CFLAGS=-DIN_OCAMLRUN
+CFLAGS=-DIN_OCAMLRUN -DOCAML_STDLIB_DIR="\"$(LIBDIR:\=\\)\""
 
 OBJS=interp.obj misc.obj stacks.obj fix_code.obj startup.obj main.obj \
   fail.obj signals.obj freelist.obj major_gc.obj minor_gc.obj \
