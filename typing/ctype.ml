@@ -225,6 +225,7 @@ let rec opened_object ty =
   | Tfield(_, _, _, t) -> opened_object t
   | Tvar               -> true
   | Tunivar            -> true
+  | Tconstr _          -> true
   | _                  -> false
 
 (**** Close an object ****)
@@ -2662,6 +2663,20 @@ let find_cltype_for_path env p =
       end
   | None -> assert false
 
+let has_constr_row env t =
+  match (expand_abbrev env t).desc with
+    Tobject(t,_) ->
+      let rec check_row t =
+        match (repr t).desc with
+          Tfield(_,_,_,t) -> check_row t
+        | Tconstr _ -> true
+        | _ -> false
+      in check_row t
+  | Tvariant row ->
+      (match row_more row with {desc=Tconstr _} -> true | _ -> false)
+  | _ ->
+      false
+
 let rec build_subtype env visited loops posi level t =
   let t = repr t in
   match t.desc with
@@ -2692,7 +2707,8 @@ let rec build_subtype env visited loops posi level t =
       let c = collect tlist' in
       if c > Unchanged then (newty (Ttuple (List.map fst tlist')), c)
       else (t, Unchanged)
-  | Tconstr(p, tl, abbrev) when level > 0 && generic_abbrev env p ->
+  | Tconstr(p, tl, abbrev)
+    when level > 0 && generic_abbrev env p && not (has_constr_row env t) ->
       let t' = repr (expand_abbrev env t) in
       let level' = pred_expand level in
       begin try match t'.desc with
@@ -2732,7 +2748,8 @@ let rec build_subtype env visited loops posi level t =
       let visited = t :: visited in
       begin try
         let decl = Env.find_type p env in
-        if level = 0 && generic_abbrev env p then warn := true;
+        if level = 0 && generic_abbrev env p && not (has_constr_row env t)
+        then warn := true;
         let tl' =
           List.map2
             (fun (co,cn,_) t ->
@@ -2778,7 +2795,7 @@ let rec build_subtype env visited loops posi level t =
           fields
       in
       let c = collect fields in
-      if posi && short && c = Unchanged then (t, Unchanged) else
+      if short && c = Unchanged then (t, Unchanged) else
       let row =
         { row_fields = List.map fst fields; row_more = newvar();
           row_bound = !bound; row_closed = posi; row_fixed = false;
@@ -2864,9 +2881,11 @@ let rec subtype_rec env trace t1 t2 cstrs =
         subtype_list env trace tl1 tl2 cstrs
     | (Tconstr(p1, [], _), Tconstr(p2, [], _)) when Path.same p1 p2 ->
         cstrs
-    | (Tconstr(p1, tl1, abbrev1), _) when generic_abbrev env p1 ->
+    | (Tconstr(p1, tl1, abbrev1), _)
+      when generic_abbrev env p1 && not (has_constr_row env t1) ->
         subtype_rec env trace (expand_abbrev env t1) t2 cstrs
-    | (_, Tconstr(p2, tl2, abbrev2)) when generic_abbrev env p2 ->
+    | (_, Tconstr(p2, tl2, abbrev2))
+      when generic_abbrev env p2 && not (has_constr_row env t2) ->
         subtype_rec env trace t1 (expand_abbrev env t2) cstrs
     | (Tconstr(p1, tl1, _), Tconstr(p2, tl2, _)) when Path.same p1 p2 ->
         begin try
@@ -2894,7 +2913,8 @@ let rec subtype_rec env trace t1 t2 cstrs =
     | (Tvariant row1, Tvariant row2) ->
         let row1 = row_repr row1 and row2 = row_repr row2 in
         begin try
-          if not row1.row_closed then raise Exit;
+          if not row1.row_closed || row1.row_more.desc <> Tvar
+          || row2.row_more.desc <> Tvar then raise Exit;
           let r1, r2, pairs =
             merge_row_fields row1.row_fields row2.row_fields in
           if filter_row_fields false r1 <> [] then raise Exit;
