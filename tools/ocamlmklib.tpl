@@ -34,7 +34,7 @@ while :; do
     *.cmo|*.cma)
         bytecode_objs="$bytecode_objs $1";;
     *.cmx|*.cmxa)
-        native_objs="native_objs $1";;
+        native_objs="$native_objs $1";;
     *.ml|*.mli)
         bytecode_objs="$bytecode_objs $1"
         native_objs="$native_objs $1";;
