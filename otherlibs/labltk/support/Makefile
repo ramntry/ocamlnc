@@ -21,7 +21,7 @@ liblabltk41.a : $(COBJS)
 	$(RANLIB) liblabltk41.a
 
 liblabltk41.so : $(COBJS)
-	$(MKSHAREDLIB) liblabltk41.so $(COBJS) $(TK_RAW_LINK) $(X11_RAW_LINK)
+	$(MKSHAREDLIB) liblabltk41.so $(COBJS) $(TK_LINK) $(X11_LINK)
 
 PUB=fileevent.cmi fileevent.mli \
     protocol.cmi protocol.mli \

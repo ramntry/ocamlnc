@@ -57,11 +57,11 @@ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
   bytecomp/translobj.cmo bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
-  bytecomp/simplif.cmo bytecomp/runtimedef.cmo
+  bytecomp/simplif.cmo bytecomp/runtimedef.cmo bytecomp/dll.cmo
 
 BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/printinstr.cmo bytecomp/opcodes.cmo bytecomp/emitcode.cmo \
-  bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
+  bytecomp/bytesections.cmo bytecomp/symtable.cmo \
   bytecomp/bytelibrarian.cmo bytecomp/bytelink.cmo
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/cmm.cmo asmcomp/printcmm.cmo \
@@ -278,9 +278,11 @@ utils/config.ml: utils/config.mlp config/Makefile
             -e 's|%%BYTERUN%%|$(BINDIR)/ocamlrun|' \
             -e 's|%%BYTECC%%|$(BYTECC) $(BYTECCCOMPOPTS)|' \
             -e 's|%%BYTELINK%%|$(BYTECC) $(BYTECCLINKOPTS)|' \
+            -e 's|%%BYTECCRPATH%%|$(BYTECCRPATH)|' \
             -e 's|%%NATIVECC%%|$(NATIVECC) $(NATIVECCCOMPOPTS)|' \
             -e 's|%%NATIVELINK%%|$(NATIVECC) $(NATIVECCLINKOPTS)|' \
             -e 's|%%PARTIALLD%%|ld -r $(NATIVECCLINKOPTS)|' \
+            -e 's|%%NATIVECCRPATH%%|$(NATIVECCRPATH)|' \
             -e 's|%%BYTECCLIBS%%|$(BYTECCLIBS)|' \
             -e 's|%%NATIVECCLIBS%%|$(NATIVECCLIBS)|' \
             -e 's|%%RANLIBCMD%%|$(RANLIBCMD)|' \

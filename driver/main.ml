@@ -74,6 +74,7 @@ module Options = Main_args.Make_options (struct
   let _cclib s = ccobjs := s :: !ccobjs
   let _ccopt s = ccopts := s :: !ccopts
   let _custom = set custom_runtime
+  let _dllpath s = dllpaths := !dllpaths @ [s]
   let _g = set debug
   let _i = set print_types
   let _I s = include_dirs := s :: !include_dirs

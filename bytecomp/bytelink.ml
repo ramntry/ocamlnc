@@ -417,9 +417,11 @@ let build_custom_runtime prim_name exec_name =
             (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
                       !load_path))
           (String.concat " "
-            (List.map (fun dir -> if dir = "" then "" else "-Wl,-rpath " ^ dir)
-                      (Dll.ld_library_path_contents()
-                       @ Dll.ld_conf_contents())))
+            (List.map (fun dir -> if dir = "" then "" else
+                                  Config.bytecomp_c_rpath ^ " " ^ dir)
+                      (!Clflags.dllpaths @
+                       Dll.ld_library_path_contents() @
+                       Dll.ld_conf_contents())))
           (String.concat " " (List.rev !Clflags.ccobjs))
           Config.bytecomp_c_libraries)
   | "Win32" ->

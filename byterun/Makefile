@@ -71,7 +71,7 @@ clean:
 	rm -f primitives prims.c opnames.h jumptbl.h
 
 primitives : $(PRIMS)
-	sed -n -e '/\/\* ML \*\//s/.* \([a-z0-9_][a-z0-9_]*\) *(.*/\1/p' \
+	sed -n -e "s/CAMLprim value \([a-z0-9_][a-z0-9_]*\).*/\1/p" \
 	    $(PRIMS) > primitives
 
 prims.c : primitives

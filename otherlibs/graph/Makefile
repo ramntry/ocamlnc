@@ -38,7 +38,7 @@ libgraphics.a: $(OBJS)
 	$(RANLIB) libgraphics.a
 
 libgraphics.so: $(OBJS)
-	$(MKSHAREDLIB) libgraphics.so $(OBJS) $(X11_RAW_LINK)
+	$(MKSHAREDLIB) libgraphics.so $(OBJS) $(X11_LINK)
 
 graphics.cma: $(CAMLOBJS)
 	@ $(MAKE) graphics.cma.$(SO)
@@ -46,7 +46,7 @@ graphics.cma.so:
 	$(CAMLC) -a -o graphics.cma $(CAMLOBJS) -cclib -lgraphics
 graphics.cma.a:
 	$(CAMLC) -a -o graphics.cma -custom
-		$(CAMLOBJS) -cclib -lgraphics $(X11_LINK)
+		$(CAMLOBJS) -cclib -lgraphics -cclib "$(X11_LINK)"
 
 graphics.cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(CAMLOPT) -a -o graphics.cmxa \

@@ -15,7 +15,7 @@
 include ../../config/Makefile
 
 CC=$(BYTECC)
-CFLAGS=-I../../byterun -O $(BYTECCCOMPOPTS) -g
+CFLAGS=-I../../byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) -g
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -I ../unix
 
 C_OBJS=scheduler.o
@@ -41,7 +41,7 @@ UNIXLIB=../unix
 
 UNIXLIB_OBJS=unix.cmo
 
-all: libthreads.a threads.cma stdlib.cma unix.cma
+all: libthreads.a libthreads.$(SO) threads.cma stdlib.cma unix.cma
 
 allopt:
 
@@ -50,14 +50,17 @@ libthreads.a: $(C_OBJS)
 	ar rc libthreads.a $(C_OBJS)
 	$(RANLIB) libthreads.a
 
+libthreads.so: $(C_OBJS)
+	$(MKSHAREDLIB) libthreads.so $(C_OBJS)
+
 threads.cma: $(CAML_OBJS)
-	$(CAMLC) -a -o threads.cma -custom $(CAML_OBJS) -cclib -lthreads
+	$(CAMLC) -a -o threads.cma $(CUSTOM_IF_NOT_SHARED) $(CAML_OBJS) -cclib -lthreads
 
 stdlib.cma: $(LIB_OBJS)
 	$(CAMLC) -a -o stdlib.cma $(LIB_OBJS)
 
 unix.cma: $(UNIXLIB_OBJS)
-	$(CAMLC) -a -linkall -custom -o unix.cma $(UNIXLIB_OBJS) -cclib -lunix
+	$(CAMLC) -a -linkall $(CUSTOM_IF_NOT_SHARED) -o unix.cma $(UNIXLIB_OBJS) -cclib -lunix
 
 pervasives.cmo: pervasives.mli pervasives.cmi pervasives.ml
 	$(CAMLC) -nopervasives -c pervasives.ml
@@ -96,6 +99,7 @@ clean: partialclean
 install:
 	cp libthreads.a $(LIBDIR)/libthreads.a
 	cd $(LIBDIR); $(RANLIB) libthreads.a
+	if test -f libthreads.so; then cp libthreads.so $(LIBDIR)/libthreads.so; fi
 	if test -d $(LIBDIR)/threads; then : ; else mkdir $(LIBDIR)/threads; fi
 	cp thread.cmi mutex.cmi condition.cmi event.cmi threadUnix.cmi threads.cma stdlib.cma unix.cma $(LIBDIR)/threads
 	cp thread.mli mutex.mli condition.mli event.mli threadUnix.mli $(LIBDIR)

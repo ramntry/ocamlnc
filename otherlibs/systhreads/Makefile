@@ -24,7 +24,7 @@ THREAD_OBJS= thread.cmo mutex.cmo condition.cmo event.cmo threadUnix.cmo
 
 GENFILES=thread.ml
 
-all: libthreads.a threads.cma
+all: libthreads.a libthreads.$(SO) threads.cma
 
 allopt: libthreadsnat.a threads.cmxa
 
@@ -32,8 +32,12 @@ libthreads.a: $(BYTECODE_C_OBJS)
 	rm -f libthreads.a
 	ar rc libthreads.a $(BYTECODE_C_OBJS)
 
+libthreads.so: $(BYTECODE_C_OBJS)
+	$(MKSHAREDLIB) libthreads.so $(BYTECODE_C_OBJS) $(PTHREAD_LINK)
+
 posix_b.o: posix.c
-	$(BYTECC) -O -I../../byterun $(BYTECCCOMPOPTS) -c posix.c
+	$(BYTECC) -O -I../../byterun $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) \
+	   -c posix.c
 	mv posix.o posix_b.o
 
 libthreadsnat.a: $(NATIVECODE_C_OBJS)
@@ -45,12 +49,17 @@ posix_n.o: posix.c
 	mv posix.o posix_n.o
 
 threads.cma: $(THREAD_OBJS)
+	@ $(MAKE) threads.cma.$(SO)
+threads.cma.so:
+	$(CAMLC) -a -o threads.cma $(THREAD_OBJS) \
+          -cclib -lthreads -cclib -lunix
+threads.cma.a:
 	$(CAMLC) -a -o threads.cma -custom $(THREAD_OBJS) \
-          -cclib -lthreads -cclib -lunix $(PTHREAD_LINK)
+          -cclib -lthreads -cclib -lunix -cclib "$(PTHREAD_LINK)"
 
 threads.cmxa: $(THREAD_OBJS:.cmo=.cmx)
 	$(CAMLOPT) -a -o threads.cmxa $(THREAD_OBJS:.cmo=.cmx) \
-          -cclib -lthreadsnat -cclib -lunix $(PTHREAD_LINK)
+          -cclib -lthreadsnat -cclib -lunix -cclib "$(PTHREAD_LINK)"
 
 $(THREAD_OBJS:.cmo=.cmx): ../../ocamlopt
 
@@ -66,6 +75,7 @@ clean: partialclean
 
 install:
 	cp libthreads.a $(LIBDIR)/libthreads.a
+	if test -f libthreads.so; then cp libthreads.so $(LIBDIR)/libthreads.so; fi
 	if test -d $(LIBDIR)/threads; then :; else mkdir $(LIBDIR)/threads; fi
 	cp $(THREAD_OBJS:.cmo=.cmi) threads.cma $(LIBDIR)/threads
 	rm -f $(LIBDIR)/threads/stdlib.cma

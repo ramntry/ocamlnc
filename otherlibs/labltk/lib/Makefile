@@ -24,11 +24,11 @@ labltk.cma.so:
           -cclib -llabltk41
 labltk.cma.a:
 	$(LABLLIBR) -custom -o labltk.cma $(SUPPORT) tk.cmo $(WIDGETOBJS) \
-          -cclib -llabltk41 $(TK_LINK) $(X11_LINK)
+          -cclib -llabltk41 -cclib "$(TK_LINK)" -cclib "$(X11_LINK)"
 
 labltk.cmxa : $(SUPPORTX) $(WIDGETOBJSX) tk.cmx
 	$(CAMLOPTLIBR) -o labltk.cmxa $(SUPPORTX) tk.cmx $(WIDGETOBJSX) \
-          -cclib -llabltk41 $(TK_LINK) $(X11_LINK)
+          -cclib -llabltk41 -cclib "$(TK_LINK)" -cclib "$(X11_LINK)"
 
 labltktop$(EXE) : $(TOPDEPS) $(WIDGETOBJS) $(SUPPORT) ../support/liblabltk41.a
 	$(LABLC) -linkall -o labltktop$(EXE) -I ../support \
