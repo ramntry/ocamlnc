@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(* typecore.ml,v 1.99.2.10 2002/02/15 14:26:04 garrigue Exp *)
 
 (* Typechecking for the core language *)
 
@@ -1321,13 +1321,18 @@ and type_application env funct sargs =
        true)
     end
   in
+  let warned = ref false in
   let rec type_args args omitted ty_fun ty_old sargs more_sargs =
     match expand_head env ty_fun with
       {desc=Tarrow (l, ty, ty_fun, com); level=lv} as ty_fun'
-      when (sargs <> [] || more_sargs <> []) ->
-        let warn =
-          (commu_repr com = Cunknown) ||
-          (!Clflags.principal && lv <> generic_level) in
+      when (sargs <> [] || more_sargs <> []) && commu_repr com = Cok ->
+        let may_warn loc msg =
+          if not !warned && !Clflags.principal && lv <> generic_level
+          then begin
+            warned := true;
+            Location.prerr_warning loc (Warnings.Other msg)
+          end
+        in
         let ty = instance ty in
         let name = label_name l
         and optional = if is_optional l then Optional else Required in
@@ -1348,25 +1353,24 @@ and type_application env funct sargs =
             let (l', sarg0, sargs, more_sargs) =
               try
                 let (l', sarg0, sargs1, sargs2) = extract_label name sargs in
-                if warn && sargs1 <> [] then
-                  Location.prerr_warning sarg0.pexp_loc
-                  (Warnings.Other "Commuting this argument is not principal");
+                if sargs1 <> [] then
+                  may_warn sarg0.pexp_loc
+                    "Commuting this argument is not principal";
                 (l', sarg0, sargs1 @ sargs2, more_sargs)
               with Not_found ->
                 let (l', sarg0, sargs1, sargs2) =
                   extract_label name more_sargs in
-                if warn && (sargs1 <> [] || sargs <> []) then
-                  Location.prerr_warning sarg0.pexp_loc
-                  (Warnings.Other "Commuting this argument is not principal");
+                if sargs1 <> [] || sargs <> [] then
+                  may_warn sarg0.pexp_loc
+                    "Commuting this argument is not principal";
                 (l', sarg0, sargs @ sargs1, sargs2)
             in
             sargs, more_sargs,
             if optional = Required || is_optional l' then
               Some (fun () -> type_argument env sarg0 ty)
             else begin
-              if warn then Location.prerr_warning sarg0.pexp_loc
-                (Warnings.Other
-                   "Using an optional argument here is not principal");
+              may_warn sarg0.pexp_loc
+                "Using an optional argument here is not principal";
               Some (fun () -> option_some (type_argument env sarg0 
                                              (extract_option_type env ty)))
             end
@@ -1375,14 +1379,13 @@ and type_application env funct sargs =
             if optional = Optional &&
               (List.mem_assoc "" sargs || List.mem_assoc "" more_sargs)
             then begin
-              if warn then Location.prerr_warning funct.exp_loc
-                  (Warnings.Other
-                     "Eliminated an optional argument without principality");
+              may_warn funct.exp_loc
+                "Eliminated an optional argument without principality";
               ignored := (l,ty,lv) :: !ignored;
               Some (fun () -> option_none ty Location.none)
             end else begin
-              if warn then Location.prerr_warning funct.exp_loc
-                  (Warnings.Other "Commuted an argument without principality");
+              may_warn funct.exp_loc
+                "Commuted an argument without principality";
               None
             end
         in
