@@ -812,13 +812,19 @@ let rec type_exp env sexp =
           with Not_found ->
             raise(Error(sexp.pexp_loc, Unbound_label lid)) in
         begin_def ();
+        if !Clflags.principal then begin_def ();
         let (vars, ty_arg, ty_res) = instance_label true label in
+        if !Clflags.principal then begin
+          end_def ();
+          generalize_structure ty_arg;
+          generalize_structure ty_res
+        end;
         begin try
-          unify env ty_res ty
+          unify env (instance ty_res) ty
         with Unify trace ->
           raise(Error(sexp.pexp_loc, Label_mismatch(lid, trace)))
         end;
-        let arg = type_expect env sarg ty_arg in
+        let arg = type_argument env sarg ty_arg in
         end_def ();
         check_univars env "field value" arg label.lbl_arg vars;
         num_fields := Array.length label.lbl_all;
@@ -1450,14 +1456,20 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
   if List.length sargs <> constr.cstr_arity then
     raise(Error(loc, Constructor_arity_mismatch
                   (lid, constr.cstr_arity, List.length sargs)));
+  if !Clflags.principal then begin_def ();
   let (ty_args, ty_res) = instance_constructor constr in
+  if !Clflags.principal then begin
+    end_def ();
+    List.iter generalize_structure ty_args;
+    generalize_structure ty_res
+  end;
   let texp =
     { exp_desc = Texp_construct(constr, []);
       exp_loc = loc;
-      exp_type = ty_res;
+      exp_type = instance ty_res;
       exp_env = env } in
   unify_exp env texp ty_expected;
-  let args = List.map2 (type_expect env) sargs ty_args in
+  let args = List.map2 (type_argument env) sargs ty_args in
   { texp with exp_desc = Texp_construct(constr, args) }
 
 (* Typing of an expression with an expected type.
