@@ -11,7 +11,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* sys.ml,v 1.25.2.1 2002/02/12 09:43:01 garrigue Exp *)
+(* $Id$ *)
 
 (* System interface *)
 
@@ -78,4 +78,4 @@ let catch_break on =
 (* OCaml version string, moved from utils/config.mlp.
    Must be in the format described in sys.mli. *)
 
-let ocaml_version = "3.04+8 polymorphic methods (2002-03-18)"
+let ocaml_version = "3.04+8 polymorphic methods (2002-03-25)"

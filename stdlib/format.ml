@@ -79,11 +79,20 @@ type 'a queue = {
  mutable body : 'a queue_elem
 };;
 
+type formatter_tag_functions = {
+ mark_open_tag : tag -> string;
+ mark_close_tag : tag -> string;
+ print_open_tag : tag -> unit;
+ print_close_tag : tag -> unit;
+
+};;
+
 type formatter = {
  mutable pp_scan_stack : pp_scan_elem list;
  mutable pp_format_stack : pp_format_elem list;
  mutable pp_tbox_stack : tblock list;
  mutable pp_tag_stack : tag list;
+ mutable pp_mark_stack : tag list;
  (* Global variables: default initialization is
     set_margin 78
     set_min_space_left 0 *)
@@ -115,15 +124,18 @@ type formatter = {
  (* Flushing function *)
  mutable pp_flush_function : unit -> unit;
  (* Output of new lines *)
- mutable pp_output_newline : formatter -> unit -> unit;
+ mutable pp_output_newline : unit -> unit;
  (* Output of indentation spaces *)
- mutable pp_output_spaces : formatter -> int -> unit;
+ mutable pp_output_spaces : int -> unit;
  (* Are tags printed ? *)
  mutable pp_print_tags : bool;
- (* Function to open tags. *)
- mutable pp_open_tag_function : formatter -> string -> tag;
- (* Function to close tags. *)
- mutable pp_close_tag_function : formatter -> tag -> unit;
+ (* Are tags marked ? *)
+ mutable pp_mark_tags : bool;
+ (* Find opening and closing markers of tags. *)
+ mutable pp_mark_open_tag : tag -> string;
+ mutable pp_mark_close_tag : tag -> string;
+ mutable pp_print_open_tag : tag -> unit;
+ mutable pp_print_close_tag : tag -> unit;
  (* The pretty-printer queue *)
  mutable pp_queue : pp_queue_elem queue
 };;
@@ -176,9 +188,9 @@ let pp_infinity = 999999999;;
 
 (* Output functions for the formatter *)
 let pp_output_string state s = state.pp_output_function s 0 (String.length s)
-and pp_output_newline state = state.pp_output_newline state ();;
+and pp_output_newline state = state.pp_output_newline ();;
 
-let pp_display_blanks state n = state.pp_output_spaces state n;;
+let pp_display_blanks state n = state.pp_output_spaces n;;
 
 (* To format a break, indenting a new line *)
 let break_new_line state offset width =
@@ -325,14 +337,16 @@ let format_pp_token state size = function
      end
 
    | Pp_open_tag tag_name ->
-      let tag = state.pp_open_tag_function state tag_name in
-      state.pp_tag_stack <- tag :: state.pp_tag_stack
+      let marker = state.pp_mark_open_tag tag_name in
+      pp_output_string state marker;
+      state.pp_mark_stack <- tag_name :: state.pp_mark_stack
 
    | Pp_close_tag ->
-      begin match state.pp_tag_stack with
-      | tag :: tags ->
-          state.pp_tag_stack <- tags;
-          state.pp_close_tag_function state tag
+      begin match state.pp_mark_stack with
+      | tag_name :: tags ->
+          let marker = state.pp_mark_close_tag tag_name in
+          pp_output_string state marker;
+          state.pp_mark_stack <- tags
       | _ -> () (* No more tag to close *)
       end;;
 
@@ -441,23 +455,47 @@ let pp_close_box state () =
      end;;
 
 (* Open a tag, pushing it on the tag stack. *)
-let pp_open_tag state s =
-    if state.pp_print_tags then
-    pp_enqueue state {elem_size = 0; token = Pp_open_tag s; length = 0};;
+let pp_open_tag state tag_name =
+    if state.pp_print_tags then begin
+      state.pp_tag_stack <- tag_name :: state.pp_tag_stack;
+      state.pp_print_open_tag tag_name end;
+    if state.pp_mark_tags then
+      pp_enqueue state
+        {elem_size = 0; token = Pp_open_tag tag_name; length = 0};;
 
 (* Close a tag, popping it from the tag stack. *)
 let pp_close_tag state () =
+    if state.pp_mark_tags then
+      pp_enqueue state {elem_size = 0; token = Pp_close_tag; length = 0};
     if state.pp_print_tags then
-    pp_enqueue state {elem_size = 0; token = Pp_close_tag; length = 0};;
+      begin match state.pp_tag_stack with
+      | tag_name :: tags ->
+          state.pp_print_close_tag tag_name;
+          state.pp_tag_stack <- tags
+      | _ -> () (* No more tag to close *)
+      end;;
 
 let pp_set_print_tags state b = state.pp_print_tags <- b;;
+let pp_set_mark_tags state b = state.pp_mark_tags <- b;;
+let pp_get_print_tags state () = state.pp_print_tags;;
+let pp_get_mark_tags state () = state.pp_mark_tags;;
 
 let pp_get_formatter_tag_functions state () =
- (state.pp_open_tag_function, state.pp_close_tag_function);;
+  {mark_open_tag = state.pp_mark_open_tag;
+   mark_close_tag = state.pp_mark_close_tag;
+   print_open_tag = state.pp_print_open_tag;
+   print_close_tag = state.pp_print_close_tag;
+};;
 
-let pp_set_formatter_tag_functions state otag ctag =
- state.pp_open_tag_function <- otag;
- state.pp_close_tag_function <- ctag;;
+let pp_set_formatter_tag_functions state
+    {mark_open_tag = motag;
+     mark_close_tag = mctag;
+     print_open_tag = potag;
+     print_close_tag = pctag;} =
+  state.pp_mark_open_tag <- motag;
+  state.pp_mark_close_tag <- mctag;
+  state.pp_print_open_tag <- potag;
+  state.pp_print_close_tag <- pctag;;
 
 (* Initialize pretty-printer. *)
 let pp_rinit state =
@@ -469,6 +507,7 @@ let pp_rinit state =
     state.pp_format_stack <- [];
     state.pp_tbox_stack <- [];
     state.pp_tag_stack <- [];
+    state.pp_mark_stack <- [];
     pp_open_sys_box state;;
 
 (* Flushing pretty-printer queue. *)
@@ -590,7 +629,7 @@ let pp_over_max_boxes state () = state.pp_curr_depth = state.pp_max_boxes;;
 let pp_set_ellipsis_text state s = state.pp_ellipsis <- s
 and pp_get_ellipsis_text state () = state.pp_ellipsis;;
 
-(* To set the margin of pretty-formater *)
+(* To set the margin of pretty-printer *)
 let pp_set_min_space_left state n =
   if n >= 1 && n < pp_infinity then
    begin
@@ -598,7 +637,7 @@ let pp_set_min_space_left state n =
     state.pp_max_indent <- state.pp_margin - state.pp_min_space_left;
     pp_rinit state end;;
 
-(* Initially we have :
+(* Initially, we have :
   pp_max_indent = pp_margin - pp_min_space_left, and
   pp_space_left = pp_margin *)
 let pp_set_max_indent state n =
@@ -631,27 +670,21 @@ let pp_get_formatter_output_functions state () =
 let pp_set_all_formatter_output_functions state
     ~out:f ~flush:g ~newline:h ~spaces:i =
   pp_set_formatter_output_functions state f g;
-  state.pp_output_newline <- (function _ -> function () -> h ());
-  state.pp_output_spaces <- (function _ -> function n -> i n);;
+  state.pp_output_newline <- (function () -> h ());
+  state.pp_output_spaces <- (function n -> i n);;
 let pp_get_all_formatter_output_functions state () =
   (state.pp_output_function, state.pp_flush_function,
-   state.pp_output_newline state, state.pp_output_spaces state);;
+   state.pp_output_newline, state.pp_output_spaces);;
 
 let pp_set_formatter_out_channel state os =
   state.pp_output_function <- output os;
   state.pp_flush_function <- (fun () -> flush os);;
 
-let default_pp_open_tag_function state tag_name =
-  let out = state.pp_output_function in
-  out "<" 0 1;
-  out tag_name 0 (String.length tag_name);
-  out ">" 0 1;
-  tag_name;;
-let default_pp_close_tag_function state tag =
-  let out = state.pp_output_function in
-  out "</" 0 2;
-  out tag 0 (String.length tag);
-  out ">" 0 1;;
+let default_pp_mark_open_tag s = "<" ^ s ^ ">";;
+let default_pp_mark_close_tag s = "</" ^ s ^ ">";;
+
+let default_pp_print_open_tag s = ();;
+let default_pp_print_close_tag = default_pp_print_open_tag;;
 
 let pp_make_formatter f g h i =
  (* The initial state of the formatter contains a dummy box *)
@@ -665,6 +698,7 @@ let pp_make_formatter f g h i =
   pp_format_stack = [];
   pp_tbox_stack = [];
   pp_tag_stack = [];
+  pp_mark_stack = [];
   pp_margin = 78;
   pp_min_space_left = 10;
   pp_max_indent = 78 - 10;
@@ -681,8 +715,11 @@ let pp_make_formatter f g h i =
   pp_output_newline = h;
   pp_output_spaces = i;
   pp_print_tags = true;
-  pp_open_tag_function = default_pp_open_tag_function;
-  pp_close_tag_function = default_pp_close_tag_function;
+  pp_mark_tags = true;
+  pp_mark_open_tag = default_pp_mark_open_tag;
+  pp_mark_close_tag = default_pp_mark_close_tag;
+  pp_print_open_tag = default_pp_print_open_tag;
+  pp_print_close_tag = default_pp_print_close_tag;
   pp_queue = pp_q
  };;
 
@@ -699,15 +736,19 @@ let rec display_blanks state n =
 (* Default function to output new lines *)
 let display_newline state () = state.pp_output_function "\n" 0  1;;
 
-let make_formatter f g = pp_make_formatter f g display_newline display_blanks;;
+let make_formatter f g =
+  let ff = pp_make_formatter f g ignore ignore in
+  ff.pp_output_newline <- display_newline ff;
+  ff.pp_output_spaces <- display_blanks ff;
+  ff;;
 
 let formatter_of_out_channel oc =
- make_formatter (output oc) (fun () -> flush oc);;
+  make_formatter (output oc) (fun () -> flush oc);;
 
 let unit_out () = ();;
 
 let formatter_of_buffer b =
- make_formatter (Buffer.add_substring b) unit_out;;
+  make_formatter (Buffer.add_substring b) unit_out;;
 
 let stdbuf = Buffer.create 512;;
 
@@ -716,10 +757,10 @@ let std_formatter = formatter_of_out_channel stdout;;
 let err_formatter = formatter_of_out_channel stderr;;
 
 let flush_str_formatter () =
- pp_flush_queue str_formatter false;
- let s = Buffer.contents stdbuf in
- Buffer.reset stdbuf;
- s;;
+  pp_flush_queue str_formatter false;
+  let s = Buffer.contents stdbuf in
+  Buffer.reset stdbuf;
+  s;;
 
 let open_hbox = pp_open_hbox std_formatter
 and open_vbox = pp_open_vbox std_formatter
@@ -776,14 +817,18 @@ and set_all_formatter_output_functions =
 and get_all_formatter_output_functions =
     pp_get_all_formatter_output_functions std_formatter
 
-and set_formatter_tag_functions ot ct =
+and set_formatter_tag_functions =
     pp_set_formatter_tag_functions std_formatter
-     (function _ -> ot) (function _ -> ct)
-and get_formatter_tag_functions () =
-    let otag, ctag = pp_get_formatter_tag_functions std_formatter () in
-    otag std_formatter, ctag std_formatter
+and get_formatter_tag_functions =
+    pp_get_formatter_tag_functions std_formatter
 and set_print_tags =
     pp_set_print_tags std_formatter
+and get_print_tags =
+    pp_get_print_tags std_formatter
+and set_mark_tags =
+    pp_set_mark_tags std_formatter
+and get_mark_tags =
+    pp_get_mark_tags std_formatter
 ;;
 
 
@@ -1026,10 +1071,12 @@ let string_out b ppf () =
 let fprintf ppf = fprintf_out false unit_out ppf;;
 let printf f = fprintf_out false unit_out std_formatter f;;
 let eprintf f = fprintf_out false unit_out err_formatter f;;
-let sprintf f =
+let kprintf k f =
  let b = Buffer.create 512 in
  let ppf = formatter_of_buffer b in
- fprintf_out true (string_out b ppf) ppf f;;
+ fprintf_out true (fun () -> k (string_out b ppf ())) ppf f
+;;
+let sprintf f = kprintf (fun x -> x) f;;
 
 let bprintf b =
  let ppf = formatter_of_buffer b in

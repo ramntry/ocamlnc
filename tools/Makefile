@@ -16,6 +16,7 @@ include ../config/Makefile
 
 CAMLRUN=../boot/ocamlrun
 CAMLC=$(CAMLRUN) ../boot/ocamlc -I ../boot
+CAMLOPT=$(CAMLRUN) ../ocamlopt 
 CAMLLEX=$(CAMLRUN) ../boot/ocamllex
 INCLUDES=-I ../utils -I ../parsing -I ../typing -I ../bytecomp -I ../asmcomp \
          -I ../driver
@@ -24,15 +25,20 @@ LINKFLAGS=$(INCLUDES)
 
 all: ocamldep ocamlprof ocamlcp ocamlmktop ocamlmklib scrapelabels addlabels
 
+opt.opt: depend.cmx
+
 # The dependency generator
 
-CAMLDEP_OBJ=ocamldep.cmo
+CAMLDEP_OBJ=depend.cmo ocamldep.cmo
 CAMLDEP_IMPORTS=misc.cmo config.cmo clflags.cmo terminfo.cmo \
   linenum.cmo warnings.cmo location.cmo longident.cmo \
   syntaxerr.cmo parser.cmo lexer.cmo parse.cmo
 
-ocamldep: $(CAMLDEP_OBJ)
+ocamldep: depend.cmi $(CAMLDEP_OBJ)
 	$(CAMLC) $(LINKFLAGS) -o ocamldep $(CAMLDEP_IMPORTS) $(CAMLDEP_OBJ)
+
+depend.cmx:
+	$(CAMLOPT) $(INCLUDES) -I ../stdlib depend.ml
 
 clean::
 	rm -f ocamldep
