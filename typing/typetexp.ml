@@ -264,9 +264,12 @@ let rec transl_type env policy rowvar styp =
 	                  if policy = Univars then new_pre_univar ()
                           else newvar () }
           in newty (Tvariant row)
-      | Tobject (_, {contents=Some(_, tv::_)}) ->
+      | Tobject (fi, _) ->
+          let _, tv = flatten_fields fi in
+          if policy = Univars then pre_univars := tv :: !pre_univars;
           begin match rowvar with None -> ()
           | Some rv ->
+              let _, tv = flatten_fields fi in
               try unify_var env tv rv with Unify trace ->
                 raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
           end;
