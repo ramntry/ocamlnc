@@ -31,6 +31,10 @@
 #include "osdeps.h"
 #include "signals.h"
 
+#ifndef S_ISREG
+#define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
+#endif
+
 char * decompose_path(struct ext_table * tbl, char * path)
 {
   char * p, * q;
@@ -64,7 +68,7 @@ char * search_in_path(struct ext_table * path, char * name)
     fullname = stat_alloc(strlen((char *)(path->contents[i])) +
                           strlen(name) + 2);
     strcpy(fullname, (char *)(path->contents[i]));
-    strcat(fullname, "/");
+    strcat(fullname, "\\");
     strcat(fullname, name);
     if (stat(fullname, &st) == 0 && S_ISREG(st.st_mode)) return fullname;
     stat_free(fullname);
@@ -75,7 +79,7 @@ char * search_in_path(struct ext_table * path, char * name)
   return fullname;
 }
   
-char * search_exe_in_path(char * name)
+CAMLexport char * search_exe_in_path(char * name)
 {
 #define MAX_PATH_LENGTH 512
   char * fullname = stat_alloc(512);
@@ -104,22 +108,34 @@ char * search_dll_in_path(struct ext_table * path, char * name)
 
 void * caml_dlopen(char * libname)
 {
-
+  return (void *) LoadLibrary(libname);
 }
 
 void caml_dlclose(void * handle)
 {
-
+  FreeLibrary((HMODULE) handle);
 }
 
 void * caml_dlsym(void * handle, char * name)
 {
-
+  return (void *) GetProcAddress((HMODULE) handle, name);
 }
 
 char * caml_dlerror(void)
 {
-
+  static char dlerror_buffer[256];
+  DWORD msglen =
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL,         /* message source */
+                  GetLastError(), /* error number */
+                  0,            /* default language */
+                  dlerror_buffer, /* destination */
+                  sizeof(dlerror_buffer), /* size of destination */
+                  NULL);         /* no inserts */
+  if (msglen == 0)
+    return "unknown error";
+  else
+    return dlerror_buffer;
 }
 
 /* Expansion of @responsefile and *? file patterns in the command line */
@@ -213,7 +229,7 @@ static void expand_diversion(char * filename)
   }
 }
 
-void expand_command_line(int * argcp, char *** argvp)
+CAMLexport void expand_command_line(int * argcp, char *** argvp)
 {
   int i;
   argc = 0;
@@ -230,8 +246,6 @@ void expand_command_line(int * argcp, char *** argvp)
 
 /* Wrapper around "system" for Win32.  Create a diversion file if
    command line is too long. */
-
-extern char * mktemp(char *);
 
 int win32_system(char * cmdline)
 {

@@ -53,11 +53,15 @@
 #include "ui.h"
 #endif
 
+#ifndef _WIN32
 extern int errno;
+#endif
 
 #ifdef HAS_STRERROR
 
+#ifndef _WIN32
 extern char * strerror(int);
+#endif
 
 char * error_message(void)
 {
@@ -86,7 +90,7 @@ char * error_message(void)
 #define EWOULDBLOCK (-1)
 #endif
 
-void sys_error(value arg)
+CAMLexport void sys_error(value arg)
 {
   CAMLparam1 (arg);
   char * err;
@@ -110,7 +114,7 @@ void sys_error(value arg)
   }
 }
 
-value sys_exit(value retcode)          /* ML */
+CAMLprim value sys_exit(value retcode)
 {
 #ifndef NATIVE_CODE
   debugger(PROGRAM_EXIT);
@@ -142,7 +146,7 @@ static int sys_open_flags[] = {
   O_BINARY, O_TEXT, O_NONBLOCK
 };
 
-value sys_open(value path, value flags, value perm) /* ML */
+CAMLprim value sys_open(value path, value flags, value perm)
 {
   int ret;
   ret = open(String_val(path), convert_flag_list(flags, sys_open_flags)
@@ -154,13 +158,13 @@ value sys_open(value path, value flags, value perm) /* ML */
   return Val_long(ret);
 }
 
-value sys_close(value fd)             /* ML */
+CAMLprim value sys_close(value fd)
 {
   close(Int_val(fd));
   return Val_unit;
 }
 
-value sys_file_exists(value name)     /* ML */
+CAMLprim value sys_file_exists(value name)
 {
 #if macintosh
   int f;
@@ -174,7 +178,7 @@ value sys_file_exists(value name)     /* ML */
 #endif
 }
 
-value sys_remove(value name)          /* ML */
+CAMLprim value sys_remove(value name)
 {
   int ret;
   ret = unlink(String_val(name));
@@ -182,20 +186,20 @@ value sys_remove(value name)          /* ML */
   return Val_unit;
 }
 
-value sys_rename(value oldname, value newname) /* ML */
+CAMLprim value sys_rename(value oldname, value newname)
 {
   if (rename(String_val(oldname), String_val(newname)) != 0)
     sys_error(oldname);
   return Val_unit;
 }
 
-value sys_chdir(value dirname)        /* ML */
+CAMLprim value sys_chdir(value dirname)
 {
   if (chdir(String_val(dirname)) != 0) sys_error(dirname);
   return Val_unit;
 }
 
-value sys_getcwd(value unit)          /* ML */
+CAMLprim value sys_getcwd(value unit)
 {
   char buff[4096];
 #ifdef HAS_GETCWD
@@ -206,7 +210,7 @@ value sys_getcwd(value unit)          /* ML */
   return copy_string(buff);
 }
 
-value sys_getenv(value var)           /* ML */
+CAMLprim value sys_getenv(value var)
 {
   char * res;
 
@@ -217,7 +221,7 @@ value sys_getenv(value var)           /* ML */
 
 char ** caml_main_argv;
 
-value sys_get_argv(value unit)        /* ML */
+CAMLprim value sys_get_argv(value unit)
 {
   return copy_string_array((char const **) caml_main_argv);
 }
@@ -237,7 +241,7 @@ void sys_init(char **argv)
 extern int win32_system(char * command);
 #endif
 
-value sys_system_command(value command)   /* ML */
+CAMLprim value sys_system_command(value command)
 {
   int status, retcode;
   
@@ -256,7 +260,7 @@ value sys_system_command(value command)   /* ML */
   return Val_int(retcode);
 }
 
-value sys_time(value unit)            /* ML */
+CAMLprim value sys_time(value unit)
 {
 #ifdef HAS_TIMES
 #ifndef CLK_TCK
@@ -275,7 +279,7 @@ value sys_time(value unit)            /* ML */
 #endif
 }
 
-value sys_random_seed (value unit)       /* ML */
+CAMLprim value sys_random_seed (value unit)
 {
 #ifdef HAS_GETTIMEOFDAY
   struct timeval tv;
@@ -286,7 +290,7 @@ value sys_random_seed (value unit)       /* ML */
 #endif
 }
 
-value sys_get_config(value unit)  /* ML */
+CAMLprim value sys_get_config(value unit)
 {
   CAMLparam0 ();   /* unit is unused */
   CAMLlocal2 (result, ostype);

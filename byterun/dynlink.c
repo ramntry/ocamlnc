@@ -162,7 +162,7 @@ void build_primitive_table(char * lib_path,
 
 #define Handle_val(v) (*((void **) (v)))
 
-value dynlink_open_lib(value filename) /* ML */
+CAMLprim value dynlink_open_lib(value filename)
 {
   void * handle;
   value result;
@@ -174,13 +174,13 @@ value dynlink_open_lib(value filename) /* ML */
   return result;
 }
 
-value dynlink_close_lib(value handle) /* ML */
+CAMLprim value dynlink_close_lib(value handle)
 {
   caml_dlclose(Handle_val(handle));
   return Val_unit;
 }
 
-value dynlink_lookup_symbol(value handle, value symbolname) /* ML */
+CAMLprim value dynlink_lookup_symbol(value handle, value symbolname)
 {
   void * symb;
   value result;
@@ -191,12 +191,12 @@ value dynlink_lookup_symbol(value handle, value symbolname) /* ML */
   return result;
 }
 
-value dynlink_add_primitive(value handle) /* ML */
+CAMLprim value dynlink_add_primitive(value handle)
 {
   return Val_int(ext_table_add(&prim_table, Handle_val(handle)));
 }
 
-value dynlink_get_current_libs(value unit) /* ML */
+CAMLprim value dynlink_get_current_libs(value unit)
 {
   CAMLparam0();
   CAMLlocal1(res);

@@ -162,7 +162,7 @@ static void print_location(value events, code_t pc)
 
 /* Print a backtrace */
 
-void print_exception_backtrace(void)
+CAMLexport void print_exception_backtrace(void)
 {
   value events;
   int i, nrepeat;

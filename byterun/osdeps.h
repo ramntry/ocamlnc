@@ -30,7 +30,7 @@ extern char * decompose_path(struct ext_table * tbl, char * path);
 extern char * search_in_path(struct ext_table * path, char * name);
 
 /* Same, but search an executable name in the system path for executables. */
-extern char * search_exe_in_path(char * name);
+CAMLextern char * search_exe_in_path(char * name);
 
 /* Same, but search a shared library in the given path. */
 extern char * search_dll_in_path(struct ext_table * path, char * name);

@@ -36,10 +36,10 @@ SYSTEM_INCLUDES=c:\Msdev\VC98\Include
 BYTECC=cl /nologo
 
 ### Additional compile-time options for $(BYTECC).
-BYTECCCOMPOPTS=/Ox /MT
+BYTECCCOMPOPTS=/Ox /MD
 
 ### Additional link-time options for $(BYTECC)
-BYTECCLINKOPTS=/MT
+BYTECCLINKOPTS=/MD
 
 ### Libraries needed
 BYTECCLIBS=wsock32.lib
@@ -50,6 +50,7 @@ CPP=cl /nologo /EP
 
 ### How to invoke the librarian
 MKLIB=lib /nologo /debugtype:CV /out:
+MKDLL=cl /nologo /MD /LD
 
 ############# Configuration for the native-code compiler
 

@@ -60,7 +60,7 @@
 #define SEEK_END 2
 #endif
 
-header_t atom_table[256];
+CAMLexport header_t atom_table[256];
 
 /* Initialize the atom table */
 
@@ -303,7 +303,7 @@ extern void caml_signal_thread(void * lpParam);
 
 /* Main entry point when loading code from a file */
 
-void caml_main(char **argv)
+CAMLexport void caml_main(char **argv)
 {
   int fd, pos;
   struct exec_trailer trail;
@@ -394,7 +394,8 @@ void caml_main(char **argv)
 
 /* Main entry point when code is linked in as initialized data */
 
-void caml_startup_code(code_t code, asize_t code_size, char *data, char **argv)
+CAMLexport void caml_startup_code(code_t code, asize_t code_size,
+                                  char *data, char **argv)
 {
   value res;
 

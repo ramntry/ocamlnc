@@ -4,7 +4,7 @@
 /*                                                                     */
 /*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
 /*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
+/*  Copyright 2001 Institut National de Recherche en Informatique et   */
 /*  en Automatique.  All rights reserved.  This file is distributed    */
 /*  under the terms of the GNU Library General Public License.         */
 /*                                                                     */
@@ -12,13 +12,30 @@
 
 /* $Id$ */
 
+#include <errno.h>
+#include <string.h>
 #include <mlvalues.h>
+#include <alloc.h>
 #include "unixsupport.h"
 
-CAMLprim value unix_chdir(value path)
+extern int error_table[];
+
+CAMLprim value unix_error_message(value err)
 {
-  int ret;
-  ret = chdir(String_val(path));
-  if (ret == -1) uerror("chdir", path);
-  return Val_unit;
+  int errnum;
+  char buffer[256];
+  
+  errnum = Is_block(err) ? Int_val(Field(err, 0)) : error_table[Int_val(err)];
+  if (errnum > 0)
+    return copy_string(strerror(errnum));
+  if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                    NULL,
+                    -errnum,
+                    0,
+                    buffer,
+                    sizeof(buffer),
+                    NULL))
+    return copy_string(buffer);
+  return copy_string("unknown error");
 }
+

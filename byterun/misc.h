@@ -42,6 +42,26 @@ typedef char * addr;
 #define Noreturn
 #endif
 
+/* Export control (to mark primitives and to handle Windows DLL) */
+
+#ifdef _WIN32
+# define CAMLexport __declspec(dllexport)
+# define CAMLprim __declspec(dllexport)
+# if defined(_DLL)
+#  if defined(IN_OCAMLRUN)
+#   define CAMLextern __declspec(dllexport) extern
+#  else
+#   define CAMLextern __declspec(dllimport) extern
+#  endif
+# else
+#  define CAMLextern extern
+# endif
+#else
+# define CAMLexport
+# define CAMLprim
+# define CAMLextern extern
+#endif
+
 /* Assertions */
 
 #ifdef DEBUG
