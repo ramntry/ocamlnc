@@ -146,7 +146,8 @@ let transl_declaration env (name, sdecl) id =
         begin match sdecl.ptype_manifest with
           None -> None
         | Some sty ->
-            let ty = transl_simple_type env true sty in
+            let ty =
+              transl_simple_type env (sdecl.ptype_kind <> Ptype_fixed) sty in
             if Ctype.cyclic_abbrev env id ty then
               raise(Error(sdecl.ptype_loc, Recursive_abbrev name));
             Some ty
