@@ -1091,15 +1091,9 @@ echo "BYTECCLINKOPTS=$bytecclinkopts" >> Makefile
 echo "BYTECCLIBS=$cclibs $dllib $curseslibs" >> Makefile
 echo "BYTECCRPATH=$byteccrpath" >> Makefile
 echo "EXE=$exe" >> Makefile
+echo "SUPPORTS_SHARED_LIBRARIES=$shared_libraries_supported" >> Makefile
 echo "SHAREDCCCOMPOPTS=$sharedcccompopts" >> Makefile
 echo "MKSHAREDLIB=$mksharedlib" >> Makefile
-if $shared_libraries_supported; then
-  echo "SO=so" >> Makefile
-  echo "CUSTOM_IF_NOT_SHARED=" >> Makefile
-else
-  echo "SO=a" >> Makefile
-  echo "CUSTOM_IF_NOT_SHARED=-custom" >> Makefile
-fi
 
 echo "ARCH=$arch" >> Makefile
 echo "MODEL=$model" >> Makefile

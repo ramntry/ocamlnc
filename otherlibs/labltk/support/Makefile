@@ -2,11 +2,11 @@ include Makefile.common
 
 all: support.cmo widget.cmo protocol.cmo \
      textvariable.cmo timer.cmo fileevent.cmo \
-     liblabltk41.a liblabltk41.$(SO)
+     liblabltk41.a
 
 opt: support.cmx widget.cmx protocol.cmx \
      textvariable.cmx timer.cmx fileevent.cmx \
-     liblabltk41.a liblabltk41.$(SO)
+     liblabltk41.a
 
 COBJS=cltkCaml.o cltkEval.o cltkEvent.o cltkFile.o cltkMain.o \
       cltkMisc.o cltkTimer.o cltkVar.o cltkWait.o
@@ -16,12 +16,7 @@ CCFLAGS=-I../../../byterun $(TK_DEFS) $(X11_INCLUDES) $(SHAREDCCCOMPOPTS)
 COMPFLAGS=-I $(OTHERS)/unix
 
 liblabltk41.a : $(COBJS)
-	rm -f liblabltk41.a
-	ar rc liblabltk41.a $(COBJS)
-	$(RANLIB) liblabltk41.a
-
-liblabltk41.so : $(COBJS)
-	$(MKSHAREDLIB) liblabltk41.so $(COBJS) $(TK_LINK) $(X11_LINK)
+	$(MKLIB) -o labltk41 $(COBJS) $(TK_LINK) $(X11_LINK)
 
 PUB=fileevent.cmi fileevent.mli \
     protocol.cmi protocol.mli \
@@ -29,9 +24,10 @@ PUB=fileevent.cmi fileevent.mli \
     timer.cmi timer.mli \
     widget.cmi widget.mli
 
-install:
+install: liblabltk41.a $(PUB)
 	if test -d $(LABLTKDIR); then : ; else mkdir $(LABLTKDIR); fi
 	cp $(PUB) liblabltk41.a $(LABLTKDIR)
+	cd $(LABLTKDIR); $(RANLIB) liblabltk41.a
 	if test -f liblabltk41.so; then cp liblabltk41.so $(LABLTKDIR); fi
 	cd $(LABLTKDIR); chmod 644 $(PUB) liblabltk41.*
 

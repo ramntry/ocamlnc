@@ -23,28 +23,20 @@ CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib
 CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib
 REGEXLIB=regex-0.12
 COBJS=strstubs.o $(REGEXLIB)/regex.o
+MKLIB=../../tools/ocamlmklib
 
-all: libstr.a libstr.$(SO) str.cmi str.cma
+all: libstr.a str.cmi str.cma
 
 allopt: libstr.a str.cmi str.cmxa
 
 libstr.a: $(COBJS)
-	rm -f libstr.a
-	ar rc libstr.a $(COBJS)
-	$(RANLIB) libstr.a
-
-libstr.so: $(COBJS)
-	$(MKSHAREDLIB) libstr.so $(COBJS)
+	$(MKLIB) -o str $(COBJS)
 
 str.cma: str.cmo
-	@ $(MAKE) str.cma.$(SO)
-str.cma.so:
-	$(CAMLC) -a -o str.cma str.cmo -cclib -lstr
-str.cma.a:
-	$(CAMLC) -a -o str.cma -custom str.cmo -cclib -lstr
+	$(MKLIB) -ocamlc '$(CAMLC)' -o str str.cmo
 
 str.cmxa: str.cmx
-	$(CAMLOPT) -a -o str.cmxa str.cmx -cclib -lstr
+	$(MKLIB) -ocamlopt '$(CAMLOPT)' -o str str.cmx
 
 $(REGEXLIB)/regex.o: $(REGEXLIB)/regex.c $(REGEXLIB)/regex.h
 	cd $(REGEXLIB); CC="$(CC) $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS)" sh configure; $(MAKE)
@@ -59,7 +51,7 @@ clean: partialclean
 	cd $(REGEXLIB); if test -f Makefile; then $(MAKE) distclean; else exit 0; fi
 
 install:
-	if test -f libstr.so; then cp libstr.so $(LIBDIR)/libstr.so; fi
+	test -f libstr.so && cp libstr.so $(LIBDIR)/libstr.so
 	cp libstr.a $(LIBDIR)/libstr.a
 	cd $(LIBDIR); $(RANLIB) libstr.a
 	cp str.cma str.cmi str.mli $(LIBDIR)
