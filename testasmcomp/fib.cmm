@@ -1,5 +1,0 @@
-(function "fib" (n: int)
-  (if (< n 2)
-      1
-    (+ (app "fib" (- n 1) int)
-       (app "fib" (- n 2) int))))

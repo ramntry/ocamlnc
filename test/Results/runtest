@@ -1,1 +1,0 @@
-../byterun/camlrun $1 | cmp - Results/$1.out
