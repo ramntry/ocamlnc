@@ -41,6 +41,8 @@ exception Error of Location.t * error
 
 let type_variables = ref (Tbl.empty : (string, type_expr) Tbl.t)
 let saved_type_variables = ref ([] : (string, type_expr) Tbl.t list)
+let univars        = ref ([] : (string * type_expr) list)
+let pre_univars    = ref ([] : type_expr list)
 
 let used_variables = ref (Tbl.empty : (string, type_expr) Tbl.t)
 let bindings       = ref ([] : (Location.t * type_expr * type_expr) list)
@@ -262,7 +264,7 @@ let rec transl_type env policy styp =
       if policy = Fixed && not (Btype.static_row row) then
         raise(Error(styp.ptyp_loc, Unbound_type_variable "[..]"));
       newty (Tvariant row)
-  | Ptyp_poly(st, vars) ->
+  | Ptyp_poly(vars, st) ->
       let ty_list = List.map (fun _ -> newty Tunivar) vars in
       let old_univars = !univars in
       univars := ty_list @ !univars;

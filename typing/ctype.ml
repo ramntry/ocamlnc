@@ -1145,6 +1145,68 @@ let occur env ty0 ty =
     try occur_rec env [] ty0 ty with Occur -> raise (Unify [])
 
 
+                   (*****************************)
+                   (*  Polymorphic Unification  *)
+                   (*****************************)
+
+(* Since we cannot duplicate universal variables, unification must
+   be done at meta-level, using bindings in univar_pairs *)
+let rec unify_univar t1 t2 = function
+    (cl1, cl2) :: rem ->
+      let repr_univ = List.map (fun (t,o) -> repr t, o) in
+      let cl1 = repr_univ cl1 and cl2 = repr_univ cl2 in
+      begin try
+	let r1 = List.assq t1 cl1 in
+	match !r1 with
+	  Some t -> if t2 != repr t then raise (Unify [])
+	| None ->
+	    try
+	      let r2 = List.assq t2 cl2 in
+	      if !r2 <> None then raise (Unify []);
+	      r1 := Some t2; r2 := Some t1
+	    with Not_found ->
+	      raise (Unify [])
+      with Not_found ->
+	unify_univar t1 t2 rem
+      end
+  | [] -> raise (Unify [])
+
+module TypeMap = Map.Make (TypeOps)
+
+(* Test the occurence of free univars in a type *)
+(* that's way too expansive. Must do some kind of cacheing *)
+let occur_univar ty =
+  let visited = ref TypeMap.empty in
+  let rec occur_rec bound ty =
+    let ty = repr ty in
+    if ty.level >= lowest_level &&
+      if TypeSet.is_empty bound then begin
+        (ty.level <- pivot_level - ty.level; true)
+      end else try
+        let bound' = TypeMap.find ty !visited in
+        if TypeSet.exists (fun x -> not (TypeSet.mem x bound)) bound' then
+          (visited := TypeMap.add ty (TypeSet.inter bound bound') !visited;
+           true)
+        else false
+      with Not_found ->
+        visited := TypeMap.add ty bound !visited;
+        true
+    then
+      match ty.desc with
+	Tunivar -> if not (TypeSet.mem ty bound) then raise Occur
+      |	Tpoly (ty, tyl) ->
+          let bound = List.fold_right TypeSet.add (List.map repr tyl) bound in
+          occur_rec bound  ty
+      |	_ -> iter_type_expr (occur_rec bound) ty
+  in
+  try
+    occur_rec TypeSet.empty ty; unmark_type ty
+  with exn ->
+    unmark_type ty; raise exn
+
+let univar_pairs = ref []
+
+
                               (*****************)
                               (*  Unification  *)
                               (*****************)
@@ -1222,13 +1284,17 @@ let rec unify env t1 t2 =
     | (Tconstr _, Tvar) when deep_occur t2 t1 ->
         unify2 env t1 t2
     | (Tvar, _) ->
-        occur env t1 t2;
+        occur env t1 t2; occur_univar t2;
         update_level env t1.level t2;
         t1.desc <- Tlink t2
     | (_, Tvar) ->
-        occur env t2 t1;
+        occur env t2 t1; occur_univar t1;
         update_level env t2.level t1;
         t2.desc <- Tlink t1
+    | (Tunivar, Tunivar) ->
+	unify_univar t1 t2 !univar_pairs;
+	update_level env t1.level t2;
+	t1.desc <- Tlink t2
     | (Tconstr (p1, [], _), Tconstr (p2, [], _)) when Path.same p1 p2 ->
         update_level env t1.level t2;
         t1.desc <- Tlink t2
@@ -1266,9 +1332,11 @@ and unify3 env t1 t1' t2 t2' =
   try
     begin match (d1, d2) with
       (Tvar, _) ->
-        ()
+        occur_univar t2
     | (_, Tvar) ->
-        occur env t2' (newty d1);
+        let td1 = newgenty d1 in
+        occur env t2' td1;
+        occur_univar td1;
         if t1 == t1' then begin
           (* The variable must be instantiated... *)
           let ty = newty2 t1'.level d1 in
@@ -1305,6 +1373,18 @@ and unify3 env t1 t1' t2 t2' =
         unify_fields env t1' t2'
     | (Tnil, Tnil) ->
         ()
+    | (Tpoly (t1, []), Tpoly (t2, [])) ->
+	unify env t1 t2
+    | (Tpoly (t1, tl1), Tpoly (t2, tl2)) ->
+	let old_univars = !univar_pairs in
+	let cl1 = List.map (fun t -> t, ref None) tl1
+	and cl2 = List.map (fun t -> t, ref None) tl2 in
+	univar_pairs := (cl1,cl2) :: (cl2,cl1) :: old_univars;
+	begin try
+	  unify env t1 t2; univar_pairs := old_univars
+	with exn ->
+	  univar_pairs := old_univars; raise exn
+	end
     | (_, _) ->
         raise (Unify [])
     end;
@@ -1472,27 +1552,40 @@ and unify_row env row1 row2 =
     rm1.desc <- md1; rm2.desc <- md2; raise exn
   end
 
-let unify_strict env ty1 ty2 =
-  let old = !allow_conjunctive in
-  try
-    allow_conjunctive := false;
-    unify env ty1 ty2;
-    allow_conjunctive := old
+let unify env ty1 ty2 =
+  try unify env ty1 ty2
   with Unify trace ->
-    allow_conjunctive := old;
     raise (Unify (expand_trace env trace))
+
+let unify_var env t1 t2 =
+  let t1 = repr t1 and t2 = repr t2 in
+  if t1 == t2 then () else
+  match t1.desc with
+    Tvar ->
+      begin try
+	occur env t1 t2;
+	update_level env t1.level t2;
+	t1.desc <- Tlink t2
+      with Unify trace ->
+	raise (Unify ((t1,t2)::trace))
+      end
+  | _ ->
+      unify env t1 t2
+
+let _ = unify' := unify_var
+
+let unify_pairs env ty1 ty2 pairs =
+  allow_conjunctive := true; univar_pairs := pairs;
+  unify env ty1 ty2
+
+let unify_strict env ty1 ty2 =
+  allow_conjunctive := false; univar_pairs := [];
+  unify env ty1 ty2
 
 let unify env ty1 ty2 =
-  let old = !allow_conjunctive in
-  try
-    allow_conjunctive := true;
-    unify env ty1 ty2;
-    allow_conjunctive := old
-  with Unify trace ->
-    allow_conjunctive := old;
-    raise (Unify (expand_trace env trace))
+  allow_conjunctive := true; univar_pairs := [];
+  unify env ty1 ty2
 
-let _ = unify' := unify
 
 (**** Special cases of unification ****)
 
@@ -1608,7 +1701,13 @@ let rec moregen inst_nongen type_pairs env t1 t2 =
 
   try
     match (t1.desc, t2.desc) with
-      (Tvar, _) when if inst_nongen then t1.level <> generic_level - 1
+      (Tunivar, Tunivar) ->
+	unify_univar t1 t2 !univar_pairs
+    | (_, Tunivar) ->
+	raise (Unify [])
+    | (Tunivar, _) ->
+	raise (Unify [])
+    | (Tvar, _) when if inst_nongen then t1.level <> generic_level - 1
                                     else t1.level =  generic_level ->
         moregen_occur env t1.level t2;
         t1.desc <- Tlink t2
@@ -1652,6 +1751,19 @@ let rec moregen inst_nongen type_pairs env t1 t2 =
               moregen inst_nongen type_pairs env t1' t2''
           | (Tnil, Tnil) ->
               ()
+	  | (Tpoly (t1, []), Tpoly (t2, [])) ->
+	      moregen inst_nongen type_pairs env t1 t2
+	  | (Tpoly (t1, tl1), Tpoly (t2, tl2)) ->
+	      let old_univars = !univar_pairs in
+	      let cl1 = List.map (fun t -> t, ref None) tl1
+	      and cl2 = List.map (fun t -> t, ref None) tl2 in
+	      univar_pairs := (cl1,cl2) :: (cl2,cl1) :: old_univars;
+	      begin try
+		moregen inst_nongen type_pairs env t1 t2;
+		univar_pairs := old_univars
+	      with exn ->
+		univar_pairs := old_univars; raise exn
+	      end
           | (_, _) ->
               raise (Unify [])
         end
@@ -1753,6 +1865,7 @@ let moregeneral env inst_nongen pat_sch subj_sch =
   current_level := generic_level;
   (* Duplicate generic variables *)
   let patt = instance pat_sch in
+  univar_pairs := [];
   let res =
     try moregen inst_nongen (TypePairs.create 13) env patt subj; true with
       Unify _ -> false
@@ -1822,6 +1935,21 @@ let rec eqtype rename type_pairs subst env t1 t2 =
               eqtype rename type_pairs subst env t1' t2''
           | (Tnil, Tnil) ->
               ()
+	  | (Tpoly (t1, []), Tpoly (t2, [])) ->
+	      eqtype rename type_pairs subst env t1 t2
+	  | (Tpoly (t1, tl1), Tpoly (t2, tl2)) ->
+	      let old_univars = !univar_pairs in
+	      let cl1 = List.map (fun t -> t, ref None) tl1
+	      and cl2 = List.map (fun t -> t, ref None) tl2 in
+	      univar_pairs := (cl1,cl2) :: (cl2,cl1) :: old_univars;
+	      begin try eqtype rename type_pairs subst env t1 t2
+	      with exn ->
+		univar_pairs := old_univars;
+		raise exn
+	      end;
+	      univar_pairs := old_univars
+	  | (Tunivar, Tunivar) ->
+	      unify_univar t1 t2 !univar_pairs
           | (_, _) ->
               raise (Unify [])
         end
@@ -1881,6 +2009,7 @@ and eqtype_row rename type_pairs subst env row1 row2 =
 (* Two modes: with or without renaming of variables *)
 let equal env rename tyl1 tyl2 =
   try
+    univar_pairs := [];
     eqtype_list rename (TypePairs.create 11) (ref []) env tyl1 tyl2; true
   with
     Unify _ -> false
@@ -1952,6 +2081,7 @@ let match_class_types env pat_sch subj_sch =
   let type_pairs = TypePairs.create 53 in
   let old_level = !current_level in
   current_level := generic_level - 1;
+  univar_pairs := [];
   (*
      Generic variables are first duplicated with [instance].  So,
      their levels are lowered to [generic_level - 1].  The subject is
@@ -2080,6 +2210,7 @@ let rec equal_clty trace type_pairs subst env cty1 cty2 =
 (* XXX Correct ? (variables de type dans parametres et corps de classe *)
 let match_class_declarations env patt_params patt_type subj_params subj_type =
   let type_pairs = TypePairs.create 53 in
+  univar_pairs := [];
   let subst = ref [] in
   let sign1 = signature_of_class_type patt_type in
   let sign2 = signature_of_class_type subj_type in
@@ -2322,7 +2453,7 @@ let rec build_subtype env visited posi t =
       assert false
   | Tpoly(t1, tl) ->
       let (t1', c) = build_subtype env visited posi t1 in
-      if c then (new_global_ty (Tpoly(t1', tl)), true)
+      if c then (newty (Tpoly(t1', tl)), true)
       else (t, false)
   | Tunivar ->
       (t, false)
@@ -2366,7 +2497,7 @@ let rec subtype_rec env trace t1 t2 cstrs =
     TypePairs.add subtypes (t1, t2) ();
     match (t1.desc, t2.desc) with
       (Tvar, _) | (_, Tvar) ->
-        (trace, t1, t2)::cstrs
+        (trace, t1, t2, !univar_pairs)::cstrs
     | (Tarrow(l1, t1, u1), Tarrow(l2, t2, u2)) when l1 = l2
       or !Clflags.classic && not (is_optional l1 or is_optional l2) ->
         let cstrs = subtype_rec env ((t2, t1)::trace) t2 t1 cstrs in
@@ -2386,7 +2517,7 @@ let rec subtype_rec env trace t1 t2 cstrs =
             if co then
               if cn then
                 (trace, newty2 t1.level (Ttuple[t1]),
-                 newty2 t2.level (Ttuple[t2])) :: cstrs 
+                 newty2 t2.level (Ttuple[t2]), !univar_pairs) :: cstrs 
               else subtype_rec env ((t1, t2)::trace) t1 t2 cstrs
             else
               if cn then subtype_rec env ((t2, t1)::trace) t2 t1 cstrs
@@ -2395,7 +2526,7 @@ let rec subtype_rec env trace t1 t2 cstrs =
     | (Tobject (f1, _), Tobject (f2, _))
               when opened_object f1 & opened_object f2 ->
         (* Same row variable implies same object. *)
-        (trace, t1, t2)::cstrs
+        (trace, t1, t2, !univar_pairs)::cstrs
     | (Tobject (f1, _), Tobject (f2, _)) ->
         subtype_fields env trace f1 f2 cstrs
     | (Tvariant row1, Tvariant row2) ->
@@ -2418,10 +2549,20 @@ let rec subtype_rec env trace t1 t2 cstrs =
               | _ -> raise Exit)
             cstrs pairs
         with Exit ->
-          (trace, t1, t2)::cstrs
+          (trace, t1, t2, !univar_pairs)::cstrs
         end
+    | (Tpoly (u1, []), Tpoly (u2, [])) ->
+	subtype_rec env trace u1 u2 cstrs
+    | (Tpoly (t1, tl1), Tpoly (t2,tl2)) ->
+	let old_univars = !univar_pairs in
+	let cl1 = List.map (fun t -> t, ref None) tl1
+	and cl2 = List.map (fun t -> t, ref None) tl2 in
+	univar_pairs := (cl1,cl2) :: (cl2,cl1) :: old_univars;
+	let cstrs = subtype_rec env trace t1 t2 cstrs in
+	univar_pairs := old_univars;
+	cstrs
     | (_, _) ->
-        (trace, t1, t2)::cstrs
+        (trace, t1, t2, !univar_pairs)::cstrs
   end
 
 and subtype_list env trace tl1 tl2 cstrs =
@@ -2435,11 +2576,13 @@ and subtype_fields env trace ty1 ty2 cstrs =
   let (fields1, rest1) = flatten_fields ty1 in
   let (fields2, rest2) = flatten_fields ty2 in
   let (pairs, miss1, miss2) = associate_fields fields1 fields2 in
-  [(trace, rest1, build_fields (repr ty2).level miss2 (newvar ()))]
-    @
+  (trace, rest1, build_fields (repr ty2).level miss2 (newvar ()),
+   !univar_pairs)
+    ::
   begin match rest2.desc with
     Tnil   -> []
-  | _      -> [(trace, build_fields (repr ty1).level miss1 rest1, rest2)]
+  | _      ->
+      [trace, build_fields (repr ty1).level miss1 rest1, rest2, !univar_pairs]
   end
     @
   (List.fold_left
@@ -2450,13 +2593,14 @@ and subtype_fields env trace ty1 ty2 cstrs =
 
 let subtype env ty1 ty2 =
   TypePairs.clear subtypes;
+  univar_pairs := [];
   (* Build constraint set. *)
   let cstrs = subtype_rec env [(ty1, ty2)] ty1 ty2 [] in
   (* Enforce constraints. *)
   function () ->
     List.iter
-      (function (trace0, t1, t2) ->
-         try unify env t1 t2 with Unify trace ->
+      (function (trace0, t1, t2, pairs) ->
+         try unify_pairs env t1 t2 pairs with Unify trace ->
            raise (Subtype (expand_trace env (List.rev trace0),
                            List.tl (List.tl trace))))
       (List.rev cstrs);
