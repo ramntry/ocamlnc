@@ -42,12 +42,22 @@ let private_flags priv1 priv2 =
 
 (* Inclusion between manifest types (particularly for fixed types) *)
 
-let is_constr = function {desc=Tconstr _} -> true | _ -> false
+let is_absrow env ty =
+  match ty.desc with
+    Tconstr(Pident id, _, _) ->
+      let s = Ident.name id in
+      let l = String.length s in
+      l >= 4 && String.sub s (l-4) 4 = "#row" &&
+      begin match Ctype.expand_head env ty with
+        {desc=Tobject _|Tvariant _} -> true
+      | _ -> false
+      end
+  | _ -> false
 
 let type_manifest env ty1 params1 ty2 params2 =
   let ty1' = Ctype.expand_head env ty1 and ty2' = Ctype.expand_head env ty2 in
   match ty1'.desc, ty2'.desc with
-    Tvariant row1, Tvariant row2 when is_constr (Btype.row_more row2) ->
+    Tvariant row1, Tvariant row2 when is_absrow env (Btype.row_more row2) ->
       let row1 = Btype.row_repr row1 and row2 = Btype.row_repr row2 in
       Ctype.equal env true (ty1::params1) (row2.row_more::params2) &&
       (match row1.row_more with	{desc=Tvar|Tconstr _} -> true | _ -> false) &&
@@ -76,7 +86,7 @@ let type_manifest env ty1 params1 ty2 params2 =
       let tl1, tl2 = List.split !to_equal in
       Ctype.equal env true tl1 tl2
   | Tobject (fi1, _), Tobject (fi2, _)
-    when is_constr (snd(Ctype.flatten_fields fi2)) ->
+    when is_absrow env (snd(Ctype.flatten_fields fi2)) ->
       let (fields2,rest2) = Ctype.flatten_fields fi2 in
       Ctype.equal env true (ty1::params1) (rest2::params2) &&
       let (fields1,rest1) = Ctype.flatten_fields fi1 in
