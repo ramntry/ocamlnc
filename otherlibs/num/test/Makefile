@@ -12,11 +12,13 @@
 
 # $Id$
 
+include ../../../config/Makefile
+
 CAMLC=../../../boot/ocamlrun ../../../ocamlc -I ../../../stdlib
 CAMLOPT=../../../boot/ocamlrun ../../../ocamlopt -I ../../../stdlib
 
 test: test.byt test.opt
-	if test $(SO) = so; then ../../../byterun/ocamlrun -I .. ./test.byt; else ./test.byt; fi
+	if $(SUPPORTS_SHARED_LIBRARIES); then ../../../byterun/ocamlrun -I .. ./test.byt; else ./test.byt; fi
 	./test.opt
 
 TESTFILES=test.cmo \
