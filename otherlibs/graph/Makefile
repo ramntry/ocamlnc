@@ -50,7 +50,7 @@ graphics.cma.a:
 
 graphics.cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(CAMLOPT) -a -o graphics.cmxa \
-          $(CAMLOBJS:.cmo=.cmx) -cclib -lgraphics $(X11_LINK)
+          $(CAMLOBJS:.cmo=.cmx) -cclib -lgraphics -cclib "$(X11_LINK)"
 
 partialclean:
 	rm -f *.cm*
