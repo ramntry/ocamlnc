@@ -69,19 +69,41 @@ let rm node =
 (* Merge one "with" constraint in a signature *)
 
 let merge_constraint initial_env loc sg lid constr =
-  let rec merge env sg namelist =
+  let rec merge env sg namelist row_id =
     match (sg, namelist, constr) with
       ([], _, _) ->
         raise(Error(loc, With_no_component lid))
+    | (Tsig_type(id, decl, rs) :: rem, [s],
+       Pwith_type ({ptype_kind = Ptype_fixed} as sdecl))
+      when Ident.name id = s ->
+	let decl_row =
+	  { type_params =
+	      List.map (fun _ -> Btype.newgenvar()) sdecl.ptype_params;
+	    type_arity = List.length sdecl.ptype_params;
+	    type_kind = Type_abstract;
+	    type_manifest = None;
+	    type_variance =
+	      List.map (fun (c,n) -> (c,n,n)) sdecl.ptype_variance }
+	and id_row = Ident.create (s^"#row") in
+	let initial_env = Env.add_type id_row decl_row initial_env in
+        let newdecl = Typedecl.transl_with_constraint initial_env id sdecl in
+	let env =
+	  match row_id with None -> env
+	  | Some id -> Env.add_type id newdecl env in
+        Includemod.type_declarations env id newdecl decl;
+	let decl_row = {decl_row with type_params = newdecl.type_params} in
+        Tsig_type(id_row, decl_row, rs)	:: Tsig_type(id, newdecl, rs) :: rem
     | (Tsig_type(id, decl, rs) :: rem, [s], Pwith_type sdecl)
       when Ident.name id = s ->
-        let newdecl = Typedecl.transl_with_constraint initial_env sdecl in
+        let newdecl = Typedecl.transl_with_constraint initial_env id sdecl in
+	let env =
+	  match row_id with None -> env
+	  | Some id -> Env.add_type id newdecl env in
         Includemod.type_declarations env id newdecl decl;
         Tsig_type(id, newdecl, rs) :: rem
     | (Tsig_type(id, decl, rs) :: rem, [s], Pwith_type sdecl)
       when Ident.name id = s ^ "#row" ->
-        let newdecl = Typedecl.transl_with_constraint initial_env sdecl in
-        merge (Env.add_item (Tsig_type(id, newdecl, rs)) env) rem namelist
+        merge env rem namelist (Some id)
     | (Tsig_module(id, mty, rs) :: rem, [s], Pwith_module lid)
       when Ident.name id = s ->
         let (path, mty') = type_module_path initial_env loc lid in
@@ -90,12 +112,12 @@ let merge_constraint initial_env loc sg lid constr =
         Tsig_module(id, newmty, rs) :: rem
     | (Tsig_module(id, mty, rs) :: rem, s :: namelist, _)
       when Ident.name id = s ->
-        let newsg = merge env (extract_sig env loc mty) namelist in
+        let newsg = merge env (extract_sig env loc mty) namelist None in
         Tsig_module(id, Tmty_signature newsg, rs) :: rem
     | (item :: rem, _, _) ->
-        item :: merge (Env.add_item item env) rem namelist in
+        item :: merge (Env.add_item item env) rem namelist row_id in
   try
-    merge initial_env sg (Longident.flatten lid)
+    merge initial_env sg (Longident.flatten lid) None
   with Includemod.Error explanation ->
     raise(Error(loc, With_mismatch(lid, explanation)))
 

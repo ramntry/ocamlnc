@@ -1207,9 +1207,9 @@ with_constraint:
     TYPE type_parameters label_longident with_type_binder core_type constraints
       { let params, variance = List.split $2 in
         ($3, Pwith_type {ptype_params = params;
-                         ptype_cstrs = List.rev $7;
-                         ptype_kind = $5;
-                         ptype_manifest = Some $6;
+                         ptype_cstrs = List.rev $6;
+                         ptype_kind = $4;
+                         ptype_manifest = Some $5;
                          ptype_variance = variance;
                          ptype_loc = symbol_rloc()}) }
     /* used label_longident instead of type_longident to disallow
@@ -1219,7 +1219,7 @@ with_constraint:
 ;
 with_type_binder:
     EQUAL { Ptype_abstract }
-/*  | AS    { Ptype_fixed } */
+  | AS    { Ptype_fixed }
 ;
 
 /* Polymorphic types */

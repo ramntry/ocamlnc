@@ -77,6 +77,30 @@ let is_float env ty =
     {desc = Tconstr(p, _, _)} -> Path.same p Predef.path_float
   | _ -> false
 
+(* Set the row variable in a fixed type *)
+let set_fixed_row env loc id decl =
+  let tm =
+    match decl.type_manifest with
+      None -> assert false
+    | Some t -> Ctype.expand_head env t
+  in
+  let rv =
+    match tm.desc with
+      Tvariant row ->
+	tm.desc <- Tvariant {row with row_fixed = true};
+	Btype.row_more row
+    | Tobject (ty, _) ->
+	snd (Ctype.flatten_fields ty)
+    | _ ->
+        raise (Error (loc, Bad_fixed_type "is not an object or variant"))
+  in
+  if rv.desc <> Tvar then
+    raise (Error (loc, Bad_fixed_type "has no row variable"));
+  let row_decl =
+    try Env.lookup_type (Longident.Lident(Ident.name id ^ "#row")) env
+    with Not_found -> assert false in
+  rv.desc <- Tconstr (fst row_decl, decl.type_params, ref Mnil)
+
 (* Translate one type declaration *)
 
 module StringSet =
@@ -162,31 +186,8 @@ let transl_declaration env (name, sdecl) id =
         raise(Error(loc, Unconsistent_constraint tr)))
     cstrs;
   Ctype.end_def ();
-  if sdecl.ptype_kind = Ptype_fixed then begin
-    let tm =
-      match decl.type_manifest with
-        None -> assert false
-      | Some t -> Ctype.expand_head env t
-    in
-    let rv =
-      match tm.desc with
-        Tvariant row ->
-	  tm.desc <- Tvariant {row with row_fixed = true};
-	  Btype.row_more row
-      | Tobject (ty, _) ->
-	  snd (Ctype.flatten_fields ty)
-      | _ ->
-          raise (Error (sdecl.ptype_loc,
-                        Bad_fixed_type "is not an object or variant"))
-    in
-    if rv.desc <> Tvar then
-      raise (Error (sdecl.ptype_loc, Bad_fixed_type "has no row variable"));
-    let row_decl =
-      try Env.lookup_type (Longident.Lident(Ident.name id ^ "#row")) env
-      with Not_found -> assert false in
-    rv.desc <- Tconstr (fst row_decl, params, ref Mnil)
-  end;
-
+  if sdecl.ptype_kind = Ptype_fixed then
+    set_fixed_row env sdecl.ptype_loc id decl;
   (id, decl)
 
 (* Generalize a type declaration *)
@@ -674,7 +675,7 @@ let transl_value_decl env valdecl =
 
 (* Translate a "with" constraint -- much simplified version of
     transl_type_decl. *)
-let transl_with_constraint env sdecl =
+let transl_with_constraint env id sdecl =
   reset_type_variables();
   Ctype.begin_def();
   let params =
@@ -690,6 +691,7 @@ let transl_with_constraint env sdecl =
        with Ctype.Unify tr ->
          raise(Error(loc, Unconsistent_constraint tr)))
     sdecl.ptype_cstrs;
+  let fixed = sdecl.ptype_kind <> Ptype_fixed in
   let decl =
     { type_params = params;
       type_arity = List.length params;
@@ -697,11 +699,12 @@ let transl_with_constraint env sdecl =
       type_manifest =
         begin match sdecl.ptype_manifest with
           None -> None
-        | Some sty -> Some(transl_simple_type env true sty)
+        | Some sty -> Some(transl_simple_type env (not fixed) sty)
         end;
       type_variance = [];
     }
   in
+  if fixed then set_fixed_row env sdecl.ptype_loc id decl;
   if Ctype.closed_type_decl decl <> None then
     raise(Error(sdecl.ptype_loc, Unbound_type_var));
   let decl =
