@@ -328,7 +328,7 @@ let f ?(dir=Unix.getcwd()) ?on () =
       pack [tl] ~expand:true ~fill:`Both;
       coe tl
   in
-  let menus = Menu.create tl ~name:"menubar" in
+  let menus = Menu.create tl ~name:"menubar" ~borderwidth:0 in
   Toplevel.configure (Winfo.toplevel tl) ~menu:menus;
   let filemenu = new Jg_menu.c "File" ~parent:menus
   and modmenu = new Jg_menu.c "Modules" ~parent:menus in
@@ -389,7 +389,7 @@ class st_viewer ?(dir=Unix.getcwd()) ?on () =
       pack [tl] ~expand:true ~fill:`Both;
       coe tl
   in
-  let menus = Menu.create tl ~name:"menubar" in
+  let menus = Menu.create tl ~name:"menubar" ~borderwidth:0 in
   let filemenu = new Jg_menu.c "File" ~parent:menus
   and modmenu = new Jg_menu.c "Modules" ~parent:menus
   and viewmenu = new Jg_menu.c "View" ~parent:menus

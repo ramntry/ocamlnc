@@ -650,7 +650,7 @@ let editor ?file ?(pos=0) ?(reuse=false) () =
       false
   then () else
     let top = Jg_toplevel.titled "Editor" in
-    let menus = Menu.create top ~name:"menubar" in
+    let menus = Menu.create top ~name:"menubar" ~borderwidth:0 in
     Toplevel.configure top ~menu:menus;
     let ed = new editor ~top ~menus in
     already_open := !already_open @ [ed];
