@@ -68,10 +68,16 @@ let rm node =
 
 (* Merge one "with" constraint in a signature *)
 
-let merge_type env id row_id newdecl decl =
+let rec add_rec_types env = function
+    Tsig_type(id, decl, Trec_next) :: rem ->
+      add_rec_types (Env.add_type id decl env) rem
+  | _ -> env
+
+let check_type_decl env id row_id newdecl decl rs rem =
   let env = Env.add_type id newdecl env in
   let env =
     match row_id with None -> env | Some id -> Env.add_type id newdecl env in
+  let env = if rs = Trec_not then env else add_rec_types env rem in
   Includemod.type_declarations env id newdecl decl
 
 let merge_constraint initial_env loc sg lid constr =
@@ -94,13 +100,14 @@ let merge_constraint initial_env loc sg lid constr =
 	let initial_env = Env.add_type id_row decl_row initial_env in
         let newdecl = Typedecl.transl_with_constraint
                         initial_env (Some(Pident id_row)) sdecl in
-        merge_type env id row_id newdecl decl;
+        check_type_decl env id row_id newdecl decl rs rem;
 	let decl_row = {decl_row with type_params = newdecl.type_params} in
-        Tsig_type(id_row, decl_row, rs)	:: Tsig_type(id, newdecl, rs) :: rem
+        let rs' = if rs = Trec_first then Trec_not else rs in
+        Tsig_type(id_row, decl_row, rs') :: Tsig_type(id, newdecl, rs) :: rem
     | (Tsig_type(id, decl, rs) :: rem, [s], Pwith_type sdecl)
       when Ident.name id = s ->
         let newdecl = Typedecl.transl_with_constraint initial_env None sdecl in
-        merge_type env id row_id newdecl decl;
+        check_type_decl env id row_id newdecl decl rs rem;
         Tsig_type(id, newdecl, rs) :: rem
     | (Tsig_type(id, decl, rs) :: rem, [s], Pwith_type sdecl)
       when Ident.name id = s ^ "#row" ->
