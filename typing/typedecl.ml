@@ -691,7 +691,7 @@ let transl_with_constraint env id sdecl =
        with Ctype.Unify tr ->
          raise(Error(loc, Unconsistent_constraint tr)))
     sdecl.ptype_cstrs;
-  let fixed = sdecl.ptype_kind <> Ptype_fixed in
+  let fixed = (sdecl.ptype_kind = Ptype_fixed) in
   let decl =
     { type_params = params;
       type_arity = List.length params;

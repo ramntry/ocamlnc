@@ -49,8 +49,6 @@ let type_manifest env ty1 params1 ty2 params2 =
   match ty1'.desc, ty2'.desc with
     Tvariant row1, Tvariant row2 when is_constr (Btype.row_more row2) ->
       let row1 = Btype.row_repr row1 and row2 = Btype.row_repr row2 in
-      Format.eprintf "@[%a@ %a@]@." Printtyp.raw_type_expr ty1
-        Printtyp.raw_type_expr row2.row_more;
       Ctype.equal env true (ty1::params1) (row2.row_more::params2) &&
       (match row1.row_more with	{desc=Tvar|Tconstr _} -> true | _ -> false) &&
       let r1, r2, pairs =
