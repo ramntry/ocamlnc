@@ -10,7 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
+(* typeclass.ml,v 1.57.4.6 2002/02/15 14:26:04 garrigue Exp *)
 
 open Misc
 open Parsetree
@@ -870,6 +870,7 @@ let rec initial_env define_class approx
   
   (* Temporary type for the class constructor *)
   let constr_type = approx cl.pci_expr in
+  if !Clflags.principal then Ctype.generalize_spine constr_type;
   let dummy_cty =
     Tcty_signature
       { cty_self = Ctype.newvar ();
@@ -992,7 +993,9 @@ let class_infos define_class kind
 
   (* Type of the class constructor *)
   begin try
-    Ctype.unify env (constructor_type constr obj_type) constr_type
+    Ctype.unify env
+      (constructor_type constr obj_type)
+      (Ctype.instance constr_type)
   with Ctype.Unify trace ->
     raise(Error(cl.pci_loc,
                 Constructor_type_mismatch (cl.pci_name, trace)))
@@ -1042,7 +1045,7 @@ let class_infos define_class kind
      cty_new =
        match cl.pci_virt with
          Virtual  -> None
-       | Concrete -> Some constr_type}
+       | Concrete -> Some (Ctype.instance constr_type)}
   in
   let obj_abbr =
     {type_params = obj_params;
