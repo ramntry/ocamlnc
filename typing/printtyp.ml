@@ -219,7 +219,7 @@ let rec tree_of_typexp sch ty =
   let ty = repr ty in
   let px = proxy ty in
   if List.mem_assq px !names && not (List.memq px !delayed) then
-   let mark = if ty.desc = Tvar then is_non_gen sch px else false in
+   let mark = is_non_gen sch px in
    Otyp_var (mark, name_of_type px) else
 
   let pr_typ () =
@@ -281,7 +281,7 @@ let rec tree_of_typexp sch ty =
             Otyp_variant (non_gen, Ovar_fields fields, row.row_closed, tags)
         end
     | Tobject (fi, nm) ->
-        tree_of_typobject sch ty fi nm
+        tree_of_typobject sch fi nm
     | Tsubst ty ->
         tree_of_typexp sch ty
     | Tlink _ | Tnil | Tfield _ ->
@@ -318,7 +318,7 @@ and tree_of_typlist sch = function
       let tr = tree_of_typexp sch ty in
       tr :: tree_of_typlist sch tyl
 
-and tree_of_typobject sch ty fi nm =
+and tree_of_typobject sch fi nm =
   begin match !nm with
   | None ->
       let pr_fields fi =
@@ -335,8 +335,8 @@ and tree_of_typobject sch ty fi nm =
         tree_of_typfields sch rest sorted_fields in
       let (fields, rest) = pr_fields fi in
       Otyp_object (fields, rest)
-  | Some (p, _ :: tyl) ->
-      let non_gen = is_non_gen sch ty in
+  | Some (p, ty :: tyl) ->
+      let non_gen = is_non_gen sch (repr ty) in
       let args = tree_of_typlist sch tyl in
       Otyp_class (non_gen, tree_of_path p, args)
   | _ ->
@@ -344,15 +344,14 @@ and tree_of_typobject sch ty fi nm =
   end
 
 and is_non_gen sch ty =
-    sch && ty.level <> generic_level
+    sch && ty.desc = Tvar && ty.level <> generic_level
 
 and tree_of_typfields sch rest = function
   | [] ->
       let rest =
         match rest.desc with
-        | Tvar -> Some (is_non_gen sch rest)
+        | Tvar | Tunivar -> Some (is_non_gen sch rest)
         | Tnil -> None
-        | Tunivar -> Some false
         | _ -> fatal_error "typfields (1)"
       in
       ([], rest)

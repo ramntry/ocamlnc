@@ -12,7 +12,7 @@
 
 (* $Id$ *)
 
-let version = "3.04+1 with explicit polymorphism (2002-02-05)"
+let version = "3.04+1 with explicit polymorphism (2002-01-07)"
 
 let standard_library =
   try

@@ -288,11 +288,14 @@ let rec transl_type env policy rowvar styp =
             ty
         | _ ->
             raise(Error(styp.ptyp_loc, Bound_type_variable alias))
-      else if Tbl.mem alias !type_variables then
-        raise(Error(styp.ptyp_loc, Bound_type_variable alias))
       else
-        let ty' = new_global_var () in
-        type_variables := Tbl.add alias ty' !type_variables;
+        let ty' =
+          try Tbl.find alias !type_variables
+          with Not_found ->
+            let t = new_global_var () in
+            type_variables := Tbl.add alias t !type_variables;
+            t
+        in
         let ty = transl_type env policy None st in
         begin try unify_var env ty' ty with Unify trace ->
           let trace = swap_list trace in

@@ -836,16 +836,6 @@ let rec copy_sep fixed free bound visited ty =
     let copy_rec = copy_sep fixed free bound visited in
     t.desc <-
       begin match ty.desc with
-      | Tconstr (p, tl, _) ->
-          begin match find_repr p !(!abbreviations) with
-            Some ty when repr ty != t ->
-              Tlink ty
-          | _ ->
-              Tconstr (p, List.map copy_rec tl,
-                       ref (match !(!abbreviations) with
-                              Mcons _ -> Mlink !abbreviations
-                            | abbrev  -> abbrev))
-          end
       | Tvariant row0 ->
           let row = row_repr row0 in
           let more = repr row.row_more in
@@ -1379,12 +1369,24 @@ and unify3 env t1 t1' t2 t2' =
     | (Tpoly (t1, []), Tpoly (t2, [])) ->
 	unify env t1 t2
     | (Tpoly (t1, tl1), Tpoly (t2, tl2)) ->
+        if List.length tl1 <> List.length tl2 then raise (Unify []);
 	let old_univars = !univar_pairs in
 	let cl1 = List.map (fun t -> t, ref None) tl1
 	and cl2 = List.map (fun t -> t, ref None) tl2 in
 	univar_pairs := (cl1,cl2) :: (cl2,cl1) :: old_univars;
 	begin try
-	  unify env t1 t2; univar_pairs := old_univars
+	  unify env t1 t2;
+          let tl1 = List.map repr tl1 and tl2 = List.map repr tl2 in
+          List.iter
+            (fun t1 ->
+              if List.memq t1 tl2 then () else
+              try
+                let t2 =
+                  List.find (fun t2 -> not (List.memq (repr t2) tl1)) tl2 in
+                t2.desc <- Tlink t1
+              with Not_found -> assert false)
+            tl1;
+          univar_pairs := old_univars
 	with exn ->
 	  univar_pairs := old_univars; raise exn
 	end
