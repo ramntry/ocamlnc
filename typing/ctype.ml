@@ -2475,7 +2475,7 @@ let rec build_subtype env visited loops posi onlyloop t =
           let (ty1', _) = build_subtype env visited loops posi onlyloop ty1 in
           assert (t''.desc = Tvar);
           t''.desc <- Tobject (ty1', ref None);
-          (try unify env ty t with Unify _ -> assert false);
+          (try unify_var env ty t with Unify _ -> assert false);
           (t'', true)
       | _ -> raise Not_found
       with Not_found -> build_subtype env visited loops posi onlyloop t'
