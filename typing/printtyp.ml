@@ -99,14 +99,6 @@ let non_gen_mark sch ty =
 let print_name_of_type sch ppf t =
   fprintf ppf "'%s%s" (non_gen_mark sch t) (name_of_type t)
 
-let visited_objects = ref ([] : type_expr list)
-let aliased = ref ([] : type_expr list)
-let delayed = ref ([] : type_expr list)
-
-let is_aliased ty = List.memq ty !aliased
-let add_alias ty =
-  if not (is_aliased ty) then aliased := ty :: !aliased
-
 let proxy ty =
   let ty = repr ty in
   match ty.desc with
@@ -120,6 +112,15 @@ let proxy ty =
         | _ -> assert false
       in proxy_obj ty
   | _ -> ty
+
+let visited_objects = ref ([] : type_expr list)
+let aliased = ref ([] : type_expr list)
+let delayed = ref ([] : type_expr list)
+
+let is_aliased ty = List.memq (proxy ty) !aliased
+let add_alias ty =
+  let px = proxy ty in
+  if not (is_aliased px) then aliased := ty :: !aliased
 
 let namable_row row =
   row.row_name <> None &&
@@ -180,7 +181,7 @@ let rec mark_loops_rec visited ty =
     | Tsubst ty -> mark_loops_rec visited ty
     | Tlink _ -> fatal_error "Printtyp.mark_loops_rec (2)"
     | Tpoly (ty, tyl) ->
-	List.iter (fun t -> add_alias (repr t)) tyl;
+	List.iter (fun t -> add_alias t) tyl;
 	mark_loops_rec visited ty
     | Tunivar -> ()
 
@@ -333,7 +334,7 @@ and tree_of_typobject sch ty fi nm =
         tree_of_typfields sch rest sorted_fields in
       let (fields, rest) = pr_fields fi in
       Otyp_object (fields, rest)
-  | Some (p, {desc = Tvar|Tunivar} :: tyl) ->
+  | Some (p, {desc=Tvar|Tunivar} :: tyl) ->
       let non_gen = is_non_gen sch ty in
       let args = tree_of_typlist sch tyl in
       Otyp_class (non_gen, tree_of_path p, args)
@@ -701,7 +702,7 @@ let rec tree_of_type_decl id decl =
 
   let params = filter_params decl.type_params in
 
-  aliased := params @ !aliased;
+  List.iter add_alias params;
   List.iter mark_loops params;
   List.iter check_name_of_type (List.map proxy params);
   begin match decl.type_manifest with
@@ -840,7 +841,7 @@ let rec prepare_class_type params = function
       let sty = repr sign.cty_self in
       (* Self may have a name *)
       if List.memq sty !visited_objects then add_alias sty
-      else visited_objects := sty :: !visited_objects;
+      else visited_objects := proxy sty :: !visited_objects;
       let (fields, _) =
         Ctype.flatten_fields (Ctype.object_fields sign.cty_self)
       in
@@ -863,7 +864,8 @@ let rec tree_of_class_type sch params =
   | Tcty_signature sign ->
       let sty = repr sign.cty_self in
       let self_ty =
-        if is_aliased sty then Some (Otyp_var (false, name_of_type sty))
+        if is_aliased sty then
+          Some (Otyp_var (false, name_of_type (proxy sty)))
         else None
       in
       let (fields, _) =
@@ -913,13 +915,13 @@ let tree_of_class_declaration id cl =
   let params = filter_params cl.cty_params in
 
   reset ();
-  aliased := params @ !aliased;
+  List.iter add_alias params;
   prepare_class_type params cl.cty_type;
   let sty = self_type cl.cty_type in
   List.iter mark_loops params;
 
   List.iter check_name_of_type (List.map proxy params);
-  if is_aliased sty then check_name_of_type sty;
+  if is_aliased sty then check_name_of_type (proxy sty);
 
   let vir_flag = cl.cty_new = None in
   Osig_class

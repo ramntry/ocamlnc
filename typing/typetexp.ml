@@ -252,18 +252,36 @@ let rec transl_type env policy rowvar styp =
                 | _ -> f)
               row.row_fields
           in
-          let row = { row with row_fields = fields; row_bound = !bound;
-                      row_name = Some (path, args) } in
-          newty (Tvariant row)
-      | _ ->
+          let row = { row_closed = true;
+                      row_fields = fields;
+                      row_bound = !bound;
+                      row_name = Some (path, args);
+                      row_more = match rowvar with Some v -> v
+                      | None ->
+	                  if policy = Univars then new_pre_univar ()
+                          else newvar () }
+          in newty (Tvariant row)
+      | Tobject (_, {contents=Some(_, tv::_)}) ->
+          begin match rowvar with None -> ()
+          | Some rv ->
+              try unify_var env tv rv with Unify trace ->
+                raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
+          end;
           ty
+      | _ ->
+          assert false
       end
   | Ptyp_alias(st, alias) ->
       if List.mem_assoc alias !univars then
         match List.assoc alias !univars with
 	  {desc=Tlink({desc=Tunivar} as tc)} as tr ->
 	    let ty = transl_type env policy (Some tc) st in
-	    tr.desc <- Tlink ty;
+            tr.level <- tc.level;
+	    tr.desc <- Tvar;
+            begin try unify_var env tr ty with Unify trace ->
+              let trace = swap_list trace in
+              raise(Error(styp.ptyp_loc, Alias_type_mismatch trace))
+            end;
             ty
         | _ ->
             raise(Error(styp.ptyp_loc, Bound_type_variable alias))

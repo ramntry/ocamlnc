@@ -790,10 +790,10 @@ let compute_univars ty =
       match ty.desc with
 	Tunivar ->
           TypeSet.singleton ty
-      | Tpoly (ty, tyl) ->
+      | Tpoly (t, tyl) ->
           let tyl = List.map repr tyl in
           let visited = (ty, tyl, cyr) :: visited in
-          List.fold_right TypeSet.remove tyl (free_rec visited ty)
+          List.fold_right TypeSet.remove tyl (free_rec visited t)
       | _ ->
           let visited = (ty, [], cyr) :: visited in
           let r = ref TypeSet.empty in
@@ -846,7 +846,7 @@ let rec copy_sep free bound visited ty =
     t
   else try
     let t, bound_t = List.assq ty visited in
-    let dl = diff_list bound bound_t in
+    let dl = if ty.desc = Tunivar then [] else diff_list bound bound_t in
     if dl <> [] && conflicts univars dl then raise Not_found;
     t
   with Not_found -> begin
@@ -872,16 +872,13 @@ let rec copy_sep free bound visited ty =
           let row = row_repr row0 in
           let more = repr row.row_more in
           (* We shall really check the level on the row variable *)
-          let keep = more.level <> generic_level in
-          let more' = if keep then more else newvar () in
+          let keep = more.desc = Tvar && more.level <> generic_level in
+          let more' = copy_sep free bound visited more in
           let row = copy_row (copy_sep free bound visited) row keep more' in
           Tvariant row
       |	Tpoly (t1, tl) ->
 	  let tl = List.map repr tl in
-	  let tl' =
-	    List.map
-	      (fun t -> if t.level <> generic_level then t else newty Tunivar)
-	      tl in
+	  let tl' = List.map (fun t -> newty Tunivar) tl in
 	  let bound = tl @ bound in
 	  let visited =
 	    List.map2 (fun ty t -> ty,(t,bound)) tl tl' @ visited in
@@ -1523,7 +1520,10 @@ and unify_row env row1 row2 =
       else rest in
     if rest <> [] && row.row_closed then raise (Unify []);
     let ty =
-      newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
+      if rest = [] && row.row_closed = closed && name == row.row_name
+      && List.length row.row_bound = List.length bound
+      then more
+      else newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
     update_level env (repr row.row_more).level ty;
     ty
   in
