@@ -1472,10 +1472,10 @@ and type_expect ?in_function env sexp ty_expected =
             let tl',ty'' = instance_poly tl ty' in
             let exp = type_expect env sbody ty'' in
             end_def ();
-            generalize exp.exp_type;
             List.iter
               (fun t ->
                 let t = repr t in
+                generalize t;
                 if t.desc <> Tvar or t.level <> generic_level then
                   raise (Error(sexp.pexp_loc,
                                Less_general_method
