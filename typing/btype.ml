@@ -133,7 +133,7 @@ let proxy ty =
       let rec proxy_obj ty =
         match ty.desc with
           Tfield (_, _, _, ty) | Tlink ty -> proxy_obj ty
-        | Tvar | Tnil | Tunivar -> ty
+        | Tvar | Tnil | Tunivar | Tconstr _ -> ty
         | _ -> assert false
       in proxy_obj ty
   | _ -> ty

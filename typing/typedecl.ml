@@ -40,6 +40,7 @@ type error =
   | Not_an_exception of Longident.t
   | Bad_variance
   | Unavailable_type_constructor of Path.t
+  | Bad_fixed_type of string
 
 exception Error of Location.t * error
 
@@ -104,7 +105,7 @@ let transl_declaration env (name, sdecl) id =
       type_arity = List.length params;
       type_kind =
         begin match sdecl.ptype_kind with
-          Ptype_abstract ->
+          Ptype_abstract | Ptype_fixed ->
             Type_abstract
         | Ptype_variant (cstrs, priv) ->
             let all_constrs = ref StringSet.empty in
@@ -160,6 +161,27 @@ let transl_declaration env (name, sdecl) id =
         raise(Error(loc, Unconsistent_constraint tr)))
     cstrs;
   Ctype.end_def ();
+  if sdecl.ptype_kind = Ptype_fixed then begin
+    let tm =
+      match decl.type_manifest with
+        None -> assert false
+      | Some t -> t
+    in
+    let rv =
+      match (Ctype.expand_head env tm).desc with
+        Tvariant row -> Btype.row_more row
+      | Tobject (ty, _) -> snd (Ctype.flatten_fields ty)
+      | _ ->
+          raise (Error (sdecl.ptype_loc,
+                        Bad_fixed_type "is not an object or variant"))
+    in
+    if rv.desc <> Tvar then
+      raise (Error (sdecl.ptype_loc, Bad_fixed_type "has no row variable"));
+    let row_decl =
+      try Env.lookup_type (Longident.Lident(Ident.name id ^ "#row")) env
+      with Not_found -> assert false in
+    rv.desc <- Tconstr (fst row_decl, params, ref Mnil)
+  end;
 
   (id, decl)
 
@@ -218,7 +240,7 @@ let check_constraints env (_, sdecl) (_, decl) =
   | Type_variant (l, _) ->
       let rec find_pl = function
           Ptype_variant(pl, _) -> pl
-        | Ptype_record _ | Ptype_abstract -> assert false
+        | Ptype_record _ | Ptype_abstract | Ptype_fixed -> assert false
       in
       let pl = find_pl sdecl.ptype_kind in
       List.iter
@@ -234,7 +256,7 @@ let check_constraints env (_, sdecl) (_, decl) =
   | Type_record (l, _, _) ->
       let rec find_pl = function
           Ptype_record(pl, _) -> pl
-        | Ptype_variant _ | Ptype_abstract -> assert false
+        | Ptype_variant _ | Ptype_abstract | Ptype_fixed -> assert false
       in
       let pl = find_pl sdecl.ptype_kind in
       let rec get_loc name = function
@@ -540,6 +562,17 @@ let compute_variance_decls env cldecls =
 
 (* Translate a set of mutually recursive type declarations *)
 let transl_type_decl env name_sdecl_list =
+  (* Add dummy types for fixed rows *)
+  let fixed_types =
+    List.filter (fun (_,sd) -> sd.ptype_kind = Ptype_fixed) name_sdecl_list in
+  let name_sdecl_list =
+    name_sdecl_list @
+    List.map
+      (fun (name,sdecl) ->
+        name^"#row",
+        {sdecl with ptype_kind = Ptype_abstract; ptype_manifest = None})
+      fixed_types
+  in
   (* Create identifiers. *)
   let id_list =
     List.map (fun (name, _) -> Ident.create name) name_sdecl_list
@@ -771,3 +804,5 @@ let report_error ppf = function
         "In this definition, expected parameter variances are not satisfied"
   | Unavailable_type_constructor p ->
       fprintf ppf "The definition of type %a@ is unavailable" Printtyp.path p
+  | Bad_fixed_type r ->
+      fprintf ppf "This fixed type %s" r

@@ -65,6 +65,7 @@ type error =
   | Not_an_exception of Longident.t
   | Bad_variance
   | Unavailable_type_constructor of Path.t
+  | Bad_fixed_type of string
 
 exception Error of Location.t * error
 

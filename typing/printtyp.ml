@@ -214,15 +214,19 @@ let add_alias ty =
   let px = proxy ty in
   if not (is_aliased px) then aliased := px :: !aliased
 
+let is_fixed_row row =
+  match row_more row with {desc=Tconstr _} -> true | _ -> false
+
 let namable_row row =
   row.row_name <> None &&
-  List.for_all
+  (List.for_all
     (fun (_, f) ->
        match row_field_repr f with
        | Reither(c, l, _, _) ->
            row.row_closed && if c then l = [] else List.length l = 1
        | _ -> true)
     row.row_fields
+  || is_fixed_row row)
 
 let rec mark_loops_rec visited ty =
   let ty = repr ty in
@@ -249,21 +253,24 @@ let rec mark_loops_rec visited ty =
               iter_row (mark_loops_rec visited) {row with row_bound = []}
          end
     | Tobject (fi, nm) ->
-        if List.memq px !visited_objects then add_alias px else
-         begin
-          if opened_object ty then
-            visited_objects := px :: !visited_objects;
-          begin match !nm with
-          | None ->
-              let fields, _ = flatten_fields fi in
-              List.iter
-                (fun (_, kind, ty) ->
+        let fields, rest = flatten_fields fi in
+        begin match rest with
+          (* {desc=Tconstr _} ->
+            mark_loops_rec visited rest *)
+        | _ when List.memq px !visited_objects ->
+            add_alias px
+        | _ ->
+            if opened_object ty then
+              visited_objects := px :: !visited_objects;
+            match !nm with
+            | None ->
+                List.iter
+                  (fun (_, kind, ty) ->
                   if field_kind_repr kind = Fpresent then
                     mark_loops_rec visited ty)
-                fields
-          | Some (_, l) ->
-              List.iter (mark_loops_rec visited) (List.tl l)
-          end
+                  fields
+            | Some (_, l) ->
+                List.iter (mark_loops_rec visited) (List.tl l)
         end
     | Tfield(_, kind, ty1, ty2) when field_kind_repr kind = Fpresent ->
         mark_loops_rec visited ty1; mark_loops_rec visited ty2
@@ -347,7 +354,7 @@ let rec tree_of_typexp sch ty =
         | Some(p, tyl) when namable_row row ->
             let id = tree_of_path p in
             let args = tree_of_typlist sch tyl in
-            if row.row_closed && all_present then
+            if row.row_closed && all_present || is_fixed_row row then
               Otyp_constr (id, args)
             else
               let non_gen = is_non_gen sch px in
@@ -404,20 +411,23 @@ and tree_of_typlist sch tyl =
 and tree_of_typobject sch fi nm =
   begin match !nm with
   | None ->
-      let pr_fields fi =
-        let (fields, rest) = flatten_fields fi in
+      let fields, rest = flatten_fields fi in
+      begin match rest with
+        (* {desc=Tconstr _} ->
+          tree_of_typexp sch rest *)
+      | _ ->
         let present_fields =
           List.fold_right
             (fun (n, k, t) l ->
-               match field_kind_repr k with
-               | Fpresent -> (n, t) :: l
-               | _ -> l)
+              match field_kind_repr k with
+              | Fpresent -> (n, t) :: l
+              | _ -> l)
             fields [] in
         let sorted_fields =
           Sort.list (fun (n, _) (n', _) -> n <= n') present_fields in
-        tree_of_typfields sch rest sorted_fields in
-      let (fields, rest) = pr_fields fi in
-      Otyp_object (fields, rest)
+        let (fields, rest) = tree_of_typfields sch rest sorted_fields in
+        Otyp_object (fields, rest)
+      end
   | Some (p, ty :: tyl) ->
       let non_gen = is_non_gen sch (repr ty) in
       let args = tree_of_typlist sch tyl in
@@ -434,6 +444,7 @@ and tree_of_typfields sch rest = function
       let rest =
         match rest.desc with
         | Tvar | Tunivar -> Some (is_non_gen sch rest)
+        | Tconstr _ -> Some false
         | Tnil -> None
         | _ -> fatal_error "typfields (1)"
       in

@@ -2965,6 +2965,8 @@ let rec unalias_object ty =
       newty2 ty.level ty.desc
   | Tunivar ->
       ty
+  | Tconstr _ ->
+      newty2 ty.level Tvar
   | _ ->
       assert false
 

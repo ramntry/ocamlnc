@@ -1158,6 +1158,8 @@ type_kind:
       { (Ptype_variant(List.rev $6, $4), Some $2) }
   | EQUAL core_type EQUAL private_flag LBRACE label_declarations opt_semi RBRACE
       { (Ptype_record(List.rev $6, $4), Some $2) }
+  | AS core_type
+      { (Ptype_fixed, Some $2) }
 ;
 type_parameters:
     /*empty*/                                   { [] }
