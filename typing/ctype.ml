@@ -763,63 +763,44 @@ let instance_class params cty =
 module TypeHash = Hashtbl.Make(TypeOps)
 module TypeSet = Set.Make(TypeOps)
 
-let rec close_cycle ty cy = function
-    [] -> false
-  | (t, q, r) :: tl ->
-      if t == ty then (r := List.rev cy :: !r; true) else
-      close_cycle ty ((t, q)::cy) tl
+type inv_type_expr =
+    { inv_type : type_expr;
+      mutable inv_parents : inv_type_expr list }
 
-let type_hash_union ht ty s =
-  if TypeSet.is_empty s then () else
-  let s' =
-    try
-      let s0 = TypeHash.find ht ty in
-      TypeHash.remove ht ty;
-      TypeSet.union s0 s
-    with Not_found -> s
-  in
-  TypeHash.add ht ty s'
+let rec inv_type hash pty ty =
+  let ty = repr ty in
+  try
+    let inv = TypeHash.find hash ty in
+    inv.inv_parents <- pty @ inv.inv_parents
+  with Not_found ->
+    let inv = { inv_type = ty; inv_parents = pty } in
+    TypeHash.add hash ty inv;
+    iter_type_expr (inv_type hash [inv]) ty
 
 let compute_univars ty =
-  let node_univars : TypeSet.t TypeHash.t = TypeHash.create 17 in
-  let rec free_rec visited ty =
-    let ty = repr ty in
-    if close_cycle ty [] visited then TypeSet.empty else
-    let cyr = ref [] in
-    let univars =
-      match ty.desc with
-	Tunivar ->
-          TypeSet.singleton ty
-      | Tpoly (t, tyl) ->
-          let tyl = List.map repr tyl in
-          let visited = (ty, tyl, cyr) :: visited in
-          List.fold_right TypeSet.remove tyl (free_rec visited t)
-      | _ ->
-          let visited = (ty, [], cyr) :: visited in
-          let r = ref TypeSet.empty in
-	  iter_type_expr
-            (fun t -> r := TypeSet.union !r (free_rec visited t))
-            ty;
-          !r
-    in
-    if not (TypeSet.is_empty univars) then begin
-      type_hash_union node_univars ty univars;
-      List.iter
-        (fun cy ->
-          ignore
-            (List.fold_left
-               (fun univars (ty, tyl) ->
-                 let univars = List.fold_right TypeSet.remove tyl univars in
-                 type_hash_union node_univars ty univars;
-                 univars)
-               univars cy))
-        !cyr
-    end;
-    univars
+  let inverted = TypeHash.create 17 in
+  inv_type inverted [] ty;
+  let node_univars = TypeHash.create 17 in
+  let rec add_univar univ inv =
+    match inv.inv_type.desc with
+      Tpoly (ty, tl) when List.memq univ (List.map repr tl) -> ()
+    | _ ->
+        try
+          let univs = TypeHash.find node_univars inv.inv_type in
+          if not (TypeSet.mem univ !univs) then begin
+            univs := TypeSet.add univ !univs;
+            List.iter (add_univar univ) inv.inv_parents
+          end
+        with Not_found ->
+          TypeHash.add node_univars inv.inv_type (ref(TypeSet.singleton univ));
+          List.iter (add_univar univ) inv.inv_parents
   in
-  ignore (free_rec [] ty);
-  fun ty -> try TypeHash.find node_univars ty with Not_found -> TypeSet.empty
-
+  TypeHash.iter
+    (fun ty inv -> if ty.desc = Tunivar then add_univar ty inv)
+    inverted;
+  fun ty ->
+    try !(TypeHash.find node_univars ty) with Not_found -> TypeSet.empty
+  
 let rec diff_list l1 l2 =
   if l1 == l2 then [] else
   match l1 with [] -> invalid_arg "Ctype.diff_list"
