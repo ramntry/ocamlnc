@@ -170,12 +170,13 @@ value rec ctyp =
   | TyTup loc tl -> mktyp loc (Ptyp_tuple (List.map ctyp tl))
   | TyUid loc s -> mktyp loc (Ptyp_constr (lident s) [])
   | TyVrn loc catl ool ->
-      let catl = List.map (fun (c, a, t) -> (c, a, List.map ctyp t)) catl in
+      let catl =
+        List.map (fun (c, a, t) -> Rtag c a (List.map ctyp t)) catl in
       let (clos, sl) =
         match ool with
-        [ None -> (True, List.map (fun (c, _, _) -> c) catl)
-        | Some None -> (False, List.map (fun (c, _, _) -> c) catl)
-        | Some (Some (clos, sl)) -> (clos, sl) ]
+        [ None -> (True, None)
+        | Some None -> (False, None)
+        | Some (Some (clos, sl)) -> (clos, Some sl) ]
       in
       mktyp loc (Ptyp_variant catl clos sl)
   | TyXnd loc c _ ->
