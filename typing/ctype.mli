@@ -98,8 +98,6 @@ val instance_list: type_expr list -> type_expr list
 val instance_constructor:
         constructor_description -> type_expr list * type_expr
         (* Same, for a constructor *)
-val instance_label: label_description -> type_expr * type_expr
-        (* Same, for a label *)
 val instance_parameterized_type:
         type_expr list -> type_expr -> type_expr list * type_expr
 val instance_parameterized_type_2:
@@ -110,6 +108,9 @@ val instance_class:
 val instance_poly:
         bool -> type_expr list -> type_expr -> type_expr list * type_expr
         (* Take an instance of a type scheme containing free univars *)
+val instance_label:
+        bool -> label_description -> type_expr list * type_expr * type_expr
+        (* Same, for a label *)
 val apply:
         Env.t -> type_expr list -> type_expr -> type_expr list -> type_expr
         (* [apply [p1...pN] t [a1...aN]] match the arguments [ai] to

@@ -441,16 +441,16 @@ let transl_simple_type_univars env styp =
   let typ = transl_type env Univars None styp in
   end_def ();
   generalize typ;
-  let univs = List.map repr !pre_univars in
-  pre_univars := [];
   let univs =
     List.fold_left
       (fun acc v ->
+        let v = repr v in
 	if v.desc <> Tvar || v.level <> Btype.generic_level || List.memq v acc
         then acc
         else (v.desc <- Tunivar ; v :: acc))
-      [] univs
+      [] !pre_univars
   in
+  pre_univars := [];
   instance (Btype.newgenty (Tpoly (typ, univs)))
 
 let transl_simple_type_delayed env styp =

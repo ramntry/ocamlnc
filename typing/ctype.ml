@@ -720,12 +720,6 @@ let instance_constructor cstr =
   cleanup_types ();
   (ty_args, ty_res)
 
-let instance_label lbl =
-  let ty_res = copy lbl.lbl_res in
-  let ty_arg = copy lbl.lbl_arg in
-  cleanup_types ();
-  (ty_arg, ty_res)
-
 let instance_parameterized_type sch_args sch =
   let ty_args = List.map copy sch_args in
   let ty = copy sch in
@@ -879,6 +873,18 @@ let instance_poly fixed univars sch =
   delayed_copy := [];
   cleanup_types ();
   vars, ty
+
+let instance_label fixed lbl =
+  let ty_res = copy lbl.lbl_res in
+  let vars, ty_arg =
+    match repr lbl.lbl_arg with
+      {desc = Tpoly (ty, tl)} ->
+        instance_poly fixed tl ty
+    | ty ->
+        [], copy lbl.lbl_arg
+  in
+  cleanup_types ();
+  (vars, ty_arg, ty_res)
 
 (**** Instantiation with parameter substitution ****)
 
@@ -1465,8 +1471,12 @@ and unify_row env row1 row2 =
               with Not_found -> (h,l)::hl)
             (List.map (fun (l,_) -> (hash_variant l, l)) row1.row_fields)
             (List.map fst r2));
-  let more = newty2 (min rm1.level rm2.level) Tvar
-  and fixed = row1.row_fixed || row2.row_fixed
+  let more =
+    if row1.row_fixed then rm1 else
+    if row2.row_fixed then rm2 else
+    newgenvar ()
+  in update_level env (min rm1.level rm2.level) more;
+  let fixed = row1.row_fixed || row2.row_fixed
   and closed = row1.row_closed || row2.row_closed in
   let keep switch =
     List.for_all
@@ -1496,7 +1506,7 @@ and unify_row env row1 row2 =
   let bound = row1.row_bound @ row2.row_bound in
   let row0 = {row_fields = []; row_more = more; row_bound = bound;
               row_closed = closed; row_fixed = fixed; row_name = name} in
-  let more row rest =
+  let set_more row rest =
     let rest =
       if closed then
         filter_row_fields row.row_closed rest
@@ -1504,14 +1514,16 @@ and unify_row env row1 row2 =
     if rest <> [] && (row.row_closed || row.row_fixed)
     || closed && row.row_fixed && not row.row_closed
     then raise (Unify []);
+    let rm = row_more row in
+    if row.row_fixed && row0.row_more == rm then () else
     let ty = newty2 generic_level (Tvariant {row0 with row_fields = rest}) in
-    update_level env (repr row.row_more).level ty;
-    ty
+    update_level env rm.level ty;
+    rm.desc <- Tlink ty
   in
   let md1 = rm1.desc and md2 = rm2.desc in
   begin try
-    rm1.desc <- Tlink (more row1 r2);
-    rm2.desc <- Tlink (more row2 r1);
+    set_more row1 r2;
+    set_more row2 r1;
     List.iter
       (fun (l,f1,f2) ->
         unify_row_field env row1.row_fixed row2.row_fixed f1 f2)

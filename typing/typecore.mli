@@ -88,7 +88,7 @@ type error =
   | Masked_instance_variable of Longident.t
   | Not_a_variant_type of Longident.t
   | Incoherent_label_order
-  | Less_general_method of (type_expr * type_expr) list
+  | Less_general of string * (type_expr * type_expr) list
 
 exception Error of Location.t * error
 

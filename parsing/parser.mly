@@ -1158,7 +1158,7 @@ label_declarations:
   | label_declarations SEMI label_declaration   { $3 :: $1 }
 ;
 label_declaration:
-    mutable_flag label COLON core_type          { ($2, $1, $4) }
+    mutable_flag label COLON poly_type          { ($2, $1, $4) }
 ;
 
 /* "with" constraints (additional type equations over signature components) */

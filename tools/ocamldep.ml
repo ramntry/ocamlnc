@@ -51,6 +51,7 @@ let rec add_type bv ty =
         (function Rtag(_,_,stl) -> List.iter (add_type bv) stl
           | Rinherit sty -> add_type bv sty)
         fl
+  | Ptyp_poly(_, t) -> add_type bv t
 
 and add_field_type bv ft =
   match ft.pfield_desc with
@@ -149,6 +150,7 @@ let rec add_expr bv exp =
       add_module bv m; add_expr (StringSet.add id bv) e
   | Pexp_assert (e) -> add_expr bv e
   | Pexp_assertfalse -> ()
+  | Pexp_poly (e, t) -> add_expr bv e; add_opt add_type bv t
 
 and add_pat_expr_list bv pel =
   List.iter (fun (p, e) -> add_pattern bv p; add_expr bv e) pel

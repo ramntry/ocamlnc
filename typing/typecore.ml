@@ -55,7 +55,7 @@ type error =
   | Masked_instance_variable of Longident.t
   | Not_a_variant_type of Longident.t
   | Incoherent_label_order
-  | Less_general_method of (type_expr * type_expr) list
+  | Less_general of string * (type_expr * type_expr) list
 
 exception Error of Location.t * error
 
@@ -184,13 +184,13 @@ let rec build_as_type env p =
       let lbl = fst(List.hd lpl) in
       let ty = newvar () in
       let do_label lbl =
-        let ty_arg, ty_res = instance_label lbl in
+        let _, ty_arg, ty_res = instance_label false lbl in
         unify_pat env {p with pat_type = ty} ty_res;
         if lbl.lbl_mut = Immutable && List.mem_assoc lbl lpl then begin
           let arg = List.assoc lbl lpl in
           unify_pat env {arg with pat_type = build_as_type env arg} ty_arg
         end else begin
-          let ty_arg', ty_res' = instance_label lbl in
+          let _, ty_arg', ty_res' = instance_label false lbl in
           unify env ty_arg ty_arg';
           unify_pat env p ty_res'
         end in
@@ -349,7 +349,7 @@ let rec type_pat env sp =
             Env.lookup_label lid env
           with Not_found ->
             raise(Error(sp.ppat_loc, Unbound_label lid)) in
-        let (ty_arg, ty_res) = instance_label label in
+        let (_, ty_arg, ty_res) = instance_label false label in
         begin try
           unify env ty_res ty
         with Unify trace ->
@@ -677,6 +677,22 @@ let rec list_labels_aux env visited ls ty_fun =
 
 let list_labels env ty = list_labels_aux env [] [] ty
 
+(* Check that all univars are safe in a type *)
+let check_univars env kind exp ty_expected vars =
+  List.iter
+    (fun t ->
+      let t = repr t in
+      generalize t;
+      if t.desc = Tvar && t.level = generic_level then () else
+      raise
+        (Error
+           (exp.exp_loc,
+            Less_general(kind,
+                         [repr exp.exp_type, full_expand env exp.exp_type;
+                          repr ty_expected, full_expand env ty_expected])));
+      t.desc <- Tunivar)
+    vars
+
 (* Hack to allow coercion of self. Will clean-up later. *)
 let self_coercion = ref ([] : (Path.t * Location.t list ref) list)
 
@@ -787,13 +803,16 @@ let rec type_exp env sexp =
             Env.lookup_label lid env
           with Not_found ->
             raise(Error(sexp.pexp_loc, Unbound_label lid)) in
-        let (ty_arg, ty_res) = instance_label label in
+        begin_def ();
+        let (vars, ty_arg, ty_res) = instance_label true label in
         begin try
           unify env ty_res ty
         with Unify trace ->
           raise(Error(sexp.pexp_loc, Label_mismatch(lid, trace)))
         end;
         let arg = type_expect env sarg ty_arg in
+        end_def ();
+        check_univars env "field value" arg label.lbl_arg vars;
         num_fields := Array.length label.lbl_all;
         (label, arg) in
       let lbl_exp_list = List.map type_label_exp lid_sexp_list in
@@ -813,8 +832,8 @@ let rec type_exp env sexp =
               if List.for_all (fun (lbl',_) -> lbl'.lbl_pos <> lbl.lbl_pos)
                   lbl_exp_list
               then begin
-                let ty_arg1, ty_res1 = instance_label lbl
-                and ty_arg2, ty_res2 = instance_label lbl in
+                let _, ty_arg1, ty_res1 = instance_label false lbl
+                and _, ty_arg2, ty_res2 = instance_label false lbl in
                 unify env ty_exp ty_res1;
                 unify env ty ty_res2;
                 unify env ty_arg1 ty_arg2
@@ -847,7 +866,7 @@ let rec type_exp env sexp =
           Env.lookup_label lid env
         with Not_found ->
           raise(Error(sexp.pexp_loc, Unbound_label lid)) in
-      let (ty_arg, ty_res) = instance_label label in
+      let (_, ty_arg, ty_res) = instance_label false label in
       unify_exp env arg ty_res;
       { exp_desc = Texp_field(arg, label);
         exp_loc = sexp.pexp_loc;
@@ -862,9 +881,12 @@ let rec type_exp env sexp =
           raise(Error(sexp.pexp_loc, Unbound_label lid)) in
       if label.lbl_mut = Immutable then
         raise(Error(sexp.pexp_loc, Label_not_mutable lid));
-      let (ty_arg, ty_res) = instance_label label in
+      begin_def ();
+      let (vars, ty_arg, ty_res) = instance_label true label in
       unify_exp env record ty_res;
       let newval = type_expect env snewval ty_arg in
+      end_def ();
+      check_univars env "field value" newval label.lbl_arg vars;
       { exp_desc = Texp_setfield(record, label, newval);
         exp_loc = sexp.pexp_loc;
         exp_type = instance Predef.type_unit;
@@ -1478,24 +1500,10 @@ and type_expect ?in_function env sexp ty_expected =
             if sty <> None then set_type ty;
             (* One more level to generalize locally *)
             begin_def ();
-            let tl',ty'' = instance_poly true tl ty' in
+            let vars, ty'' = instance_poly true tl ty' in
             let exp = type_expect env sbody ty'' in
             end_def ();
-            List.iter
-              (fun t ->
-                let t =
-                  match repr t with
-                  | {desc=Tvariant row} -> row_more row
-                  | t -> t
-                in
-                generalize t;
-                if t.desc <> Tvar or t.level <> generic_level then raise
-                    (Error
-                       (sexp.pexp_loc, Less_general_method
-                          [repr exp.exp_type, full_expand env exp.exp_type;
-                           repr ty_expected, full_expand env ty_expected ]));
-                t.desc <- Tunivar)
-              tl';
+            check_univars env "method" exp ty_expected vars;
             { exp with exp_type = ty }
         | _ -> assert false
       end
@@ -1745,7 +1753,7 @@ let report_error ppf = function
       fprintf ppf "This function is applied to arguments@ ";
       fprintf ppf "in an order different from other calls.@ ";
       fprintf ppf "This is only allowed when the real type is known."
-  | Less_general_method trace ->
+  | Less_general (kind, trace) ->
       report_unification_error ppf trace
-        (fun ppf -> fprintf ppf "This method has type")
+        (fun ppf -> fprintf ppf "This %s has type" kind)
         (fun ppf -> fprintf ppf "which is less general than")
