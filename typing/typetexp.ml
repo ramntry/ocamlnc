@@ -264,6 +264,7 @@ let rec transl_type env policy styp =
       if policy = Fixed && not (Btype.static_row row) then
         raise(Error(styp.ptyp_loc, Unbound_type_variable "[..]"));
       newty (Tvariant row)
+(*
   | Ptyp_poly(vars, st) ->
       let ty_list = List.map (fun _ -> newty Tunivar) vars in
       let old_univars = !univars in
@@ -283,6 +284,7 @@ let rec transl_type env policy styp =
       aliases := List.fold_right Tbl.remove vars !aliases;
       univars := old_univars;
       newty (Tpoly(ty,ty_list))
+*)
 
 and transl_fields env policy =
   function
