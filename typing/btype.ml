@@ -149,6 +149,7 @@ let rec iter_abbrev f = function
   | Mlink rem              -> iter_abbrev f !rem
 
 let copy_row f fixed row keep more =
+  let bound = ref [] in
   let fields = List.map
       (fun (l, fi) -> l,
         match row_field_repr fi with
@@ -156,15 +157,19 @@ let copy_row f fixed row keep more =
         | Reither(c, tl, m, e) ->
             let e = if keep then e else ref None in
             let m = if row.row_fixed then fixed else m in
-            Reither(c, List.map f tl, m , e)
+            let tl = List.map f tl in
+            bound := List.filter
+                (function {desc=Tconstr(_,[],_)} -> false | _ -> true)
+                (List.map repr tl)
+              @ !bound;
+            Reither(c, tl, m, e)
         | _ -> fi)
       row.row_fields in
   let name =
     match row.row_name with None -> None
     | Some (path, tl) -> Some (path, List.map f tl) in
   { row_fields = fields; row_more = more;
-    row_bound = List.map f row.row_bound;
-    row_fixed = row.row_fixed && fixed;
+    row_bound = !bound; row_fixed = row.row_fixed && fixed;
     row_closed = row.row_closed; row_name = name; }
 
 let rec copy_kind = function
@@ -193,6 +198,9 @@ let rec copy_type_desc f = function
   | Tsubst ty           -> assert false
   | Tunivar             -> Tunivar
   | Tpoly (ty, tyl)     -> Tpoly (f ty, List.map f tyl)
+
+
+(* Utilities for copying *)
 
 let saved_desc = ref []
   (* Saved association of generic nodes with their description. *)
