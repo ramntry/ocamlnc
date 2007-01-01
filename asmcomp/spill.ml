@@ -143,7 +143,7 @@ let rec reload i before =
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
-  | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
+  | Iop(Icall_ind _ | Icall_imm _ | Iextcall(_, true, _)) ->
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload i.next i.live in
       (add_reloads (Reg.inter_set_array before i.arg)
@@ -240,7 +240,7 @@ let rec reload i before =
         reload i.next (Reg.Set.union after_body after_handler) in
       (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
        finally)
-  | Iraise ->
+  | Iraise _ ->
       (add_reloads (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
 
 (* Second pass: add spill instructions based on what we've decided to reload.
@@ -292,8 +292,8 @@ let rec spill i finally =
       let before1 = Reg.diff_set_array after i.res in
       let before =
         match i.desc with
-          Iop(Icall_ind) | Iop(Icall_imm _) | Iop(Iextcall(_, _))
-        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _)) ->
+          Iop(Icall_ind _) | Iop(Icall_imm _) | Iop(Iextcall _)
+        | Iop(Iintop (Icheckbound _)) | Iop(Iintop_imm(Icheckbound _, _)) ->
             Reg.Set.union before1 !spill_at_raise
         | _ ->
             before1 in
@@ -381,7 +381,7 @@ let rec spill i finally =
       spill_at_raise := saved_spill_at_raise;
       (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
        before_body)
-  | Iraise ->
+  | Iraise _ ->
       (i, !spill_at_raise)
 
 (* Entry point *)

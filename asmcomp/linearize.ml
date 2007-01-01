@@ -43,10 +43,10 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise
+  | Lraise of Debuginfo.t
 
 let has_fallthrough = function
-  | Lreturn | Lbranch _ | Lswitch _ | Lraise
+  | Lreturn | Lbranch _ | Lswitch _ | Lraise _
   | Lop Itailcall_ind | Lop (Itailcall_imm _) -> false
   | _ -> true 
 
@@ -253,8 +253,8 @@ let rec linear i n =
                     (linear body (cons_instr Lpoptrap n1))) in
       cons_instr (Lsetuptrap lbl_body)
         (linear handler (add_branch lbl_join n2))
-  | Iraise ->
-      copy_instr Lraise i (discard_dead_code n)
+  | Iraise dbg ->
+      copy_instr (Lraise dbg) i (discard_dead_code n)
 
 let fundecl f =
   { fun_name = f.Mach.fun_name;

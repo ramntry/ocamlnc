@@ -91,15 +91,15 @@ let rec live i finally =
       live_at_raise := saved_live_at_raise;
       i.live <- before_body;
       before_body
-  | Iraise ->
+  | Iraise _ ->
       (* i.live remains empty since no regs are live across *)
       Reg.add_set_array !live_at_raise i.arg
   | _ ->
       let across_after = Reg.diff_set_array (live i.next finally) i.res in
       let across =
         match i.desc with
-          Iop(Icall_ind) | Iop(Icall_imm _) | Iop(Iextcall(_, _))
-        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _)) ->
+          Iop(Icall_ind _) | Iop(Icall_imm _) | Iop(Iextcall _)
+        | Iop(Iintop (Icheckbound _)) | Iop(Iintop_imm(Icheckbound _, _)) ->
             (* The function call may raise an exception, branching to the
                nearest enclosing try ... with. Similarly for bounds checks.
                Hence, everything that must be live at the beginning of

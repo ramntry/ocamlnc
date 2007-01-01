@@ -22,7 +22,7 @@ type integer_operation =
     Iadd | Isub | Imul | Idiv | Imod
   | Iand | Ior | Ixor | Ilsl | Ilsr | Iasr
   | Icomp of integer_comparison
-  | Icheckbound
+  | Icheckbound of Debuginfo.t
 
 type test =
     Itruetest
@@ -40,11 +40,11 @@ type operation =
   | Iconst_int of nativeint
   | Iconst_float of string
   | Iconst_symbol of string
-  | Icall_ind
-  | Icall_imm of string
+  | Icall_ind of Debuginfo.t
+  | Icall_imm of string * Debuginfo.t
   | Itailcall_ind
   | Itailcall_imm of string
-  | Iextcall of string * bool
+  | Iextcall of string * bool * Debuginfo.t
   | Istackoffset of int
   | Iload of Cmm.memory_chunk * Arch.addressing_mode
   | Istore of Cmm.memory_chunk * Arch.addressing_mode
@@ -72,7 +72,7 @@ and instruction_desc =
   | Icatch of int * instruction * instruction
   | Iexit of int
   | Itrywith of instruction * instruction
-  | Iraise
+  | Iraise of Debuginfo.t
 
 type fundecl =
   { fun_name: string;
@@ -122,7 +122,7 @@ let rec instr_iter f i =
       | Iexit _ -> ()
       | Itrywith(body, handler) ->
           instr_iter f body; instr_iter f handler; instr_iter f i.next
-      | Iraise -> ()
+      | Iraise _ -> ()
       | _ ->
           instr_iter f i.next      
 

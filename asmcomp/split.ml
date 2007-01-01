@@ -186,8 +186,8 @@ let rec rename i sub =
         rename i.next (merge_substs sub_body sub_handler i.next) in
       (instr_cons (Itrywith(new_body, new_handler)) [||] [||] new_next,
        sub_next)
-  | Iraise ->
-      (instr_cons Iraise (subst_regs i.arg sub) [||] i.next,
+  | Iraise dbg ->
+      (instr_cons (Iraise dbg) (subst_regs i.arg sub) [||] i.next,
        None)
       
 (* Second pass: replace registers by their final representatives *)

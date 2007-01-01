@@ -37,7 +37,7 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise
+  | Lraise of Debuginfo.t
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction

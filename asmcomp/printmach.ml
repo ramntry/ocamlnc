@@ -81,7 +81,7 @@ let intop = function
   | Ilsr -> " >>u "
   | Iasr -> " >>s "
   | Icomp cmp -> intcomp cmp
-  | Icheckbound -> " check > "
+  | Icheckbound d -> " check > " ^ Debuginfo.to_string d
 
 let test tst ppf arg =
   match tst with
@@ -107,13 +107,14 @@ let operation op arg ppf res =
   | Iconst_int n -> fprintf ppf "%s" (Nativeint.to_string n)
   | Iconst_float s -> fprintf ppf "%s" s
   | Iconst_symbol s -> fprintf ppf "\"%s\"" s
-  | Icall_ind -> fprintf ppf "call %a" regs arg
-  | Icall_imm lbl -> fprintf ppf "call \"%s\" %a" lbl regs arg
+  | Icall_ind d -> fprintf ppf "call %a%s" regs arg (Debuginfo.to_string d)
+  | Icall_imm(lbl, d) -> fprintf ppf "call \"%s\" %a%s" lbl regs arg (Debuginfo.to_string d)
   | Itailcall_ind -> fprintf ppf "tailcall %a" regs arg
   | Itailcall_imm lbl -> fprintf ppf "tailcall \"%s\" %a" lbl regs arg
-  | Iextcall(lbl, alloc) ->
-      fprintf ppf "extcall \"%s\" %a%s" lbl regs arg
+  | Iextcall(lbl, alloc, d) ->
+      fprintf ppf "extcall \"%s\" %a%s%s" lbl regs arg
       (if not alloc then "" else " (noalloc)")
+      (Debuginfo.to_string d)
   | Istackoffset n ->
       fprintf ppf "offset stack %i" n
   | Iload(chunk, addr) ->
@@ -179,8 +180,8 @@ let rec instr ppf i =
   | Itrywith(body, handler) ->
       fprintf ppf "@[<v 2>try@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
              instr body instr handler
-  | Iraise ->
-      fprintf ppf "raise %a" reg i.arg.(0)
+  | Iraise d ->
+      fprintf ppf "raise %a%s" reg i.arg.(0) (Debuginfo.to_string d)
   end;
   begin match i.next.desc with
     Iend -> ()

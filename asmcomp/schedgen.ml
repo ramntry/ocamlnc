@@ -119,11 +119,11 @@ class virtual scheduler_generic = object (self)
    that terminate a basic block. *)
 
 method oper_in_basic_block = function
-    Icall_ind -> false
+    Icall_ind _ -> false
   | Icall_imm _ -> false
   | Itailcall_ind -> false
   | Itailcall_imm _ -> false
-  | Iextcall(_, _) -> false
+  | Iextcall _ -> false
   | Istackoffset _ -> false
   | Ialloc _ -> false
   | _ -> true
@@ -149,8 +149,8 @@ method is_load = function
   | _ -> false
 
 method is_checkbound = function
-    Iintop Icheckbound -> true
-  | Iintop_imm(Icheckbound, _) -> true
+    Iintop (Icheckbound _) -> true
+  | Iintop_imm(Icheckbound _, _) -> true
   | _ -> false
 
 method private instr_is_store instr =
@@ -337,8 +337,8 @@ method schedule_fundecl f =
     else begin
       let critical_outputs =
         match i.desc with
-          Lop(Icall_ind | Itailcall_ind) -> [| i.arg.(0) |]
-        | Lop(Icall_imm _ | Itailcall_imm _ | Iextcall(_, _)) -> [||]
+          Lop(Icall_ind _ | Itailcall_ind) -> [| i.arg.(0) |]
+        | Lop(Icall_imm _ | Itailcall_imm _ | Iextcall _) -> [||]
         | Lreturn -> [||]
         | _ -> i.arg in
       List.iter (fun x -> ignore (longest_path critical_outputs x)) ready_queue;

@@ -29,7 +29,7 @@ let allocated_size = function
 
 let rec combine i allocstate =
   match i.desc with
-    Iend | Ireturn | Iexit _ | Iraise ->
+    Iend | Ireturn | Iexit _ | Iraise _ ->
       (i, allocated_size allocstate)
   | Iop(Ialloc sz) ->
       begin match allocstate with
@@ -49,7 +49,7 @@ let rec combine i allocstate =
             (instr_cons (Iop(Ialloc newsz)) i.arg i.res newnext, ofs)
           end
       end
-  | Iop(Icall_ind | Icall_imm _ | Iextcall(_, _) |
+  | Iop(Icall_ind _ | Icall_imm _ | Iextcall _ |
         Itailcall_ind | Itailcall_imm _) ->
       let newnext = combine_restart i.next in
       (instr_cons i.desc i.arg i.res newnext, allocated_size allocstate)

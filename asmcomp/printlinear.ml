@@ -27,7 +27,7 @@ let instr ppf i =
   | Lend -> ()
   | Lop op ->
       begin match op with
-      | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->
+      | Ialloc _ | Icall_ind _ | Icall_imm _ | Iextcall _ ->
           fprintf ppf "@[<1>{%a}@]@," regsetaddr i.live
       | _ -> ()
       end;
@@ -62,8 +62,8 @@ let instr ppf i =
       fprintf ppf "push trap"
   | Lpoptrap ->
       fprintf ppf "pop trap"
-  | Lraise ->
-      fprintf ppf "raise %a" reg i.arg.(0)
+  | Lraise dbg ->
+      fprintf ppf "raise %a%s" reg i.arg.(0) (Debuginfo.to_string dbg)
 
 let rec all_instr ppf i =
   match i.desc with
