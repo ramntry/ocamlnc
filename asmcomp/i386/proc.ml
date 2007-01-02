@@ -150,8 +150,8 @@ let destroyed_at_c_call =               (* ebx, esi, edi, ebp preserved *)
   [|eax; ecx; edx|]
 
 let destroyed_at_oper = function
-    Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
-  | Iop(Iextcall(_, false)) -> destroyed_at_c_call
+    Iop(Icall_ind _ | Icall_imm _ | Iextcall(_, true, _)) -> all_phys_regs
+  | Iop(Iextcall(_, false, _)) -> destroyed_at_c_call
   | Iop(Iintop(Idiv | Imod)) -> [| eax; edx |]
   | Iop(Iintop_imm(Imod, _)) -> [| eax |]
   | Iop(Ialloc _) -> [| eax |]
@@ -167,7 +167,7 @@ let destroyed_at_raise = all_phys_regs
 let safe_register_pressure op = 4
 
 let max_register_pressure = function
-    Iextcall(_, _) -> [| 4; max_int |]
+    Iextcall(_, _, _) -> [| 4; max_int |]
   | Iintop(Idiv | Imod) -> [| 5; max_int |]
   | Ialloc _ | Iintop(Icomp _) | Iintop_imm(Icomp _, _) |
     Iintoffloat -> [| 6; max_int |]
