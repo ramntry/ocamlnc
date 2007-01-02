@@ -573,7 +573,7 @@ let emit_instr fallthrough i =
         stack_offset := !stack_offset - 16
     | Lraise dbg ->
         if !Clflags.debug then begin
-          `	call    caml_raise_exn\n`;
+          `	call    {emit_symbol "caml_raise_exn"}\n`;
           record_frame Reg.Set.empty dbg
         end else begin
           `	movq	%r14, %rsp\n`;
