@@ -341,14 +341,8 @@ FUNCTION(caml_callback3_exn)
         jmp     .L106
 
 FUNCTION(caml_ml_array_bound_error)
-    /* Record lowest stack address and return address */
-        popq    %r12
-        movq    %r12, caml_last_return_address(%rip)
-        movq    %rsp, caml_bottom_of_stack(%rip)
-    /* Make the exception handler and alloc ptr available to the C code */
-	movq	%r15, caml_young_ptr(%rip)
-	movq	%r14, caml_exception_pointer(%rip)
-	jmp	caml_array_bound_error	
+        leaq    caml_array_bound_error(%rip), %rax
+        jmp     caml_c_call
 
         .data
         .globl  caml_system__frametable
