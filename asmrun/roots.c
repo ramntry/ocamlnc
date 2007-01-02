@@ -100,7 +100,7 @@ void caml_oldify_local_roots (void)
   frame_descr * d;
   uintnat h;
   int i, j, n, ofs;
-  short * p;
+  unsigned short * p;
   value glob;
   value * root;
   struct global_root * gr;
@@ -229,7 +229,7 @@ void caml_do_local_roots(scanning_action f, char * bottom_of_stack,
   frame_descr * d;
   uintnat h;
   int i, j, n, ofs;
-  short * p;
+  unsigned short * p;
   value * root;
   struct caml__roots_block *lr;
 
