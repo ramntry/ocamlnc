@@ -42,7 +42,7 @@ let regs ppf v =
   | 0 -> ()
   | 1 -> reg ppf v.(0)
   | n -> reg ppf v.(0);
-         for i = 1 to n-1 do fprintf ppf "@ %a" reg v.(i) done
+         for i = 1 to n-1 do fprintf ppf " %a" reg v.(i) done
 
 let regset ppf s =
   let first = ref true in
@@ -81,7 +81,7 @@ let intop = function
   | Ilsr -> " >>u "
   | Iasr -> " >>s "
   | Icomp cmp -> intcomp cmp
-  | Icheckbound d -> " check > " ^ Debuginfo.to_string d
+  | Icheckbound -> " check > "
 
 let test tst ppf arg =
   match tst with
@@ -107,14 +107,13 @@ let operation op arg ppf res =
   | Iconst_int n -> fprintf ppf "%s" (Nativeint.to_string n)
   | Iconst_float s -> fprintf ppf "%s" s
   | Iconst_symbol s -> fprintf ppf "\"%s\"" s
-  | Icall_ind d -> fprintf ppf "call %a%s" regs arg (Debuginfo.to_string d)
-  | Icall_imm(lbl, d) -> fprintf ppf "call \"%s\" %a%s" lbl regs arg (Debuginfo.to_string d)
+  | Icall_ind -> fprintf ppf "call %a" regs arg
+  | Icall_imm lbl -> fprintf ppf "call \"%s\" %a" lbl regs arg
   | Itailcall_ind -> fprintf ppf "tailcall %a" regs arg
   | Itailcall_imm lbl -> fprintf ppf "tailcall \"%s\" %a" lbl regs arg
-  | Iextcall(lbl, alloc, d) ->
-      fprintf ppf "extcall \"%s\" %a%s%s" lbl regs arg
+  | Iextcall(lbl, alloc) ->
+      fprintf ppf "extcall \"%s\" %a%s" lbl regs arg
       (if not alloc then "" else " (noalloc)")
-      (Debuginfo.to_string d)
   | Istackoffset n ->
       fprintf ppf "offset stack %i" n
   | Iload(chunk, addr) ->
@@ -180,9 +179,11 @@ let rec instr ppf i =
   | Itrywith(body, handler) ->
       fprintf ppf "@[<v 2>try@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
              instr body instr handler
-  | Iraise d ->
-      fprintf ppf "raise %a%s" reg i.arg.(0) (Debuginfo.to_string d)
+  | Iraise ->
+      fprintf ppf "raise %a" reg i.arg.(0)
   end;
+  if i.dbg != Debuginfo.none then
+    fprintf ppf " %s" (Debuginfo.to_string i.dbg);
   begin match i.next.desc with
     Iend -> ()
   | _ -> fprintf ppf "@,%a" instr i.next

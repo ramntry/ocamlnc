@@ -22,7 +22,7 @@ type integer_operation =
     Iadd | Isub | Imul | Idiv | Imod
   | Iand | Ior | Ixor | Ilsl | Ilsr | Iasr
   | Icomp of integer_comparison
-  | Icheckbound of Debuginfo.t
+  | Icheckbound
 
 type test =
     Itruetest
@@ -40,11 +40,11 @@ type operation =
   | Iconst_int of nativeint
   | Iconst_float of string
   | Iconst_symbol of string
-  | Icall_ind of Debuginfo.t
-  | Icall_imm of string * Debuginfo.t
+  | Icall_ind
+  | Icall_imm of string
   | Itailcall_ind
   | Itailcall_imm of string
-  | Iextcall of string * bool * Debuginfo.t
+  | Iextcall of string * bool
   | Istackoffset of int
   | Iload of Cmm.memory_chunk * Arch.addressing_mode
   | Istore of Cmm.memory_chunk * Arch.addressing_mode
@@ -60,6 +60,7 @@ type instruction =
     next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
+    dbg: Debuginfo.t;
     mutable live: Reg.Set.t }
 
 and instruction_desc =
@@ -72,7 +73,7 @@ and instruction_desc =
   | Icatch of int * instruction * instruction
   | Iexit of int 
   | Itrywith of instruction * instruction
-  | Iraise of Debuginfo.t
+  | Iraise
 
 type fundecl =
   { fun_name: string;
@@ -85,8 +86,8 @@ val end_instr: unit -> instruction
 val instr_cons: 
       instruction_desc -> Reg.t array -> Reg.t array -> instruction ->
         instruction
-val instr_cons_live: 
-      instruction_desc -> Reg.t array -> Reg.t array -> Reg.Set.t ->
+val instr_cons_debug: 
+      instruction_desc -> Reg.t array -> Reg.t array -> Debuginfo.t ->
         instruction -> instruction
 val instr_iter: (instruction -> unit) -> instruction -> unit
 

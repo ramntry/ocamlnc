@@ -456,12 +456,12 @@ let emit_instr fallthrough i =
         end
     | Lop(Iconst_symbol s) ->
         `	movl	${emit_symbol s}, {emit_reg i.res.(0)}\n`
-    | Lop(Icall_ind dbg) ->
+    | Lop(Icall_ind) ->
         `	call	*{emit_reg i.arg.(0)}\n`;
-        record_frame i.live dbg
-    | Lop(Icall_imm(s, dbg)) ->
+        record_frame i.live i.dbg
+    | Lop(Icall_imm s) ->
         `	call	{emit_symbol s}\n`;
-        record_frame i.live dbg
+        record_frame i.live i.dbg
     | Lop(Itailcall_ind) ->
         output_epilogue();
         `	jmp	*{emit_reg i.arg.(0)}\n`
@@ -472,7 +472,7 @@ let emit_instr fallthrough i =
           output_epilogue();
           `	jmp	{emit_symbol s}\n`
         end
-    | Lop(Iextcall(s, alloc, dbg)) ->
+    | Lop(Iextcall(s, alloc)) ->
         if alloc then begin
           if not macosx then
             `	movl	${emit_symbol s}, %eax\n`
@@ -482,7 +482,7 @@ let emit_instr fallthrough i =
             `	movl	L{emit_symbol s}$non_lazy_ptr, %eax\n`
           end;
           `	call	{emit_symbol "caml_c_call"}\n`;
-          record_frame i.live dbg
+          record_frame i.live i.dbg
         end else begin
           if not macosx then
             `	call	{emit_symbol s}\n`
@@ -573,12 +573,12 @@ let emit_instr fallthrough i =
         let b = name_for_cond_branch cmp in
         `	set{emit_string b}	%al\n`;
         `	movzbl	%al, {emit_reg i.res.(0)}\n`
-    | Lop(Iintop (Icheckbound dbg)) ->
-        let lbl = bound_error_label dbg in
+    | Lop(Iintop Icheckbound) ->
+        let lbl = bound_error_label i.dbg in
         `	cmpl	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}\n`;
         `	jbe	{emit_label lbl}\n`
-    | Lop(Iintop_imm(Icheckbound dbg, n)) ->
-        let lbl = bound_error_label dbg in
+    | Lop(Iintop_imm(Icheckbound, n)) ->
+        let lbl = bound_error_label i.dbg in
         `	cmpl	${emit_int n}, {emit_reg i.arg.(0)}\n`;
         `	jbe	{emit_label lbl}\n`
     | Lop(Iintop(Idiv | Imod)) ->
@@ -790,10 +790,10 @@ let emit_instr fallthrough i =
         `	popl	{emit_symbol "caml_exception_pointer"}\n`;
         `	addl	${emit_int (trap_frame_size - 4)}, %esp\n`;
         stack_offset := !stack_offset - trap_frame_size
-    | Lraise dbg ->
+    | Lraise ->
         if !Clflags.debug then begin
           `	call    {emit_symbol "caml_raise_exn"}\n`;
-          record_frame Reg.Set.empty dbg
+          record_frame Reg.Set.empty i.dbg
         end else begin
           `	movl	{emit_symbol "caml_exception_pointer"}, %esp\n`;
           `	popl    {emit_symbol "caml_exception_pointer"}\n`;

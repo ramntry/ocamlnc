@@ -119,7 +119,7 @@ class virtual scheduler_generic = object (self)
    that terminate a basic block. *)
 
 method oper_in_basic_block = function
-    Icall_ind _ -> false
+    Icall_ind -> false
   | Icall_imm _ -> false
   | Itailcall_ind -> false
   | Itailcall_imm _ -> false
@@ -149,8 +149,8 @@ method is_load = function
   | _ -> false
 
 method is_checkbound = function
-    Iintop (Icheckbound _) -> true
-  | Iintop_imm(Icheckbound _, _) -> true
+    Iintop Icheckbound -> true
+  | Iintop_imm(Icheckbound, _) -> true
   | _ -> false
 
 method private instr_is_store instr =
@@ -328,8 +328,7 @@ method schedule_fundecl f =
           clear_code_dag();
           schedule_block [] i
         end else
-          { desc = i.desc; arg = i.arg; res = i.res; live = i.live;
-            next = schedule i.next }
+          { i with next = schedule i.next }
 
   and schedule_block ready_queue i =
     if self#instr_in_basic_block i then
@@ -337,7 +336,7 @@ method schedule_fundecl f =
     else begin
       let critical_outputs =
         match i.desc with
-          Lop(Icall_ind _ | Itailcall_ind) -> [| i.arg.(0) |]
+          Lop(Icall_ind | Itailcall_ind) -> [| i.arg.(0) |]
         | Lop(Icall_imm _ | Itailcall_imm _ | Iextcall _) -> [||]
         | Lreturn -> [||]
         | _ -> i.arg in

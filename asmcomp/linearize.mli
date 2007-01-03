@@ -22,6 +22,7 @@ type instruction =
     mutable next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
+    dbg: Debuginfo.t;
     live: Reg.Set.t }
 
 and instruction_desc =
@@ -37,7 +38,7 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise of Debuginfo.t
+  | Lraise
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction

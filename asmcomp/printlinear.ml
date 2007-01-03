@@ -23,11 +23,11 @@ let label ppf l =
   Format.fprintf ppf "L%i" l
 
 let instr ppf i =
-  match i.desc with
+  begin match i.desc with
   | Lend -> ()
   | Lop op ->
       begin match op with
-      | Ialloc _ | Icall_ind _ | Icall_imm _ | Iextcall _ ->
+      | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->
           fprintf ppf "@[<1>{%a}@]@," regsetaddr i.live
       | _ -> ()
       end;
@@ -62,8 +62,11 @@ let instr ppf i =
       fprintf ppf "push trap"
   | Lpoptrap ->
       fprintf ppf "pop trap"
-  | Lraise dbg ->
-      fprintf ppf "raise %a%s" reg i.arg.(0) (Debuginfo.to_string dbg)
+  | Lraise ->
+      fprintf ppf "raise %a" reg i.arg.(0)
+  end;
+  if i.dbg != Debuginfo.none then
+    fprintf ppf " %s" (Debuginfo.to_string i.dbg)
 
 let rec all_instr ppf i =
   match i.desc with

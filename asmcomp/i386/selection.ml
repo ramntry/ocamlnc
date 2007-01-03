@@ -269,11 +269,11 @@ method select_floatarith regular_op reversed_op mem_op mem_rev_op args =
 
 (* Deal with register constraints *)
 
-method insert_op op rs rd =
+method insert_op_debug op dbg rs rd =
   try
     let (rsrc, rdst, move_res) = pseudoregs_for_operation op rs rd in
     self#insert_moves rs rsrc;
-    self#insert (Iop op) rsrc rdst;
+    self#insert_debug (Iop op) dbg rsrc rdst;
     if move_res then begin
       self#insert_moves rdst rd;
       rd
@@ -281,6 +281,9 @@ method insert_op op rs rd =
       rdst
   with Use_default ->
     super#insert_op op rs rd
+
+method insert_op op rs rd =
+  self#insert_op_debug op Debuginfo.none rs rd
 
 (* Selection of push instructions for external calls *)
 

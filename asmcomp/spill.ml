@@ -143,11 +143,11 @@ let rec reload i before =
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
-  | Iop(Icall_ind _ | Icall_imm _ | Iextcall(_, true, _)) ->
+  | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload i.next i.live in
       (add_reloads (Reg.inter_set_array before i.arg)
-                   (instr_cons i.desc i.arg i.res new_next),
+                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
        finally)
   | Iop op ->
       let new_before =
@@ -160,7 +160,7 @@ let rec reload i before =
         Reg.diff_set_array (Reg.diff_set_array new_before i.arg) i.res in
       let (new_next, finally) = reload i.next after in
       (add_reloads (Reg.inter_set_array new_before i.arg)
-                   (instr_cons i.desc i.arg i.res new_next),
+                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
        finally)
   | Iifthenelse(test, ifso, ifnot) ->
       let at_fork = Reg.diff_set_array before i.arg in
@@ -240,7 +240,7 @@ let rec reload i before =
         reload i.next (Reg.Set.union after_body after_handler) in
       (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
        finally)
-  | Iraise _ ->
+  | Iraise ->
       (add_reloads (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
 
 (* Second pass: add spill instructions based on what we've decided to reload.
@@ -292,12 +292,12 @@ let rec spill i finally =
       let before1 = Reg.diff_set_array after i.res in
       let before =
         match i.desc with
-          Iop(Icall_ind _) | Iop(Icall_imm _) | Iop(Iextcall _)
-        | Iop(Iintop (Icheckbound _)) | Iop(Iintop_imm(Icheckbound _, _)) ->
+          Iop Icall_ind | Iop(Icall_imm _) | Iop(Iextcall _)
+        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _)) ->
             Reg.Set.union before1 !spill_at_raise
         | _ ->
             before1 in
-      (instr_cons i.desc i.arg i.res
+      (instr_cons_debug i.desc i.arg i.res i.dbg
                   (add_spills (Reg.inter_set_array after i.res) new_next),
        before)
   | Iifthenelse(test, ifso, ifnot) ->
@@ -381,7 +381,7 @@ let rec spill i finally =
       spill_at_raise := saved_spill_at_raise;
       (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
        before_body)
-  | Iraise _ ->
+  | Iraise ->
       (i, !spill_at_raise)
 
 (* Entry point *)

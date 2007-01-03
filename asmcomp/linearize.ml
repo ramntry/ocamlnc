@@ -28,6 +28,7 @@ type instruction =
     mutable next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
+    dbg: Debuginfo.t;
     live: Reg.Set.t }
 
 and instruction_desc =
@@ -43,10 +44,10 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise of Debuginfo.t
+  | Lraise
 
 let has_fallthrough = function
-  | Lreturn | Lbranch _ | Lswitch _ | Lraise _
+  | Lreturn | Lbranch _ | Lswitch _ | Lraise
   | Lop Itailcall_ind | Lop (Itailcall_imm _) -> false
   | _ -> true 
 
@@ -77,24 +78,28 @@ let rec end_instr =
     next = end_instr;
     arg = [||];
     res = [||];
+    dbg = Debuginfo.none;
     live = Reg.Set.empty }
 
-(* Cons an instruction (live empty) *)
+(* Cons an instruction (live, debug empty) *)
 
 let instr_cons d a r n =
-  { desc = d; next = n; arg = a; res = r; live = Reg.Set.empty }
+  { desc = d; next = n; arg = a; res = r; 
+    dbg = Debuginfo.none; live = Reg.Set.empty }
 
 (* Cons a simple instruction (arg, res, live empty) *)
 
 let cons_instr d n =
-  { desc = d; next = n; arg = [||]; res = [||]; live = Reg.Set.empty }
+  { desc = d; next = n; arg = [||]; res = [||]; 
+    dbg = Debuginfo.none; live = Reg.Set.empty }
 
-(* Build an instruction with arg, res, live taken from
+(* Build an instruction with arg, res, dbg, live taken from
    the given Mach.instruction *)
 
 let copy_instr d i n =
   { desc = d; next = n;
-    arg = i.Mach.arg; res = i.Mach.res; live = i.Mach.live }
+    arg = i.Mach.arg; res = i.Mach.res; 
+    dbg = i.Mach.dbg; live = i.Mach.live }
 
 (*
    Label the beginning of the given instruction sequence.
@@ -253,8 +258,8 @@ let rec linear i n =
                     (linear body (cons_instr Lpoptrap n1))) in
       cons_instr (Lsetuptrap lbl_body)
         (linear handler (add_branch lbl_join n2))
-  | Iraise dbg ->
-      copy_instr (Lraise dbg) i (discard_dead_code n)
+  | Iraise ->
+      copy_instr Lraise i (discard_dead_code n)
 
 let fundecl f =
   { fun_name = f.Mach.fun_name;

@@ -22,7 +22,7 @@ type integer_operation =
     Iadd | Isub | Imul | Idiv | Imod
   | Iand | Ior | Ixor | Ilsl | Ilsr | Iasr
   | Icomp of integer_comparison
-  | Icheckbound of Debuginfo.t
+  | Icheckbound
 
 type test =
     Itruetest
@@ -40,11 +40,11 @@ type operation =
   | Iconst_int of nativeint
   | Iconst_float of string
   | Iconst_symbol of string
-  | Icall_ind of Debuginfo.t
-  | Icall_imm of string * Debuginfo.t
+  | Icall_ind
+  | Icall_imm of string
   | Itailcall_ind
   | Itailcall_imm of string
-  | Iextcall of string * bool * Debuginfo.t
+  | Iextcall of string * bool
   | Istackoffset of int
   | Iload of Cmm.memory_chunk * Arch.addressing_mode
   | Istore of Cmm.memory_chunk * Arch.addressing_mode
@@ -60,6 +60,7 @@ type instruction =
     next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
+    dbg: Debuginfo.t;
     mutable live: Reg.Set.t }
 
 and instruction_desc =
@@ -72,7 +73,7 @@ and instruction_desc =
   | Icatch of int * instruction * instruction
   | Iexit of int
   | Itrywith of instruction * instruction
-  | Iraise of Debuginfo.t
+  | Iraise
 
 type fundecl =
   { fun_name: string;
@@ -85,6 +86,7 @@ let rec dummy_instr =
     next = dummy_instr;
     arg = [||]; 
     res = [||];
+    dbg = Debuginfo.none;
     live = Reg.Set.empty }
 
 let end_instr () =
@@ -92,13 +94,15 @@ let end_instr () =
     next = dummy_instr;
     arg = [||]; 
     res = [||];
+    dbg = Debuginfo.none;
     live = Reg.Set.empty }
 
 let instr_cons d a r n =
-  { desc = d; next = n; arg = a; res = r; live = Reg.Set.empty }
+  { desc = d; next = n; arg = a; res = r; 
+    dbg = Debuginfo.none; live = Reg.Set.empty }
 
-let instr_cons_live d a r l n =
-  { desc = d; next = n; arg = a; res = r; live = l }
+let instr_cons_debug d a r dbg n =
+  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty }
 
 let rec instr_iter f i =
   match i.desc with
@@ -122,7 +126,7 @@ let rec instr_iter f i =
       | Iexit _ -> ()
       | Itrywith(body, handler) ->
           instr_iter f body; instr_iter f handler; instr_iter f i.next
-      | Iraise _ -> ()
+      | Iraise -> ()
       | _ ->
           instr_iter f i.next      
 
