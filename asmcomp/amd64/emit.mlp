@@ -330,12 +330,12 @@ let emit_instr fallthrough i =
           `	leaq	{emit_symbol s}(%rip), {emit_reg i.res.(0)}\n`
         else
           `	movq	${emit_symbol s}, {emit_reg i.res.(0)}\n`
-    | Lop(Icall_ind dbg) ->
+    | Lop(Icall_ind) ->
         `	call	*{emit_reg i.arg.(0)}\n`;
-        record_frame i.live dbg
-    | Lop(Icall_imm(s, dbg)) ->
+        record_frame i.live i.dbg
+    | Lop(Icall_imm(s)) ->
         `	call	{emit_symbol s}\n`;
-        record_frame i.live dbg
+        record_frame i.live i.dbg
     | Lop(Itailcall_ind) ->
         output_epilogue();
         `	jmp	*{emit_reg i.arg.(0)}\n`
@@ -346,11 +346,11 @@ let emit_instr fallthrough i =
           output_epilogue();
           `	jmp	{emit_symbol s}\n`
         end
-    | Lop(Iextcall(s, alloc, dbg)) ->
+    | Lop(Iextcall(s, alloc)) ->
         if alloc then begin
           `	leaq	{emit_symbol s}(%rip), %rax\n`;
           `	call	{emit_symbol "caml_c_call"}\n`;
-          record_frame i.live dbg
+          record_frame i.live i.dbg
         end else begin
           `	call	{emit_symbol s}\n`
         end
@@ -430,12 +430,12 @@ let emit_instr fallthrough i =
         let b = name_for_cond_branch cmp in
         `	set{emit_string b}	%al\n`;
         `	movzbq	%al, {emit_reg i.res.(0)}\n`
-    | Lop(Iintop (Icheckbound dbg)) ->
-        let lbl = bound_error_label dbg in
+    | Lop(Iintop Icheckbound) ->
+        let lbl = bound_error_label i.dbg in
         `	cmpq	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}\n`;
         `	jbe	{emit_label lbl}\n`
-    | Lop(Iintop_imm(Icheckbound dbg, n)) ->
-        let lbl = bound_error_label dbg in
+    | Lop(Iintop_imm(Icheckbound, n)) ->
+        let lbl = bound_error_label i.dbg in
         `	cmpq	${emit_int n}, {emit_reg i.arg.(0)}\n`;
         `	jbe	{emit_label lbl}\n`
     | Lop(Iintop(Idiv | Imod)) ->
@@ -571,10 +571,10 @@ let emit_instr fallthrough i =
         `	popq	%r14\n`;
         `	addq	$8, %rsp\n`;
         stack_offset := !stack_offset - 16
-    | Lraise dbg ->
+    | Lraise ->
         if !Clflags.debug then begin
           `	call    {emit_symbol "caml_raise_exn"}\n`;
-          record_frame Reg.Set.empty dbg
+          record_frame Reg.Set.empty i.dbg
         end else begin
           `	movq	%r14, %rsp\n`;
           `	popq	%r14\n`;
