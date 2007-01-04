@@ -280,7 +280,7 @@ method insert_op_debug op dbg rs rd =
     end else
       rdst
   with Use_default ->
-    super#insert_op op rs rd
+    super#insert_op_debug op dbg rs rd
 
 method insert_op op rs rd =
   self#insert_op_debug op Debuginfo.none rs rd
