@@ -74,6 +74,9 @@ void caml_stash_backtrace(value exn, uintnat pc, char * sp, char * trapsp)
       sp -= (d->frame_size & 0xFFFC);
 #endif
       pc = Saved_return_address(sp);
+#ifdef Mask_already_scanned
+      pc = Mask_already_scanned(pc);
+#endif
     } else {
       /* Special frame marking the top of a stack chunk for an ML callback.
          Skip C portion of stack and continue with next ML stack chunk. */

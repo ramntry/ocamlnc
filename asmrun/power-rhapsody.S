@@ -274,9 +274,9 @@ L113:
 L112:
         mr      r28, r3        /* preserve exn bucket in callee-save */
                                /* arg 1: exception bucket (already in r3) */
-        mflr    r4             /* arg 2: PC of raise */
-        mr      r5, r1         /* arg 3: SP of raise */
-        mr      r6, r29        /* arg 4: SP of handler */
+	Loadglobal r4, _caml_last_return_address, r11 /* arg 2: PC of raise */
+	Loadglobal r5, _caml_bottom_of_stack, r11 /* arg 3: SP of raise */
+        Loadglobal r6, _caml_exception_pointer, r11 /* arg 4: SP of handler */
         addi    r1, r1, -(16*WORD)    /* reserve stack space for C call */
         bl      _caml_stash_backtrace
         mr      r3, r28
