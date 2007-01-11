@@ -64,6 +64,8 @@ let add_used_symbol s =
 let emit_symbol s =
   emit_string "_"; Emitaux.emit_symbol '$' s
 
+let emit_int32 n = emit_printf "0%lxh" n
+
 (* Output a label *)
 
 let emit_label lbl =
@@ -890,9 +892,9 @@ let end_assembly() =
       efa_word = (fun n -> `	DWORD	{emit_int n}\n`);
       efa_align = emit_align;
       efa_label_rel = (fun lbl ofs ->
-                           `	DWORD	({emit_label lbl} - THIS BYTE) + {emit_int32 ofs}\n`);
-      efa_def_label = (fun l -> `{emit_label l}:\n`);
-      efa_string = (fun s -> emit_bytes_directive  "	.byte	" (s ^ "\000")) };
+                           `	DWORD	{emit_label lbl} - THIS BYTE + {emit_int32 ofs}\n`);
+      efa_def_label = (fun l -> `{emit_label l}	LABEL	DWORD\n`);
+      efa_string = (fun s -> emit_bytes_directive  "	BYTE	" (s ^ "\000")) };
   `\n;External functions\n\n`;
   StringSet.iter
     (fun s ->
