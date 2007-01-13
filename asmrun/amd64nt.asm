@@ -27,10 +27,12 @@
         EXTRN  caml_array_bound_error: NEAR
         EXTRN  caml_young_limit: QWORD
         EXTRN  caml_young_ptr: QWORD
-        EXTRN	caml_bottom_of_stack: QWORD
-        EXTRN	caml_last_return_address: QWORD
-        EXTRN	caml_gc_regs: QWORD
-	EXTRN	caml_exception_pointer: QWORD
+        EXTRN  caml_bottom_of_stack: QWORD
+        EXTRN  caml_last_return_address: QWORD
+        EXTRN  caml_gc_regs: QWORD
+	EXTRN  caml_exception_pointer: QWORD
+        EXTRN  caml_backtrace_active: DWORD
+        EXTRN  caml_stash_backtrace: NEAR
 
         .CODE
 
@@ -293,15 +295,54 @@ L108:
         or      rax, 2
         jmp     L109
 
+; Raise an exception for Caml
+
+        PUBLIC  caml_raise_exn
+        ALIGN   16
+caml_raise_exn:
+        test    caml_backtrace_active, 1
+        jne     L110
+        mov	rsp, r14
+        pop	r14
+        ret	
+L110:
+        mov     rsi, rax                ; Save exception bucket in esi
+        mov     rcx, rax                ; arg 1: exception bucket
+        mov     rdx, [rsp]              ; arg 2: PC of raise
+        lea     r8, [rsp+8]             ; arg 3: SP of raise
+        mov     r9, r14                 ; arg 4: SP of handler
+        sub     rsp, 32                 ; reserve stack space
+        call    caml_stash_backtrace
+        mov     rax, rsi                ; recover exception bucket
+        mov     rsp, r14                ; cut the stack
+        pop     r14
+        ret
+
+
 ; Raise an exception from C 
 
         PUBLIC  caml_raise_exception
         ALIGN   16
 caml_raise_exception:
+        test    caml_backtrace_active, 1
+        jne     L111
         mov     rax, rcx             ; First argument is exn bucket
         mov     rsp, caml_exception_pointer
         pop     r14                  ; Recover previous exception handler 
-        mov     r15, caml_young_ptr ; Reload alloc ptr 
+        mov     r15, caml_young_ptr  ; Reload alloc ptr 
+        ret
+L111:
+        mov     rsi, rcx             ; Save exception bucket in esi
+                                              ; arg 1: exception bucket
+        mov     rdx, caml_last_return_address ; arg 2: PC of raise
+        mov     r8, caml_bottom_of_stack      ; arg 3: SP of raise
+        mov     r9, caml_exception_pointer    ; arg 4: SP of handler
+        sub     rsp, 32               ; reserve stack space
+        call    caml_stash_backtrace
+        mov     rax, rsi              ; recover exception bucket
+        mov     rsp, caml_exception_pointer
+        pop     r14                   ; Recover previous exception handler 
+        mov     r15, caml_young_ptr   ; Reload alloc ptr 
         ret
 
 ; Callback from C to Caml 
@@ -399,10 +440,8 @@ caml_callback3_exn:
         PUBLIC  caml_ml_array_bound_error
         ALIGN   16
 caml_ml_array_bound_error:
-    ; Make the exception handler and alloc ptr available to the C code 
-	mov	caml_young_ptr, r15
-	mov	caml_exception_pointer, r14
-	jmp	caml_array_bound_error	
+        lea     rax, caml_array_bound_error
+        jmp     caml_c_call
 
         .DATA
         PUBLIC  caml_system__frametable
