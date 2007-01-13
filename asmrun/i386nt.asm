@@ -303,8 +303,9 @@ _caml_ml_array_bound_error:
         ffree   st(5)
         ffree   st(6)
         ffree   st(7)
-    ; Branch to array_bound_error
-        jmp     _caml_array_bound_error
+    ; Branch to caml_array_bound_error
+        mov     eax, offset _caml_array_bound_error
+        jmp     _caml_c_call
 
         .DATA
         PUBLIC  _caml_system__frametable
