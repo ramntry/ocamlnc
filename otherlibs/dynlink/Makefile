@@ -18,6 +18,7 @@
 include ../../config/Makefile
 
 CAMLC=../../boot/ocamlrun ../../ocamlc
+CAMLOPT=../../ocamlcompopt.sh
 INCLUDES=-I ../../utils -I ../../typing -I ../../bytecomp
 COMPFLAGS=-warn-error A -I ../../stdlib $(INCLUDES)
 
@@ -39,12 +40,17 @@ COMPILEROBJS=\
   ../../bytecomp/dll.cmo ../../bytecomp/meta.cmo \
   ../../bytecomp/symtable.cmo
 
+NATOBJS=natdynlink.cmx
+
 all: dynlink.cma extract_crc
 
-allopt:
+allopt: natdynlink.cmxa
 
 dynlink.cma: $(OBJS)
 	$(CAMLC) $(COMPFLAGS) -a -o dynlink.cma $(OBJS)
+
+natdynlink.cmxa: $(NATOBJS)
+	$(CAMLOPT) $(COMPFLAGS) -a -o natdynlink.cmxa $(NATOBJS)
 
 dynlinkaux.cmo dynlinkaux.cmi: $(COMPILEROBJS)
 	$(CAMLC) $(COMPFLAGS) -pack -o dynlinkaux.cmo $(COMPILEROBJS)
@@ -56,13 +62,15 @@ install:
 	cp dynlink.cmi dynlink.cma dynlink.mli extract_crc $(LIBDIR)
 
 installopt:
+	cp $(NATOBJS) natdynlink.cmi natdynlink.mli natdynlink.cmxa natdynlink.a $(LIBDIR)
 
 partialclean:
 	rm -f extract_crc *.cm[ioa]
 
 clean: partialclean
+	rm -f *.a *.o *.so
 
-.SUFFIXES: .ml .mli .cmo .cmi
+.SUFFIXES: .ml .mli .cmo .cmi .cmx
 
 .mli.cmi:
 	$(CAMLC) -c $(COMPFLAGS) $<
@@ -70,7 +78,11 @@ clean: partialclean
 .ml.cmo:
 	$(CAMLC) -c $(COMPFLAGS) $<
 
+.ml.cmx:
+	$(CAMLOPT) -c $(COMPFLAGS) $<
+
 depend:
 
 dynlink.cmo: dynlinkaux.cmi dynlink.cmi
 extract_crc.cmo: dynlink.cmi 
+natdynlink.cmx: natdynlink.cmi
