@@ -2,7 +2,7 @@ CAMLOPT=../../ocamlopt
 COMPFLAGS=
 FLAGSMAIN=-ccopt -Wl,-E
 
-all: plugin.so plugin2.so sub/plugin.so sub/plugin3.so main
+all: plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so main
 
 clean:
 	rm -f *.so *.o *.cm* main
@@ -23,6 +23,7 @@ sub/api.cmi: sub/api.mli
 plugin.cmx: api.cmx
 sub/plugin.cmx: api.cmx
 plugin2.cmx: api.cmx
+plugin4.cmx: api.cmx
 main.cmx: api.cmx
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx .so
