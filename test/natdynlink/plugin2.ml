@@ -4,3 +4,4 @@ let () =
   Api.reg_mod "Plugin2";
 (*  let i = ex 3 in*)
   List.iter (fun i -> Printf.printf "%i\n" i) Plugin.facts;
+  raise Exit
