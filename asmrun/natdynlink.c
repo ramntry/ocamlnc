@@ -57,13 +57,15 @@ CAMLprim value caml_natdynlink_getmap(value unit)
   return (value)caml_globals_map;
 }
 
-CAMLprim value caml_natdynlink_open
-(value private, value filename, value symbol)
+CAMLprim value caml_natdynlink_globals_inited(value unit)
 {
-  CAMLparam3 (private, filename, symbol);
-  CAMLlocal3 (result, err, tup);
+  return Val_int(caml_globals_inited);
+}
 
-  char *unit = String_val(symbol);
+CAMLprim value caml_natdynlink_open
+(value private, value filename, value symbols)
+{
+  CAMLparam3 (private, filename, symbols);
 
   void *handle =
     dlopen(String_val(filename),
@@ -76,13 +78,17 @@ CAMLprim value caml_natdynlink_open
     CAMLreturn(caml_copy_string(dlerror()));
   
 #define sym(n) getsym(handle,unit,n)
-  caml_register_frametable(sym("__frametable"));
-  caml_register_dyn_global((value)sym(""));
-  caml_dyn_data_segments = 
-    cons(sym("__data_begin"),sym("__data_end"),caml_dyn_data_segments); 
-  void (*entrypoint)(void) = sym("__entry");
+  while (symbols != Val_unit) {
+    char *unit = String_val(Field(symbols,0));
+    symbols = Field(symbols,1);
+    caml_register_frametable(sym("__frametable"));
+    caml_register_dyn_global((value)sym(""));
+    caml_dyn_data_segments = 
+      cons(sym("__data_begin"),sym("__data_end"),caml_dyn_data_segments); 
+    void (*entrypoint)(void) = sym("__entry");
+    caml_callback((value)(&entrypoint), 0);
+  }
 #undef sym
-  err = caml_callback((value)(&entrypoint), 0);
 
   CAMLreturn (Val_unit);
 }

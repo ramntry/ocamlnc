@@ -21,8 +21,9 @@ type error =
   | Inconsistent_interface of string * string * string
   | Inconsistent_implementation of string * string * string
   | Unavailable_unit of string
-  | Cyclic_loading of string
+  | Not_yet_available_unit of string
   | Exception of exn
+  | Reloading_symbol of string * string * string
 
   | Unsafe_file
   | Linking_error of string * string
@@ -78,8 +79,13 @@ let cmx_not_found_crc =
 
 module StrMap = Map.Make(String)
 
+type implem_state =
+  | Loaded
+  | Not_loaded
+
 let ifaces = ref StrMap.empty
 let implems = ref StrMap.empty
+let loaded_symbols = ref StrMap.empty
 
 let add_check_ifaces allow_ext filename ui ifaces =
   List.fold_left
@@ -97,72 +103,83 @@ let add_check_ifaces allow_ext filename ui ifaces =
 	   else raise (Error(Unavailable_unit name))
     ) ifaces ui.ui_imports_cmi
 
-let reraise = function
-  | None -> ()
-  | Some exn -> raise (Error (Exception exn))
-
 let check_implems filename ui implems =
   List.iter
     (fun (name, crc) ->
        try
-	 let (old_crc,old_src,old_exn) = StrMap.find name implems in
+	 let (old_crc,old_src,state) = StrMap.find name implems in
 	 if crc <> cmx_not_found_crc && old_crc <> crc 
-	 then raise(Error(Inconsistent_implementation(name, old_src, filename)))
-	 else reraise old_exn
+	 then 
+	   raise(Error(Inconsistent_implementation(name, old_src, filename)))
+	 else match state with
+	   | Not_loaded -> raise(Error(Not_yet_available_unit name))
+	   | Loaded -> ()
        with Not_found ->
 	 raise (Error(Unavailable_unit name))
     ) ui.ui_imports_cmx
 
-external ndl_open: bool -> string -> string -> string = "caml_natdynlink_open"
-external ndl_getmap : unit -> string = "caml_natdynlink_getmap"
+(* Prevent redefinition of a unit symbol *)
 
-let loaded = Hashtbl.create 8
+let check_symbols filename ui symbols =
+  List.fold_left
+    (fun syms name ->
+       try
+	 let old_src = StrMap.find name symbols in
+	 raise (Error(Reloading_symbol(name,old_src,filename)))
+       with Not_found -> 
+	 StrMap.add name filename syms
+    )
+    symbols
+    ui.ui_defines
+
+external ndl_open: bool -> string -> string list -> 
+  string = "caml_natdynlink_open"
+external ndl_getmap : unit -> string = "caml_natdynlink_getmap"
+external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
+
+let dll_filename filename = 
+  let s = Filename.chop_suffix filename ".cmx" ^ ".so" in
+  if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
+  else s
 
 let loadfile filename =
   let (ui, crc) = read_unit_info filename in
-  try 
-    let (old_crc,old_src,old_exn) = StrMap.find ui.ui_name !implems in
-    if old_crc <> crc 
-    then raise(Error(Inconsistent_implementation(ui.ui_name, old_src, filename)))
-    else reraise old_exn
-  with Not_found ->
-    check_implems filename ui !implems;
-    let new_ifaces = add_check_ifaces true filename ui !ifaces in
-    let dll_filename = 
-      let s = Filename.chop_suffix filename ".cmx" ^ ".so" in
-      if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
-      else s in
-    if not (Sys.file_exists dll_filename) then
-      raise (Error (File_not_found dll_filename));
 
-    let old_ifaces = !ifaces in
-    try 
-      ifaces := new_ifaces;
-      implems := StrMap.add ui.ui_name 
-	(crc,filename,Some(Error(Cyclic_loading ui.ui_name)))
-	!implems;
+  let new_symbols = check_symbols filename ui !loaded_symbols in
+  let new_ifaces = add_check_ifaces false filename ui !ifaces in
+  check_implems filename ui !implems;
 
-      let s = ndl_open false dll_filename ui.ui_symbol in
-      if Obj.repr s <> Obj.repr () then 
-	raise (Error (Linking_error (filename,s)));
-      
-      implems := StrMap.add ui.ui_name (crc,filename,None) !implems;
-    with exn -> 
-      ifaces := old_ifaces;
-      implems := StrMap.add ui.ui_name (crc,filename,Some exn) !implems;
-      raise exn
+  let dll = dll_filename filename in
+  if not (Sys.file_exists dll) 
+  then raise (Error (File_not_found dll));
   
-
+  let s = ndl_open false dll ui.ui_defines in
+  if Obj.repr s <> Obj.repr () 
+  then raise (Error (Linking_error (filename,s)));
+  
+  implems := StrMap.add ui.ui_name (crc,filename,Loaded) !implems;
+  ifaces := new_ifaces;
+  loaded_symbols := new_symbols
+      
 let init () =
-  let map : (string*Digest.t*Digest.t) list = 
+  Printf.printf "globals_inited = %i\n" (ndl_globals_inited());
+  let map : (string*Digest.t*Digest.t*string list) list = 
     Marshal.from_string (ndl_getmap ()) 0 in
   let exe = Sys.executable_name in
+  let rank = ref 0 in
+  let inited = ndl_globals_inited () in
   List.iter
-    (fun (name,crc_intf,crc_impl) -> 
+    (fun (name,crc_intf,crc_impl,syms) -> 
        ifaces := StrMap.add name (crc_intf,exe) !ifaces;
-       implems := StrMap.add name (crc_impl,exe,None) !implems;
-       (* TODO: Should check which of these units have been already
-	  initialized! *)
+       List.iter
+	 (fun s ->
+	    loaded_symbols := StrMap.add s exe !loaded_symbols;
+	    incr rank
+	 )
+	 syms;
+       if inited >= !rank 
+       then implems := StrMap.add name (crc_impl,exe,Loaded) !implems
+       else implems := StrMap.add name (crc_impl,exe,Not_loaded) !implems;
     )
     map
 
@@ -171,16 +188,19 @@ let init () =
 let error_message = function
     Not_a_cmx_file name | Corrupted_unit_info name ->
       name ^ " is not a valid cmx file"
-  | Cyclic_loading name ->
-      "cyclic loading of " ^ name
   | Inconsistent_interface (name,source1,source2) ->
       "interface mismatch on " ^ name ^ " between " ^ source1
       ^ " and " ^ source2
   | Inconsistent_implementation (name,source1,source2) ->
       "implementation mismatch on " ^ name ^ " between " ^ source1
       ^ " and " ^ source2
+  | Reloading_symbol (name,source1,source2) ->
+      "module " ^ name ^ " defined in both " ^ source1
+      ^ " and " ^ source2
   | Unavailable_unit name ->
       "no implementation available for " ^ name
+  | Not_yet_available_unit name ->
+      "no implementation available for " ^ name ^ " yet"
   | Unsafe_file ->
       "this object file uses unsafe features"
   | Linking_error (name, msg) ->

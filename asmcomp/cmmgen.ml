@@ -1960,10 +1960,10 @@ let global_table namelist =
         List.map mksym namelist @
         [cint_zero])
 
-let globals_map namelist =
+let globals_map v =
   Cdata(Cglobal_symbol "caml_globals_map" ::
         emit_constant "caml_globals_map"
-          (Const_base (Const_string (Marshal.to_string namelist []))) [])
+          (Const_base (Const_string (Marshal.to_string v []))) [])
 
 (* Generate the master table of frame descriptors *)
 
