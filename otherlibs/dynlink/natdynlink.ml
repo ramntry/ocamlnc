@@ -15,6 +15,11 @@
 
 (* Dynamic loading of .cmx files *)
 
+external ndl_open: bool -> string -> string list -> 
+  string = "caml_natdynlink_open"
+external ndl_getmap : unit -> string = "caml_natdynlink_getmap"
+external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
+
 type error =
     Not_a_cmx_file of string
   | Corrupted_unit_info of string
@@ -81,11 +86,13 @@ module StrMap = Map.Make(String)
 
 type implem_state =
   | Loaded
-  | Not_loaded
+  | Check_inited of int
 
-let ifaces = ref StrMap.empty
-let implems = ref StrMap.empty
-let loaded_symbols = ref StrMap.empty
+type state = {
+  ifaces: (string*string) StrMap.t;
+  implems: (string*string*implem_state) StrMap.t;
+  loaded_symbols: string StrMap.t;
+}
 
 let add_check_ifaces allow_ext filename ui ifaces =
   List.fold_left
@@ -112,13 +119,18 @@ let check_implems filename ui implems =
 	 then 
 	   raise(Error(Inconsistent_implementation(name, old_src, filename)))
 	 else match state with
-	   | Not_loaded -> raise(Error(Not_yet_available_unit name))
+	   | Check_inited i -> 
+	       if ndl_globals_inited() < i 
+	       then raise(Error(Not_yet_available_unit name))
 	   | Loaded -> ()
        with Not_found ->
 	 raise (Error(Unavailable_unit name))
     ) ui.ui_imports_cmx
 
 (* Prevent redefinition of a unit symbol *)
+
+(* TODO: make loaded_symbols a global variable, otherwise could
+   break safety with load_private (or not?) *)
 
 let check_symbols filename ui symbols =
   List.fold_left
@@ -132,56 +144,64 @@ let check_symbols filename ui symbols =
     symbols
     ui.ui_defines
 
-external ndl_open: bool -> string -> string list -> 
-  string = "caml_natdynlink_open"
-external ndl_getmap : unit -> string = "caml_natdynlink_getmap"
-external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
 
 let dll_filename filename = 
   let s = Filename.chop_suffix filename ".cmx" ^ ".so" in
   if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
   else s
 
-let loadfile filename =
+let global_state = ref {
+  ifaces = StrMap.empty;
+  implems = StrMap.empty;
+  loaded_symbols = StrMap.empty;
+}
+
+let loadcmx priv filename state =
   let (ui, crc) = read_unit_info filename in
 
-  let new_symbols = check_symbols filename ui !loaded_symbols in
-  let new_ifaces = add_check_ifaces false filename ui !ifaces in
-  check_implems filename ui !implems;
+  let new_symbols = check_symbols filename ui state.loaded_symbols in
+  let new_ifaces = add_check_ifaces false filename ui state.ifaces in
+  check_implems filename ui state.implems;
 
   let dll = dll_filename filename in
   if not (Sys.file_exists dll) 
   then raise (Error (File_not_found dll));
   
-  let s = ndl_open false dll ui.ui_defines in
+  let s = ndl_open priv dll ui.ui_defines in
   if Obj.repr s <> Obj.repr () 
   then raise (Error (Linking_error (filename,s)));
   
-  implems := StrMap.add ui.ui_name (crc,filename,Loaded) !implems;
-  ifaces := new_ifaces;
-  loaded_symbols := new_symbols
+  { 
+    implems = StrMap.add ui.ui_name (crc,filename,Loaded) state.implems;
+    ifaces = new_ifaces;
+    loaded_symbols = new_symbols;
+  }
+
+
+let loadfile filename = global_state := loadcmx false filename !global_state
+let loadfile_private filename = ignore (loadcmx true filename !global_state)
       
-let init () =
-  Printf.printf "globals_inited = %i\n" (ndl_globals_inited());
+let add_builtin_map st =
   let map : (string*Digest.t*Digest.t*string list) list = 
     Marshal.from_string (ndl_getmap ()) 0 in
   let exe = Sys.executable_name in
   let rank = ref 0 in
-  let inited = ndl_globals_inited () in
-  List.iter
-    (fun (name,crc_intf,crc_impl,syms) -> 
-       ifaces := StrMap.add name (crc_intf,exe) !ifaces;
-       List.iter
-	 (fun s ->
-	    loaded_symbols := StrMap.add s exe !loaded_symbols;
-	    incr rank
-	 )
-	 syms;
-       if inited >= !rank 
-       then implems := StrMap.add name (crc_impl,exe,Loaded) !implems
-       else implems := StrMap.add name (crc_impl,exe,Not_loaded) !implems;
+  List.fold_left
+    (fun st (name,crc_intf,crc_impl,syms) -> 
+       rank := !rank + List.length syms; {
+	 ifaces = StrMap.add name (crc_intf,exe) st.ifaces;
+	 implems =StrMap.add name (crc_impl,exe,Check_inited !rank) st.implems;
+	 loaded_symbols =
+	   List.fold_left (fun l s -> StrMap.add s exe l) 
+	     st.loaded_symbols syms
+       }
     )
+    st
     map
+    
+
+let init () =
+  global_state := add_builtin_map !global_state
 
 (* Error report *)
 

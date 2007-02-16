@@ -32,12 +32,12 @@ val loadfile : string -> unit
     must register itself its entry points with the main program,
     e.g. by modifying tables of functions. *)
 
-(*
-
 val loadfile_private : string -> unit
 (** Same as [loadfile], except that the compilation units just loaded
     are hidden (cannot be referenced) from other modules dynamically
     loaded afterwards. *)
+
+(*
 
 (** {6 Access control} *)
 

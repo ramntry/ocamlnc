@@ -7,3 +7,12 @@ let reg_mod name =
     mods := name :: !mods;
     Printf.printf "Registering module %s\n" name
   )
+
+
+let cbs = ref []
+
+let add_cb f = cbs := f :: !cbs
+let runall () = List.iter (fun f -> f ()) !cbs
+
+let () =
+  at_exit runall

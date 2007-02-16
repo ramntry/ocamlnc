@@ -2,7 +2,7 @@ CAMLOPT=../../ocamlopt
 COMPFLAGS=
 FLAGSMAIN=-ccopt -Wl,-E
 
-all: plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so main main_rev
+all: plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so main_rev main plugin_ref.so
 
 clean:
 	rm -f *.so *.o *.cm* main
