@@ -43,7 +43,7 @@ typedef struct link {
   struct link *next;
 } link;  
 
-link *cons(void *data, link *tl) {
+static link *cons(void *data, link *tl) {
   link *lnk = caml_stat_alloc(sizeof(link));
   lnk->data = data;
   lnk->next = tl;
@@ -52,8 +52,6 @@ link *cons(void *data, link *tl) {
 
 #define iter_list(list,lnk) \
   for (lnk = list; lnk != NULL; lnk = lnk->next)
-    
-  
 
 link *frametables = NULL;
 
