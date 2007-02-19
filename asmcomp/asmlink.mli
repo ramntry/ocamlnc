@@ -18,6 +18,8 @@ open Format
 
 val link: formatter -> string list -> string -> unit
 
+val compile_shared: formatter -> string -> unit
+
 val check_consistency: string -> Compilenv.unit_infos -> Digest.t -> unit
 val extract_crc_interfaces: unit -> (string * Digest.t) list
 val extract_crc_implementations: unit -> (string * Digest.t) list

@@ -92,6 +92,8 @@ val cmx_not_found_crc: Digest.t
         (* Special digest used in the [ui_imports_cmx] list to signal
            that no [.cmx] file was found and used for the imported unit *)
 
+val read_library_info: string -> library_infos
+
 type error =
     Not_a_unit_info of string
   | Corrupted_unit_info of string

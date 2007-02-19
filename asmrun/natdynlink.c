@@ -85,6 +85,9 @@ CAMLprim value caml_natdynlink_open
     
   if (NULL == handle)
     CAMLreturn(caml_copy_string(dlerror()));
+
+  void *sym = dlsym (handle, "caml_startup__frametable");
+  if (NULL != sym) caml_register_frametable(sym);
   
 #define sym(n) getsym(handle,unit,n)
   while (symbols != Val_unit) {

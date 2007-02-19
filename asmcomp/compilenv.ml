@@ -126,6 +126,17 @@ let read_unit_info filename =
     close_in ic;
     raise(Error(Corrupted_unit_info(filename)))
 
+let read_library_info filename =
+  let ic = open_in_bin filename in
+  let buffer = String.create (String.length cmxa_magic_number) in
+  really_input ic buffer 0 (String.length cmxa_magic_number);
+  if buffer <> cmxa_magic_number then
+    raise(Error(Not_a_unit_info filename));
+  let infos = (input_value ic : library_infos) in
+  close_in ic;
+  infos
+
+
 (* Read and cache info on global identifiers *)
 
 let cmx_not_found_crc =
