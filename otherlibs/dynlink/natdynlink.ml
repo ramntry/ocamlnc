@@ -41,6 +41,7 @@ exception Error of error
 (* Copied from other places to avoid dependencies *)
 
 let cmx_magic_number = "Caml1999Y011"
+and cmxa_magic_number = "Caml1999Z010"
 
 type value_approximation
 
@@ -56,22 +57,34 @@ type unit_infos =
     mutable ui_send_fun: int list;              (* Send functions needed *)
     mutable ui_force_link: bool }               (* Always linked *)
 
+type library_infos =
+  { lib_units: (unit_infos * Digest.t) list;  (* List of unit infos w/ CRCs *)
+    lib_ccobjs: string list;            (* C object files needed *)
+    lib_ccopts: string list }           (* Extra opts to C compiler *)
+
+type kind = Unit of unit_infos * Digest.t | Library of library_infos
+
 let global_infos_table =
   (Hashtbl.create 17 : (string, (unit_infos * Digest.t) option) Hashtbl.t)
 
-let read_unit_info filename =
+let read_file filename =
   let ic = open_in_bin filename in
   try
     let buffer = String.create (String.length cmx_magic_number) in
     really_input ic buffer 0 (String.length cmx_magic_number);
-    if buffer <> cmx_magic_number then begin
+    if buffer = cmx_magic_number then begin
+      let ui = (input_value ic : unit_infos) in
+      let crc = Digest.input ic in
+      close_in ic;
+      Unit (ui, crc)
+    end else if buffer = cmxa_magic_number then begin
+      let infos = (input_value ic : library_infos) in
+      close_in ic;
+      Library infos
+    end else begin
       close_in ic;
       raise(Error(Not_a_cmx_file filename))
     end;
-    let ui = (input_value ic : unit_infos) in
-    let crc = Digest.input ic in
-    close_in ic;
-    (ui, crc)
   with End_of_file | Failure _ ->
     close_in ic;
     raise(Error(Corrupted_unit_info filename))
@@ -144,9 +157,11 @@ let check_symbols filename ui symbols =
     symbols
     ui.ui_defines
 
+let chop_extension_if_any fname =
+  try Filename.chop_extension fname with Invalid_argument _ -> fname
 
 let dll_filename filename = 
-  let s = Filename.chop_suffix filename ".cmx" ^ ".so" in
+  let s = chop_extension_if_any filename ^ ".so" in
   if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
   else s
 
@@ -156,30 +171,35 @@ let global_state = ref {
   loaded_symbols = StrMap.empty;
 }
 
-let loadcmx priv filename state =
-  let (ui, crc) = read_unit_info filename in
-
-  let new_symbols = check_symbols filename ui state.loaded_symbols in
-  let new_ifaces = add_check_ifaces false filename ui state.ifaces in
-  check_implems filename ui state.implems;
+let loadunits priv filename units state =
+  let new_symbols = 
+    List.fold_left (fun accu (ui,_) -> check_symbols filename ui accu)
+      state.loaded_symbols units in
+  let new_ifaces = 
+    List.fold_left (fun accu (ui,_) -> add_check_ifaces false filename ui accu)
+      state.ifaces units in
+  let new_implems =
+    List.fold_left
+      (fun accu (ui,crc) -> 
+	 check_implems filename ui accu;
+	 StrMap.add ui.ui_name (crc,filename,Loaded) accu)
+      state.implems units in
 
   let dll = dll_filename filename in
-  if not (Sys.file_exists dll) 
-  then raise (Error (File_not_found dll));
+  if not (Sys.file_exists dll) then raise (Error (File_not_found dll));
   
-  let s = ndl_open priv dll ui.ui_defines in
-  if Obj.repr s <> Obj.repr () 
-  then raise (Error (Linking_error (filename,s)));
+  let defines = List.flatten (List.map (fun (ui,_) -> ui.ui_defines) units) in
+  let s = ndl_open priv dll defines in
+  if Obj.repr s <> Obj.repr () then raise (Error (Linking_error (filename,s)));
   
-  { 
-    implems = StrMap.add ui.ui_name (crc,filename,Loaded) state.implems;
-    ifaces = new_ifaces;
-    loaded_symbols = new_symbols;
-  }
+  { implems = new_implems; ifaces = new_ifaces; loaded_symbols = new_symbols }
 
+let load priv filename state = match read_file filename with
+  | Unit (ui,crc) -> loadunits priv filename [(ui,crc)] state
+  | Library infos -> loadunits priv filename infos.lib_units state
 
-let loadfile filename = global_state := loadcmx false filename !global_state
-let loadfile_private filename = ignore (loadcmx true filename !global_state)
+let loadfile filename = global_state := load false filename !global_state
+let loadfile_private filename = ignore (load true filename !global_state)
       
 let add_builtin_map st =
   let map : (string*Digest.t*Digest.t*string list) list = 

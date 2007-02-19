@@ -2,7 +2,7 @@ let ()  =
   Natdynlink.init ();
   for i = 1 to Array.length Sys.argv - 1 do
     let name = Sys.argv.(i) in
-    Printf.eprintf "Loading %s\n" name;
+    Printf.printf "Loading %s\n" name; flush stdout;
     try 
       if name.[0] = '-'
       then Natdynlink.loadfile_private 

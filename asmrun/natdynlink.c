@@ -67,6 +67,15 @@ CAMLprim value caml_natdynlink_open
 {
   CAMLparam3 (private, filename, symbols);
 
+  /*
+  void *handle0 = dlopen(String_val(filename),RTLD_NOLOAD);
+  if (NULL != handle0) {
+    printf("WARNING: %s already loaded\n", String_val(filename));
+  } else {
+    printf("%s not yet loaded\n", String_val(filename));
+  }
+  */
+
   void *handle =
     dlopen(String_val(filename),
 	   (private == Val_true

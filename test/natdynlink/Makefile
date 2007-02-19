@@ -1,18 +1,17 @@
 CAMLOPT=../../ocamlopt
 COMPFLAGS=
-FLAGSMAIN=-ccopt -Wl,-E
 
-all: plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so main_rev main plugin_ref.so
+all: plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so main_rev main plugin_ref.so mylib.so
 
 clean:
 	rm -f *.so *.o *.cm* main
 	rm -f sub/*.so sub/*.o sub/*.cm*
 
 main: api.cmx main.cmx
-	$(CAMLOPT) -o main $(FLAGSMAIN) natdynlink.cmxa api.cmx main.cmx
+	$(CAMLOPT) -o main natdynlink.cmxa api.cmx main.cmx
 
 main_rev: api.cmx main.cmx
-	$(CAMLOPT) -o main_rev $(FLAGSMAIN) natdynlink.cmxa main.cmx api.cmx
+	$(CAMLOPT) -o main_rev natdynlink.cmxa main.cmx api.cmx
 
 sub/plugin3.cmx: sub/api.cmi sub/api.cmx sub/plugin3.ml
 	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
@@ -41,8 +40,10 @@ packed1.cmx: api.cmx packed1.ml
 mypack.cmx: packed1.cmx
 	$(CAMLOPT) -c $(COMPFLAGS) -pack -o mypack.cmx packed1.cmx
 
+mylib.cmxa: plugin.cmx plugin2.cmx
+	$(CAMLOPT) -a -o mylib.cmxa plugin.cmx plugin2.cmx
 
-.SUFFIXES: .ml .mli .cmo .cmi .cmx .so
+.SUFFIXES: .ml .mli .cmo .cmi .cmx .so .cmxa
 
 .mli.cmi:
 	$(CAMLOPT) -c $(COMPFLAGS) $<
@@ -52,3 +53,6 @@ mypack.cmx: packed1.cmx
 
 .cmx.so:
 	gcc -shared -o $@ $(<:.cmx=.o)
+
+.cmxa.so:
+	gcc -shared -o $@ -Wl,-whole-archive $(<:.cmxa=.a) -Wl,-no-whole-archive
