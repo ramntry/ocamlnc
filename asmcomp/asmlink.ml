@@ -274,14 +274,15 @@ let call_linker_shared file_list output_name =
   | _ -> assert false
 
 let compile_shared ppf file =
-  let prefixname,objfile,units =
+  let prefixname,objfiles,units =
     match read_file file with
       | Unit (filename,ui,_) -> 
 	  let prefix = chop_extension_if_any filename in
-	  prefix,prefix ^ Config.ext_obj,[ui]
+	  prefix,[prefix ^ Config.ext_obj],[ui]
       | Library (filename,infos) -> 
 	  let prefix = chop_extension_if_any filename in
-	  prefix,prefix ^ Config.ext_lib,List.map fst infos.lib_units
+	  let objfiles = (prefix ^ Config.ext_lib) :: infos.lib_ccobjs in
+	  prefix,objfiles,List.map fst infos.lib_units
   in
   let need,genfuns = generic_functions ppf true units in
   if need then begin
@@ -294,10 +295,10 @@ let compile_shared ppf file =
     if Proc.assemble_file asmfile startup_objfile <> 0
     then raise(Error(Assembler_error asmfile));
     if !Clflags.keep_startup_file then () else remove_file asmfile;
-    call_linker_shared [startup_objfile;objfile] (prefixname ^ ext_dll);
+    call_linker_shared (startup_objfile::objfiles) (prefixname ^ ext_dll);
     remove_file startup_objfile
   end
-  else call_linker_shared [objfile] (prefixname ^ ext_dll)
+  else call_linker_shared objfiles (prefixname ^ ext_dll)
 
 
 let call_linker file_list startup_file output_name =
