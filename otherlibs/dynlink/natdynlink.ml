@@ -20,7 +20,24 @@ external ndl_open: bool -> string -> string list ->
 external ndl_getmap : unit -> string = "caml_natdynlink_getmap"
 external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
 
+(** {6 Error reporting} *)
+
+type linking_error =
+    Undefined_global of string
+  | Unavailable_primitive of string
+  | Uninitialized_global of string
+
 type error =
+    Not_a_bytecode_file of string
+  | Inconsistent_import of string
+  | Unavailable_unit of string
+  | Unsafe_file
+  | Linking_error of string * linking_error
+  | Corrupted_interface of string
+  | File_not_found of string
+  | Cannot_open_dll of string
+
+(*
     Not_a_cmx_file of string
   | Corrupted_unit_info of string
   | Inconsistent_interface of string * string * string
@@ -34,6 +51,7 @@ type error =
   | Linking_error of string * string
   | File_not_found of string
   | Cannot_open_dll of string
+*)
 
 
 exception Error of error
@@ -83,11 +101,11 @@ let read_file filename =
       Library infos
     end else begin
       close_in ic;
-      raise(Error(Not_a_cmx_file filename))
+      raise(Error(Not_a_bytecode_file filename))
     end;
   with End_of_file | Failure _ ->
     close_in ic;
-    raise(Error(Corrupted_unit_info filename))
+    raise(Error(Not_a_bytecode_file filename))
 
 let cmx_not_found_crc =
   "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
@@ -104,8 +122,10 @@ type implem_state =
 type state = {
   ifaces: (string*string) StrMap.t;
   implems: (string*string*implem_state) StrMap.t;
-  loaded_symbols: string StrMap.t;
+(*  loaded_symbols: string StrMap.t; *)
 }
+
+let allow_extension = ref true
 
 let add_check_ifaces allow_ext filename ui ifaces =
   List.fold_left
@@ -116,7 +136,7 @@ let add_check_ifaces allow_ext filename ui ifaces =
 	 try
 	   let (old_crc,old_src) = StrMap.find name ifaces in
 	   if old_crc <> crc 
-	   then raise(Error(Inconsistent_interface(name, old_src, filename)))
+	   then raise(Error(Inconsistent_import(name)))
 	   else ifaces
 	 with Not_found ->
 	   if allow_ext then StrMap.add name (crc,filename) ifaces
@@ -130,11 +150,11 @@ let check_implems filename ui implems =
 	 let (old_crc,old_src,state) = StrMap.find name implems in
 	 if crc <> cmx_not_found_crc && old_crc <> crc 
 	 then 
-	   raise(Error(Inconsistent_implementation(name, old_src, filename)))
+	   raise(Error(Inconsistent_import(name)))
 	 else match state with
 	   | Check_inited i -> 
 	       if ndl_globals_inited() < i 
-	       then raise(Error(Not_yet_available_unit name))
+	       then raise(Error(Unavailable_unit name))
 	   | Loaded -> ()
        with Not_found ->
 	 raise (Error(Unavailable_unit name))
@@ -144,7 +164,7 @@ let check_implems filename ui implems =
 
 (* TODO: make loaded_symbols a global variable, otherwise could
    break safety with load_private (or not?) *)
-
+(*
 let check_symbols filename ui symbols =
   List.fold_left
     (fun syms name ->
@@ -156,6 +176,7 @@ let check_symbols filename ui symbols =
     )
     symbols
     ui.ui_defines
+*)
 
 let chop_extension_if_any fname =
   try Filename.chop_extension fname with Invalid_argument _ -> fname
@@ -165,18 +186,21 @@ let dll_filename filename =
   if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
   else s
 
-let global_state = ref {
+let empty_state = {
   ifaces = StrMap.empty;
   implems = StrMap.empty;
-  loaded_symbols = StrMap.empty;
+(*  loaded_symbols = StrMap.empty; *)
 }
 
+let global_state = ref empty_state
+
 let loadunits priv filename units state =
-  let new_symbols = 
+(*  let new_symbols = 
     List.fold_left (fun accu (ui,_) -> check_symbols filename ui accu)
-      state.loaded_symbols units in
+      state.loaded_symbols units in *)
   let new_ifaces = 
-    List.fold_left (fun accu (ui,_) -> add_check_ifaces false filename ui accu)
+    List.fold_left 
+      (fun accu (ui,_) -> add_check_ifaces !allow_extension filename ui accu)
       state.ifaces units in
   let new_implems =
     List.fold_left
@@ -190,9 +214,10 @@ let loadunits priv filename units state =
   
   let defines = List.flatten (List.map (fun (ui,_) -> ui.ui_defines) units) in
   let s = ndl_open priv dll defines in
-  if Obj.repr s <> Obj.repr () then raise (Error (Linking_error (filename,s)));
+  if Obj.repr s <> Obj.repr () then raise (Error (Cannot_open_dll s));
   
-  { implems = new_implems; ifaces = new_ifaces; loaded_symbols = new_symbols }
+  { implems = new_implems; ifaces = new_ifaces; 
+    (*loaded_symbols = new_symbols*) }
 
 let load priv filename state = match read_file filename with
   | Unit (ui,crc) -> loadunits priv filename [(ui,crc)] state
@@ -211,43 +236,80 @@ let add_builtin_map st =
        rank := !rank + List.length syms; {
 	 ifaces = StrMap.add name (crc_intf,exe) st.ifaces;
 	 implems =StrMap.add name (crc_impl,exe,Check_inited !rank) st.implems;
+(*
 	 loaded_symbols =
 	   List.fold_left (fun l s -> StrMap.add s exe l) 
 	     st.loaded_symbols syms
+*)
        }
     )
     st
     map
-    
+
+
+(* is it ok to restrict only the accessible interfaces? *)
+let allow_only names =
+  let old = !global_state.ifaces in
+  let ifaces = 
+    List.fold_left
+      (fun ifaces name ->
+	 try StrMap.add name (StrMap.find name old) ifaces
+	 with Not_found -> ifaces)
+      StrMap.empty names in
+  global_state := { !global_state with ifaces = ifaces };
+  allow_extension := false
+
+let prohibit names =
+  let ifaces = List.fold_right StrMap.remove names !global_state.ifaces in
+  global_state := { !global_state with ifaces = ifaces };
+  allow_extension := false
+
+let default_available_units () =
+  global_state := add_builtin_map empty_state;
+  allow_extension := true
 
 let init () =
-  global_state := add_builtin_map !global_state
+  default_available_units ()
+
+let digest_interface _ _ = 
+  failwith "Dynlink.digest_interface: not implemented in native code"
+let add_interfaces _ _ = 
+  failwith "Dynlink.add_interfaces: not implemented in native code"
+let add_available_units _ =
+  failwith "Dynlink.add_available_units: not implemented in native code"
+let clear_available_units _ =
+  failwith "Dynlink.clear_available_units: not implemented in native code"
+let allow_unsafe_modules _ =
+  failwith "Dynlink.allow_unsafe_modules: not implemented in native code"
+
+
+(* Error report *)
 
 (* Error report *)
 
 let error_message = function
-    Not_a_cmx_file name | Corrupted_unit_info name ->
-      name ^ " is not a valid cmx file"
-  | Inconsistent_interface (name,source1,source2) ->
-      "interface mismatch on " ^ name ^ " between " ^ source1
-      ^ " and " ^ source2
-  | Inconsistent_implementation (name,source1,source2) ->
-      "implementation mismatch on " ^ name ^ " between " ^ source1
-      ^ " and " ^ source2
-  | Reloading_symbol (name,source1,source2) ->
-      "module " ^ name ^ " defined in both " ^ source1
-      ^ " and " ^ source2
+    Not_a_bytecode_file name ->
+      name ^ " is not an object file"
+  | Inconsistent_import name ->
+      "interface or implementation mismatch on " ^ name
   | Unavailable_unit name ->
       "no implementation available for " ^ name
-  | Not_yet_available_unit name ->
-      "no implementation available for " ^ name ^ " yet"
   | Unsafe_file ->
       "this object file uses unsafe features"
-  | Linking_error (name, msg) ->
-      "error while linking " ^ name ^ ".\n" ^ msg
+  | Linking_error (name, Undefined_global s) ->
+      "error while linking " ^ name ^ ".\n" ^
+      "Reference to undefined global `" ^ s ^ "'"
+  | Linking_error (name, Unavailable_primitive s) ->
+      "error while linking " ^ name ^ ".\n" ^
+      "The external function `" ^ s ^ "' is not available"
+  | Linking_error (name, Uninitialized_global s) ->
+      "error while linking " ^ name ^ ".\n" ^
+      "The module `" ^ s ^ "' is not yet initialized"
+  | Corrupted_interface name ->
+      "corrupted interface file " ^ name
   | File_not_found name ->
       "cannot find file " ^ name ^ " in search path"
   | Cannot_open_dll reason ->
       "error loading shared library: " ^ reason
-  | Exception exn ->
-      "exception raised: " ^ Printexc.to_string exn
+
+let is_native = true

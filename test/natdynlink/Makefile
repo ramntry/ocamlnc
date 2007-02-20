@@ -10,10 +10,10 @@ clean:
 	rm -f sub/*.so sub/*.o sub/*.cm*
 
 main: api.cmx main.cmx
-	$(CAMLOPT) -o main natdynlink.cmxa api.cmx main.cmx
+	$(CAMLOPT) -o main dynlink.cmxa api.cmx main.cmx
 
 main_rev: api.cmx main.cmx
-	$(CAMLOPT) -o main_rev natdynlink.cmxa main.cmx api.cmx
+	$(CAMLOPT) -o main_rev dynlink.cmxa main.cmx api.cmx
 
 sub/plugin3.so: sub/api.cmi sub/api.cmx sub/plugin3.ml
 	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)

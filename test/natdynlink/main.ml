@@ -1,17 +1,17 @@
 let ()  =
-  Natdynlink.init ();
+  Dynlink.init ();
   for i = 1 to Array.length Sys.argv - 1 do
     let name = Sys.argv.(i) in
     Printf.printf "Loading %s\n" name; flush stdout;
     try 
       if name.[0] = '-'
-      then Natdynlink.loadfile_private 
+      then Dynlink.loadfile_private 
 	(String.sub name 1 (String.length name - 1))
-      else Natdynlink.loadfile name
+      else Dynlink.loadfile name
     with
-      | Natdynlink.Error err ->
-	  Printf.eprintf "Natdynlink error: %s\n" 
-	    (Natdynlink.error_message err)
+      | Dynlink.Error err ->
+	  Printf.eprintf "Dynlink error: %s\n" 
+	    (Dynlink.error_message err)
       | exn ->
 	  Printf.eprintf "Error: %s\n" (Printexc.to_string exn)
   done

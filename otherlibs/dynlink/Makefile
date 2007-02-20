@@ -40,20 +40,25 @@ COMPILEROBJS=\
   ../../bytecomp/dll.cmo ../../bytecomp/meta.cmo \
   ../../bytecomp/symtable.cmo
 
-NATOBJS=natdynlink.cmx
+NATOBJS=dynlink.cmx
 
 all: dynlink.cma extract_crc
 
-allopt: natdynlink.cmxa
+allopt: dynlink.cmxa
 
 dynlink.cma: $(OBJS)
 	$(CAMLC) $(COMPFLAGS) -a -o dynlink.cma $(OBJS)
 
-natdynlink.cmxa: $(NATOBJS)
-	$(CAMLOPT) $(COMPFLAGS) -ccopt -Wl,-E -a -o natdynlink.cmxa $(NATOBJS)
+dynlink.cmxa: $(NATOBJS)
+	$(CAMLOPT) $(COMPFLAGS) -ccopt -Wl,-E -a -o dynlink.cmxa $(NATOBJS)
 
 dynlinkaux.cmo dynlinkaux.cmi: $(COMPILEROBJS)
 	$(CAMLC) $(COMPFLAGS) -pack -o dynlinkaux.cmo $(COMPILEROBJS)
+
+dynlink.cmx: dynlink.cmi natdynlink.ml
+	cp natdynlink.ml dynlink.mlopt
+	$(CAMLOPT) -c $(COMPFLAGS) -impl dynlink.mlopt
+	rm -f dynlink.mlopt
 
 extract_crc: dynlink.cma extract_crc.cmo
 	$(CAMLC) $(COMPFLAGS) -o extract_crc dynlink.cma extract_crc.cmo
@@ -62,13 +67,13 @@ install:
 	cp dynlink.cmi dynlink.cma dynlink.mli extract_crc $(LIBDIR)
 
 installopt:
-	cp $(NATOBJS) natdynlink.cmi natdynlink.mli natdynlink.cmxa natdynlink.a $(LIBDIR)
+	cp $(NATOBJS) dynlink.cmxa dynlink.a $(LIBDIR)
 
 partialclean:
 	rm -f extract_crc *.cm[ioa]
 
 clean: partialclean
-	rm -f *.a *.o *.so
+	rm -f *.a *.o *.so dynlink.mlopt
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
@@ -85,4 +90,3 @@ depend:
 
 dynlink.cmo: dynlinkaux.cmi dynlink.cmi
 extract_crc.cmo: dynlink.cmi 
-natdynlink.cmx: natdynlink.cmi
