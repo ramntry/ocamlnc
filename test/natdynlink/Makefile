@@ -1,7 +1,7 @@
 CAMLOPT=../../ocamlopt
 COMPFLAGS=-verbose
 
-PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so
+PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so
 
 all: $(PLUGINS) $(PLUGINS:.so=.cmx) main_rev main mylib.so
 
@@ -59,8 +59,5 @@ mylib.so: plugin.cmx plugin2.cmx
 .ml.so:
 	$(CAMLOPT) -c -shared $(COMPFLAGS) $<
 
-#.cmx.so:
-#	gcc -shared -o $@ $(<:.cmx=.o)
-
-#.cmxa.so:
-#	gcc -shared -o $@ -Wl,-whole-archive $(<:.cmxa=.a) -Wl,-no-whole-archive
+factorial.o: factorial.c
+	$(CAMLOPT) -c factorial.c

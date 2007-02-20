@@ -10,10 +10,10 @@ let ()  =
       else Dynlink.loadfile name
     with
       | Dynlink.Error err ->
-	  Printf.eprintf "Dynlink error: %s\n" 
+	  Printf.printf "Dynlink error: %s\n" 
 	    (Dynlink.error_message err)
       | exn ->
-	  Printf.eprintf "Error: %s\n" (Printexc.to_string exn)
+	  Printf.printf "Error: %s\n" (Printexc.to_string exn)
   done
 
 
