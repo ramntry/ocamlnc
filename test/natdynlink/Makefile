@@ -18,7 +18,7 @@ main_rev: api.cmx main.cmx
 	$(CAMLOPT) -o main_rev dynlink.cmxa main.cmx api.cmx
 
 sub/plugin3.so: sub/api.cmi sub/api.cmx sub/plugin3.ml
-	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
+	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(SHARED) $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
 
 plugin2.so: api.cmx plugin.cmi plugin.cmx
 	(mv plugin.cmx plugin.cmx.bak; $(CAMLOPT) -c $(COMPFLAGS) $(SHARED) plugin2.ml; mv plugin.cmx.bak plugin.cmx)
@@ -37,17 +37,17 @@ sub/plugin.so: api.cmx
 plugin4.so: api.cmx
 main.so: api.cmx
 
-packed1_client.cmx: packed1.cmx
+packed1_client.cmx: packed1.so
 
-pack_client.cmx: mypack.cmx
+pack_client.cmx: mypack.so
 
-packed1.cmx: api.cmx packed1.ml
-	$(CAMLOPT) -c $(COMPFLAGS) -for-pack Mypack packed1.ml
+packed1.so: api.cmx packed1.ml
+	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) -for-pack Mypack packed1.ml
 
-mypack.so: packed1.cmx
-	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) -pack -o mypack.cmx packed1.cmx
+mypack.so: packed1.so
+	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) -S -pack -o mypack.cmx packed1.cmx
 
-mylib.so: plugin.cmx plugin2.cmx
+mylib.so: plugin.so plugin2.so
 	$(CAMLOPT) $(COMPFLAGS) $(SHARED) -a -o mylib.cmxa -shared plugin.cmx plugin2.cmx
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx .so .cmxa
