@@ -124,7 +124,9 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
+  otherlibraries 
+
+#ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
 
 # The compilation of ocaml will fail if the runtime has changed.
 # Never mind, just do make bootstrap to reach fixpoint again.
@@ -268,14 +270,15 @@ installopt:
 	cd asmrun; $(MAKE) install
 	cp ocamlopt $(BINDIR)/ocamlopt$(EXE)
 	cd stdlib; $(MAKE) installopt
-	cd ocamldoc; $(MAKE) installopt
 	for i in $(OTHERLIBRARIES); do (cd otherlibs/$$i; $(MAKE) installopt) || exit $$?; done
-	if test -f ocamlc.opt; \
-	  then cp ocamlc.opt $(BINDIR)/ocamlc.opt$(EXE); else :; fi
-	if test -f ocamlopt.opt; \
-	  then cp ocamlopt.opt $(BINDIR)/ocamlopt.opt$(EXE); else :; fi
-	if test -f lex/ocamllex.opt; \
-	  then cp lex/ocamllex.opt $(BINDIR)/ocamllex.opt$(EXE); else :; fi
+
+#	cd ocamldoc; $(MAKE) installopt
+#	if test -f ocamlc.opt; \
+#	  then cp ocamlc.opt $(BINDIR)/ocamlc.opt$(EXE); else :; fi
+#	if test -f ocamlopt.opt; \
+#	  then cp ocamlopt.opt $(BINDIR)/ocamlopt.opt$(EXE); else :; fi
+#	if test -f lex/ocamllex.opt; \
+#	  then cp lex/ocamllex.opt $(BINDIR)/ocamllex.opt$(EXE); else :; fi
 
 clean:: partialclean
 

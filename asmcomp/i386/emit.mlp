@@ -1118,6 +1118,7 @@ let system_exports () =
     "caml_c_call";
     "caml_extra_params";
     "caml_exception_pointer";
+    "caml_ml_array_bound_error";
   ];
   ()
 (*
