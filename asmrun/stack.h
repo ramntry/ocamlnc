@@ -117,6 +117,10 @@ extern void caml_init_frame_descriptors(void);
 extern void caml_register_frametable(intnat *);
 extern void caml_register_dyn_global(value);
 
+extern char * caml_symtable[];
+extern intnat caml_dynsym(const char*);
+extern void caml_register_symtable(char *);
+
 /* Declaration of variables used in the asm code */
 extern char * caml_bottom_of_stack;
 extern uintnat caml_last_return_address;

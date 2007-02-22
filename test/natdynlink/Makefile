@@ -1,7 +1,9 @@
 CAMLOPT=../../ocamlopt
 COMPFLAGS=-verbose
+SHARED=-shared -closed -S
+#SHARED=-shared
 
-PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so
+PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so
 
 all: $(PLUGINS) $(PLUGINS:.so=.cmx) main_rev main mylib.so
 
@@ -19,10 +21,10 @@ sub/plugin3.so: sub/api.cmi sub/api.cmx sub/plugin3.ml
 	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
 
 plugin2.so: api.cmx plugin.cmi plugin.cmx
-	(mv plugin.cmx plugin.cmx.bak; $(CAMLOPT) -c $(COMPFLAGS) plugin2.ml; mv plugin.cmx.bak plugin.cmx)
+	(mv plugin.cmx plugin.cmx.bak; $(CAMLOPT) -c $(COMPFLAGS) $(SHARED) plugin2.ml; mv plugin.cmx.bak plugin.cmx)
 
 sub/api.so: sub/api.cmi sub/api.ml
-	(cd sub; ../$(CAMLOPT) -c $(COMPFLAGS) api.ml)
+	(cd sub; ../$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) api.ml)
 
 sub/api.cmi: sub/api.mli
 	(cd sub; ../$(CAMLOPT) -c $(COMPFLAGS) api.mli)
@@ -43,10 +45,10 @@ packed1.cmx: api.cmx packed1.ml
 	$(CAMLOPT) -c $(COMPFLAGS) -for-pack Mypack packed1.ml
 
 mypack.so: packed1.cmx
-	$(CAMLOPT) -c $(COMPFLAGS) -shared -pack -o mypack.cmx packed1.cmx
+	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) -pack -o mypack.cmx packed1.cmx
 
 mylib.so: plugin.cmx plugin2.cmx
-	$(CAMLOPT) $(COMPFLAGS) -a -o mylib.cmxa -shared plugin.cmx plugin2.cmx
+	$(CAMLOPT) $(COMPFLAGS) $(SHARED) -a -o mylib.cmxa -shared plugin.cmx plugin2.cmx
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx .so .cmxa
 
@@ -57,7 +59,7 @@ mylib.so: plugin.cmx plugin2.cmx
 	$(CAMLOPT) -c $(COMPFLAGS) $<
 
 .ml.so:
-	$(CAMLOPT) -c -shared $(COMPFLAGS) $<
+	$(CAMLOPT) -c $(SHARED) $(COMPFLAGS) $<
 
 factorial.o: factorial.c
 	$(CAMLOPT) -c factorial.c

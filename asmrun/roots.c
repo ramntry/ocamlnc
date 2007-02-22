@@ -24,6 +24,8 @@
 #include "mlvalues.h"
 #include "stack.h"
 #include "roots.h"
+#include <string.h>
+#include <stdio.h>
 
 /* Roots registered from C functions */
 
@@ -36,7 +38,7 @@ void (*caml_scan_roots_hook) (scanning_action) = NULL;
 frame_descr ** caml_frame_descriptors = NULL;
 int caml_frame_descriptors_mask;
 
-/* Linked-list of frametables */
+/* Linked-list */
 
 typedef struct link {
   void *data;
@@ -53,7 +55,86 @@ static link *cons(void *data, link *tl) {
 #define iter_list(list,lnk) \
   for (lnk = list; lnk != NULL; lnk = lnk->next)
 
-link *frametables = NULL;
+/* Symbol tables */
+
+
+typedef struct {
+  intnat addr;
+  char *name;
+} dynsymbol;
+
+static link *symtables = NULL;
+static dynsymbol *caml_dynamic_symbols = NULL;
+static int caml_dynamic_symbols_size = 0;
+
+static int compare_dynsymbol(const void *s1, const void *s2) {
+  return strcmp(((dynsymbol*) s1) -> name, ((dynsymbol*) s2) -> name);
+}
+
+void caml_register_symtable(char *table) {
+  symtables = cons(table,symtables);
+
+  if (NULL != caml_dynamic_symbols) {
+    caml_stat_free(caml_dynamic_symbols);
+    caml_dynamic_symbols = NULL;
+  }
+}
+
+static void caml_init_dynamic_symbols(void)
+{
+  static int inited = 0;
+  link *lnk;
+
+  if (!inited) {
+    int i;
+    for (i = 0; caml_symtable[i] != 0; i++)
+      caml_register_symtable(caml_symtable[i]);
+    inited = 1;
+  }
+
+  intnat num_sym = 0;
+  iter_list(symtables,lnk) {
+    num_sym += *((intnat*) lnk->data);
+  }
+  caml_dynamic_symbols_size = num_sym;
+
+  caml_dynamic_symbols = (dynsymbol*) malloc(sizeof(dynsymbol) * num_sym);
+  dynsymbol *sym = caml_dynamic_symbols;
+  iter_list(symtables,lnk) {
+    int n;
+    char *ptr = (char*)(((intnat*) lnk->data) + 1);
+    for (n = *((intnat*) lnk->data); n > 0; n--) { 
+      sym->addr = *((intnat*) ptr);
+      ptr += sizeof(intnat);
+      sym->name = (char*)(((intnat*) ptr));
+      ptr += strlen(sym->name) + 1;
+      sym++;
+    }
+  }
+
+  qsort(caml_dynamic_symbols, num_sym, sizeof(dynsymbol),&compare_dynsymbol);
+}
+
+intnat caml_dynsym(const char *name) {
+  static dynsymbol s;
+  s.name = (char*) name;
+
+  if (NULL == caml_dynamic_symbols) 
+    caml_init_dynamic_symbols();
+
+  dynsymbol *sym = (dynsymbol*) 
+    bsearch(&s,caml_dynamic_symbols,
+	    caml_dynamic_symbols_size,
+	    sizeof(dynsymbol),
+	    &compare_dynsymbol);
+  if (NULL == sym) return (intnat) NULL;
+  return (sym->addr);
+}
+
+
+/* Linked-list of frametables */
+
+static link *frametables = NULL;
 
 void caml_register_frametable(intnat *table) {
   frametables = cons(table,frametables);

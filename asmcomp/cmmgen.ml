@@ -1976,6 +1976,17 @@ let frame_table namelist =
         List.map mksym namelist
         @ [cint_zero])
 
+(* Generate the master table of symbol tables *)
+
+let sym_table namelist =
+  let mksym name =
+    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some "symtable"))
+  in
+  Cdata(Cglobal_symbol "caml_symtable" ::
+        Cdefine_symbol "caml_symtable" ::
+        List.map mksym namelist @ 
+	[cint_zero])
+
 (* Generate the table of module data and code segments *)
 
 let segment_table namelist symbol begname endname =

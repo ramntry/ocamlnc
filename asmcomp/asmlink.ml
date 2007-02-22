@@ -245,6 +245,7 @@ let make_startup_file ppf filename units_list =
   compile_phrase(Cmmgen.code_segment_table ("_startup" :: name_list));
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
+  compile_phrase (Cmmgen.sym_table ("_startup" :: name_list));
   Emit.end_assembly();
   close_out oc
 

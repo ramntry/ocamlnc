@@ -15,6 +15,7 @@
 (* Emission of Intel 386 assembly code *)
 
 module StringSet = Set.Make(struct type t = string let compare = compare end)
+module StringIntSet = Set.Make(struct type t = string * int let compare = compare end)
 
 open Location
 open Misc
@@ -82,7 +83,46 @@ let label_prefix =
 let emit_label lbl =
   emit_string label_prefix; emit_int lbl
 
+(* External symbols: relocations and exports *)
 
+let is_local_symbol s =
+  (not !Clflags.closed) ||
+    let ui = Compilenv.make_symbol None in
+    String.length s >= String.length ui &&
+      String.sub s 0 (String.length ui) = ui
+
+let is_extern_symbol s = not (is_local_symbol s)
+
+let relocs = ref []
+let exported_symbols = ref []
+
+let add_export s = 
+  exported_symbols := s :: !exported_symbols
+
+let new_reloc s offset absolute =
+  let lbl = new_label () in
+  relocs := (s,lbl,offset,absolute) :: !relocs;
+  `{emit_label lbl}:\n`
+
+let emit_call s =
+  if is_local_symbol s 
+  then `	call	{emit_symbol s}\n`
+  else `{new_reloc s 1 false}	call	0\n`
+
+let export_symbol name =
+  exported_symbols := name :: !exported_symbols;
+  `	.globl	{emit_symbol name}\n`
+
+
+let _code () =
+  if !Clflags.closed 
+  then `	.data\n`
+    (* Relocation requires write-access to the memory pages that
+       contain the code. Should use mprotect... *)
+  else `	.text\n`
+
+
+  
 (* Some data directives have different names under Solaris *)
 
 let word_dir =
@@ -206,7 +246,8 @@ type gc_call =
 let call_gc_sites = ref ([] : gc_call list)
 
 let emit_call_gc gc =
-  `{emit_label gc.gc_lbl}:	call	{emit_symbol "caml_call_gc"}\n`;
+  `{emit_label gc.gc_lbl}:\n`;
+  emit_call "caml_call_gc";
   `{emit_label gc.gc_frame}:	jmp	{emit_label gc.gc_return_lbl}\n`
 
 (* Record calls to caml_ml_array_bound_error.
@@ -460,7 +501,7 @@ let emit_instr fallthrough i =
         `	call	*{emit_reg i.arg.(0)}\n`;
         record_frame i.live i.dbg
     | Lop(Icall_imm s) ->
-        `	call	{emit_symbol s}\n`;
+	emit_call s;
         record_frame i.live i.dbg
     | Lop(Itailcall_ind) ->
         output_epilogue();
@@ -497,6 +538,18 @@ let emit_instr fallthrough i =
         then `	addl	${emit_int(-n)}, %esp\n`
         else `	subl	${emit_int(n)}, %esp\n`;
         stack_offset := !stack_offset + n
+    | Lop(Iload(chunk,Ibased(s,d))) when is_extern_symbol s ->
+	begin match chunk with
+        | Word | Thirtytwo_signed | Thirtytwo_unsigned ->
+	    let delta =
+	      match i.res.(0).loc with
+		| Reg 0 -> 1 (* %eax :  b8 XX XX XX XX *)
+		| Reg _ -> 2 (*         8b RR XX XX XX XX *)
+		| _ -> assert false
+	    in
+        `{new_reloc s delta true}	movl	{emit_int d}, {emit_reg i.res.(0)}\n`
+	| _ -> assert false
+	end
     | Lop(Iload(chunk, addr)) ->
         let dest = i.res.(0) in
         begin match chunk with
@@ -541,10 +594,18 @@ let emit_instr fallthrough i =
     | Lop(Ialloc n) ->
         if !fastcode_flag then begin
           let lbl_redo = new_label() in
-          `{emit_label lbl_redo}:	movl	{emit_symbol "caml_young_ptr"}, %eax\n`;
-          `	subl	${emit_int n}, %eax\n`;
-          `	movl	%eax, {emit_symbol "caml_young_ptr"}\n`;
-          `	cmpl	{emit_symbol "caml_young_limit"}, %eax\n`;
+          `{emit_label lbl_redo}:\n`;
+	  if !Clflags.closed then begin
+            `{new_reloc "caml_young_ptr" 1 true}	movl	0, %eax\n`;
+            `	subl	${emit_int n}, %eax\n`;
+            `{new_reloc "caml_young_ptr" 1 true}	movl	%eax, 0\n`;
+            `{new_reloc "caml_young_limit" 2 true}	cmpl	0, %eax\n`;
+	  end else begin
+            `	movl	{emit_symbol "caml_young_ptr"}, %eax\n`;
+            `	subl	${emit_int n}, %eax\n`;
+            `	movl	%eax, {emit_symbol "caml_young_ptr"}\n`;
+            `	cmpl	{emit_symbol "caml_young_limit"}, %eax\n`;
+	  end;
           let lbl_call_gc = new_label() in
           let lbl_frame = record_frame_label i.live Debuginfo.none in
           `	jb	{emit_label lbl_call_gc}\n`;
@@ -555,11 +616,11 @@ let emit_instr fallthrough i =
               gc_frame = lbl_frame } :: !call_gc_sites
         end else begin
           begin match n with
-            8  -> `	call	{emit_symbol "caml_alloc1"}\n`
-          | 12 -> `	call	{emit_symbol "caml_alloc2"}\n`
-          | 16 -> `	call	{emit_symbol "caml_alloc3"}\n`
+            8  -> emit_call "caml_alloc1"
+          | 12 -> emit_call "caml_alloc2"
+          | 16 -> emit_call "caml_alloc3"
           | _  -> `	movl	${emit_int n}, %eax\n`;
-                  `	call	{emit_symbol "caml_allocN"}\n`
+	          emit_call "caml_allocN"
           end;
           `{record_frame i.live Debuginfo.none}	leal	4(%eax), {emit_reg i.res.(0)}\n`
         end
@@ -777,7 +838,7 @@ let emit_instr fallthrough i =
         for i = 0 to Array.length jumptbl - 1 do
           `	.long	{emit_label jumptbl.(i)}\n`
         done;
-        `	.text\n`
+	_code()
     | Lsetuptrap lbl ->
         `	call	{emit_label lbl}\n`
     | Lpushtrap ->
@@ -878,7 +939,7 @@ let emit_profile () =
 (* Declare a global function symbol *)
 
 let declare_function_symbol name =
-  `	.globl	{emit_symbol name}\n`;
+  export_symbol name;
   match Config.system with
     "linux_elf" | "bsd_elf" | "gnu" ->
       `	.type	{emit_symbol name},@function\n`
@@ -895,7 +956,7 @@ let fundecl fundecl =
   call_gc_sites := [];
   bound_error_sites := [];
   bound_error_call := 0;
-  `	.text\n`;
+  _code();
   emit_align 16;
   declare_function_symbol fundecl.fun_name;
   `{emit_symbol fundecl.fun_name}:\n`;
@@ -911,15 +972,26 @@ let fundecl fundecl =
 
 (* Emission of data *)
 
+let _globl s  = `	.globl	{emit_symbol s}\n`
+let _define s = `{emit_symbol s}:\n`
+let _glbdef s = _globl s; _define s
+let _str s =
+  if use_ascii_dir
+  then emit_string_directive "	.ascii	" s
+  else emit_bytes_directive  "	.byte	" s
+let _data () = `	.data\n`
+let _byte n  = `	.byte	{emit_int n}\n`
+let _int n   = `	.long	{emit_nativeint n}\n`
+
 let emit_item = function
-    Cglobal_symbol s ->
-      `	.globl	{emit_symbol s}\n`;
+    Cglobal_symbol s -> 
+      _globl s
   | Cdefine_symbol s ->
       `{emit_symbol s}:\n`
   | Cdefine_label lbl ->
       `{emit_label (100000 + lbl)}:\n`
   | Cint8 n ->
-      `	.byte	{emit_int n}\n`
+      _byte n
   | Cint16 n ->
       `	{emit_string word_dir}	{emit_int n}\n`
   | Cint32 n ->
@@ -934,34 +1006,87 @@ let emit_item = function
       `	.long	{emit_symbol s}\n`
   | Clabel_address lbl ->
       `	.long	{emit_label (100000 + lbl)}\n`
-  | Cstring s ->
-      if use_ascii_dir
-      then emit_string_directive "	.ascii	" s
-      else emit_bytes_directive  "	.byte	" s
+  | Cstring s -> 
+      _str s
   | Cskip n ->
       if n > 0 then `	{emit_string skip_dir}	{emit_int n}\n`
   | Calign n ->
       emit_align n
 
 let data l =
-  `	.data\n`;
+  _data ();
   List.iter emit_item l
+
+let emit_reloctable relocs =
+  let syms = Hashtbl.create 8 in
+  let rels = Hashtbl.create 8 in
+  List.iter
+    (fun (sym,lab,ofs,abs) -> 
+       Hashtbl.replace syms sym (); 
+       Hashtbl.add rels sym (lab,ofs,abs))
+    relocs;
+
+  _data();
+  _glbdef (Compilenv.make_symbol (Some "reloctable"));
+  _byte 0;
+  Hashtbl.iter 
+    (fun sym () ->
+       _str (symbol_prefix ^ sym); 
+       (* TODO: escaping as in Emitaux.emit_symbol *)
+       _byte 0;
+       List.iter
+	 (fun (lab,ofs,abs) -> 
+	    `	.long	{emit_label lab} + {emit_int ofs}\n`;
+	    _byte (if abs then 1 else 0)
+	 )
+	 (Hashtbl.find_all rels sym);
+       _int 0n
+    )
+    syms;
+  _byte 0
+
+let emit_symtable symbols =
+  _data();
+  _glbdef (Compilenv.make_symbol (Some "symtable"));
+  _int (Nativeint.of_int symbols);
+  List.iter
+    (fun sym ->
+       `	.long	{emit_symbol sym}\n`;
+       _str (symbol_prefix ^ sym);
+       _byte 0;
+       (* TODO: escaping as in Emitaux.emit_symbol *)
+    )
+    symbols
+
 
 (* Beginning / end of an assembly file *)
 
 let begin_assembly() =
+  exported_symbols := [];
+  add_export (Compilenv.make_symbol None);
+  if Compilenv.current_unit_name () = "_startup" 
+  then List.iter add_export [
+    "caml_young_ptr";
+    "caml_young_limit";
+    "caml_alloc1";
+    "caml_alloc2";
+    "caml_alloc3";
+    "caml_allocN";  
+    "caml_call_gc"
+  ];
+
   let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
   `	.data\n`;
   `	.globl	{emit_symbol lbl_begin}\n`;
   `{emit_symbol lbl_begin}:\n`;
   let lbl_begin = Compilenv.make_symbol (Some "code_begin") in
-  `	.text\n`;
+  _code();
   `	.globl	{emit_symbol lbl_begin}\n`;
   `{emit_symbol lbl_begin}:\n`
 
 let end_assembly() =
   let lbl_end = Compilenv.make_symbol (Some "code_end") in
-  `	.text\n`;
+  _code();
   `	.globl	{emit_symbol lbl_end}\n`;
   `{emit_symbol lbl_end}:\n`;
   `	.data\n`;
@@ -986,4 +1111,10 @@ let end_assembly() =
         if use_ascii_dir
         then emit_string_directive "	.ascii	" s
         else emit_bytes_directive  "	.byte	" s) };
-  if macosx then emit_external_symbols ()
+  if macosx then emit_external_symbols ();
+
+  emit_symtable !exported_symbols;
+  exported_symbols := [];
+  if !Clflags.closed then emit_reloctable !relocs;
+  relocs := []
+
