@@ -67,7 +67,7 @@ static void caml_relocate(void *reloctable) {
   reloctable++;
 
   while (0 != *(name = reloctable)) {
-    /* printf("Symbol %s\n", name); */
+    /*    printf("Symbol %s\n", name);  */
     reloctable += strlen(name) + 1;
 
     intnat s = caml_dynsym(name);
@@ -79,7 +79,7 @@ static void caml_relocate(void *reloctable) {
     /* printf("-> %lx\n", (intnat)s);  */
 
     while (NULL != (void*) (reloc = (*((intnat*)reloctable)))) {
-      uintnat c = (*((unsigned char*)(reloc) - 1));
+      /*      uintnat c = (*((unsigned char*)(reloc) - 1)); */
       reloctable += sizeof(intnat);
       uintnat absolute = *((unsigned char*)(reloctable));
       reloctable++;
@@ -127,28 +127,31 @@ CAMLprim value caml_natdynlink_open
   if (NULL == handle)
     CAMLreturn(caml_copy_string(dlerror()));
 
-  void *sym = dlsym (handle, "caml_startup__frametable");
-  if (NULL != sym) caml_register_frametable(sym);
-  
-#define sym(n) getsym(handle,unit,n,0)
 #define optsym(n) getsym(handle,unit,n,1)
   while (symbols != Val_unit) {
     char *unit = String_val(Field(symbols,0));
     symbols = Field(symbols,1);
-    caml_register_frametable(sym("__frametable"));
-    caml_register_dyn_global((value)sym(""));
-    caml_dyn_data_segments = 
-      segment_cons(sym("__data_begin"),sym("__data_end"),
-		   caml_dyn_data_segments); 
 
-    void *reloctable = optsym("__reloctable");
-    if (NULL != reloctable) caml_relocate(reloctable);
+    void *sym,*sym2;
+    sym = optsym("__frametable");
+    if (NULL != sym) caml_register_frametable(sym);
 
-    void *symtable = optsym("__symtable");
-    if (NULL != symtable) caml_register_symtable(symtable); 
+    sym = optsym("");
+    if (NULL != sym) caml_register_dyn_global(sym);
 
-    void (*entrypoint)(void) = sym("__entry");
-    caml_callback((value)(&entrypoint), 0);
+    sym = optsym("__data_begin");
+    sym2 = optsym("__data_end");
+    if (NULL != sym && NULL != sym2)
+      caml_dyn_data_segments = segment_cons(sym,sym2,caml_dyn_data_segments); 
+
+    sym = optsym("__reloctable");
+    if (NULL != sym) caml_relocate(sym);
+
+    sym = optsym("__symtable");
+    if (NULL != sym) caml_register_symtable(sym);
+
+    void (*entrypoint)(void) = optsym("__entry");
+    if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);
   }
 #undef sym
 #undef optsym

@@ -227,7 +227,7 @@ let loadunits priv filename units state =
   if not (Sys.file_exists dll) then raise (Error (File_not_found dll));
   
   let defines = List.flatten (List.map (fun (ui,_) -> ui.ui_defines) units) in
-  let s = ndl_open priv dll defines in
+  let s = ndl_open priv dll ("_shared_startup"::defines) in
   if Obj.repr s <> Obj.repr () then raise (Error (Cannot_open_dll s));
   
   { implems = new_implems; ifaces = new_ifaces; 

@@ -211,7 +211,7 @@ intnat caml_globals_inited = 0;
 static intnat caml_globals_scanned = 0;
 static link * caml_dyn_globals = NULL;
 
-void caml_register_dyn_global(value v) {
+void caml_register_dyn_global(void *v) {
   caml_dyn_globals = cons((void*) v,caml_dyn_globals);
 }
 

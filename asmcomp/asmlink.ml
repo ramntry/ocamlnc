@@ -254,10 +254,11 @@ let make_shared_startup_file ppf filename genfuns =
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
-  Compilenv.reset "_startup"; (* set the name of the "current" compunit *)
+  Compilenv.reset "_shared_startup"; 
+  (* set the name of the "current" compunit *)
   Emit.begin_assembly();
   genfuns();
-  compile_phrase (Cmmgen.frame_table ["_startup"]);
+  compile_phrase (Cmmgen.frame_table ["_shared_startup"]);
   Emit.end_assembly();
   close_out oc
 
