@@ -338,7 +338,7 @@ let camlp4_flags camlp4s =
 
 camlp4_flags ["camlp4o"; "camlp4r"; "camlp4of"; "camlp4rf"; "camlp4orf"];;
 
-ocaml_lib ~extern:true ~native:false "dynlink";;
+ocaml_lib ~extern:true "dynlink";;
 ocaml_lib ~extern:true "unix";;
 ocaml_lib ~extern:true "str";;
 ocaml_lib ~extern:true "bigarray";;

@@ -45,6 +45,10 @@ value loaded_modules = ref SSet.empty;
 value add_to_loaded_modules name =
   loaded_modules.val := SSet.add name loaded_modules.val;
 
+value (objext,libext) =
+  if DynLoader.is_native then (".cmx",".cmxa") 
+  else (".cmo",".cma");
+
 value rewrite_and_load n x =
   let dyn_loader = dyn_loader.val () in
   let find_in_path = DynLoader.find_in_path dyn_loader in
@@ -56,7 +60,7 @@ value rewrite_and_load n x =
     if SSet.mem n loaded_modules.val then ()
     else do {
       add_to_loaded_modules n;
-      DynLoader.load dyn_loader (n ^ ".cmo");
+      DynLoader.load dyn_loader (n ^ objext);
     }) in
   do {
     match (n, String.lowercase x) with
@@ -94,7 +98,7 @@ value rewrite_and_load n x =
     | ("Printers"|"", "a" | "auto" | "camlp4autoprinter.cmo") ->
         load ["Camlp4AutoPrinter"]
     | _ ->
-      let y = "Camlp4"^n^"/"^x^".cmo" in
+      let y = "Camlp4"^n^"/"^x^objext in
       real_load (try find_in_path y with [ Not_found -> x ]) ];
     rcall_callback.val ();
   };
@@ -275,8 +279,8 @@ value anon_fun name =
   input_file
   (if Filename.check_suffix name ".mli" then Intf name
     else if Filename.check_suffix name ".ml" then Impl name
-    else if Filename.check_suffix name ".cmo" then ModuleImpl name
-    else if Filename.check_suffix name ".cma" then ModuleImpl name
+    else if Filename.check_suffix name objext then ModuleImpl name
+    else if Filename.check_suffix name libext then ModuleImpl name
     else raise (Arg.Bad ("don't know what to do with " ^ name)));
 
 value main argv =

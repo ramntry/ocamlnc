@@ -146,6 +146,20 @@ let add_check_ifaces allow_ext filename ui ifaces =
 let check_implems filename ui implems =
   List.iter
     (fun (name, crc) ->
+       match name with
+	 |"Out_of_memory"
+	 |"Sys_error"
+	 |"Failure"
+	 |"Invalid_argument"
+	 |"End_of_file"
+	 |"Division_by_zero"
+	 |"Not_found"
+	 |"Match_failure"
+	 |"Stack_overflow"
+	 |"Sys_blocked_io"
+	 |"Assert_failure"
+	 |"Undefined_recursive_module" -> ()
+	 | _ ->
        try
 	 let (old_crc,old_src,state) = StrMap.find name implems in
 	 if crc <> cmx_not_found_crc && old_crc <> crc 
@@ -280,7 +294,8 @@ let add_available_units _ =
 let clear_available_units _ =
   failwith "Dynlink.clear_available_units: not implemented in native code"
 let allow_unsafe_modules _ =
-  failwith "Dynlink.allow_unsafe_modules: not implemented in native code"
+  ()
+(*  failwith "Dynlink.allow_unsafe_modules: not implemented in native code" *)
 
 
 (* Error report *)
