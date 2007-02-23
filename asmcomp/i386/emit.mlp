@@ -108,12 +108,12 @@ let new_reloc s offset absolute =
 let emit_call s =
   if is_local_symbol s 
   then `	call	{emit_symbol s}\n`
-  else `	call	.\n{new_reloc s (-4) false}\n`
+  else `{new_reloc s 1 false}	.byte 0xe8, 0x00, 0x00, 0x00, 0x00\n`
 
 let emit_jmp s =
   if is_local_symbol s 
   then `	jmp	{emit_symbol s}\n`
-  else `	jmp	.\n{new_reloc s (-4) false}\n`
+  else `{new_reloc s 1 false}	.byte 0xe9, 0x00, 0x00, 0x00, 0x00\n`
 
 let export_symbol name =
   add_export name;
