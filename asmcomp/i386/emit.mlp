@@ -91,6 +91,8 @@ let has_prefix s prefix =
 
 let is_local_symbol s =
   (not !Clflags.closed) || has_prefix s (Compilenv.make_symbol None)
+  || ((has_prefix s "caml_curry") 
+      && Compilenv.current_unit_name () = "_shared_startup")
 
 let is_extern_symbol s = not (is_local_symbol s)
 
