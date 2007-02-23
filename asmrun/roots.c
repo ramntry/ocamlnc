@@ -84,6 +84,8 @@ static void caml_init_dynamic_symbols(void)
 {
   static int inited = 0;
   link *lnk;
+  intnat num_sym = 0;
+  dynsymbol *sym;
 
   if (!inited) {
     int i;
@@ -92,14 +94,13 @@ static void caml_init_dynamic_symbols(void)
     inited = 1;
   }
 
-  intnat num_sym = 0;
   iter_list(symtables,lnk) {
     num_sym += *((intnat*) lnk->data);
   }
   caml_dynamic_symbols_size = num_sym;
 
   caml_dynamic_symbols = (dynsymbol*) malloc(sizeof(dynsymbol) * num_sym);
-  dynsymbol *sym = caml_dynamic_symbols;
+  sym = caml_dynamic_symbols;
   iter_list(symtables,lnk) {
     int n;
     char *ptr = (char*)(((intnat*) lnk->data) + 1);
@@ -117,12 +118,13 @@ static void caml_init_dynamic_symbols(void)
 
 intnat caml_dynsym(const char *name) {
   static dynsymbol s;
+  dynsymbol *sym;
   s.name = (char*) name;
 
   if (NULL == caml_dynamic_symbols) 
     caml_init_dynamic_symbols();
 
-  dynsymbol *sym = (dynsymbol*) 
+  sym = (dynsymbol*) 
     bsearch(&s,caml_dynamic_symbols,
 	    caml_dynamic_symbols_size,
 	    sizeof(dynsymbol),

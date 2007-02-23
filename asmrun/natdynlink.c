@@ -91,8 +91,8 @@ int caml_is_in_data(void *p) {
 
 static void *getsym(void *handle, char *module, char *name, int opt){
   char *fullname = malloc(strlen(module) + strlen(name) + 5);
-  sprintf(fullname, "caml%s%s", module, name);
   void *sym = dlsym (handle, fullname);
+  sprintf(fullname, "caml%s%s", module, name);
   if (NULL == sym && !opt) {
     printf("natdynlink: cannot find symbol %s\n", fullname);
     exit(2);
@@ -103,9 +103,11 @@ static void *getsym(void *handle, char *module, char *name, int opt){
 
 extern intnat caml_dynsym(const char *name);
 
-static void caml_relocate(void *reloctable) {
+static void caml_relocate(char *reloctable) {
   intnat reloc;
   char *name;
+  intnat s;
+  uintnat absolute;
 
   if (*(char*)(reloctable)) 
     return;  /* Already relocated */
@@ -117,7 +119,7 @@ static void caml_relocate(void *reloctable) {
     /*    printf("Symbol %s\n", name);  */
     reloctable += strlen(name) + 1;
 
-    intnat s = caml_dynsym(name);
+    s = caml_dynsym(name);
     if (NULL == (void*) s) {
       printf("Cannot resolve %s\n", name);
       exit(2);
@@ -128,7 +130,7 @@ static void caml_relocate(void *reloctable) {
     while (NULL != (void*) (reloc = (*((intnat*)reloctable)))) {
       /*      uintnat c = (*((unsigned char*)(reloc) - 1)); */
       reloctable += sizeof(intnat);
-      uintnat absolute = *((unsigned char*)(reloctable));
+      absolute = *((unsigned char*)(reloctable));
       reloctable++;
       /*
       printf("Reloc %lx (%lx) [%lx: %lx -> %lx]\n", reloc, 
@@ -163,7 +165,7 @@ CAMLprim value caml_natdynlink_open
 (value private, value filename, value symbols)
 {
   CAMLparam3 (private, filename, symbols);
-
+  void *sym,*sym2;
   void *handle =
     dlopen(String_val(filename),
 	   (private == Val_true
@@ -177,9 +179,10 @@ CAMLprim value caml_natdynlink_open
 #define optsym(n) getsym(handle,unit,n,1)
   while (symbols != Val_unit) {
     char *unit = String_val(Field(symbols,0));
+    void (*entrypoint)(void);
+
     symbols = Field(symbols,1);
 
-    void *sym,*sym2;
     sym = optsym("__frametable");
     if (NULL != sym) caml_register_frametable(sym);
 
@@ -197,7 +200,7 @@ CAMLprim value caml_natdynlink_open
     sym = optsym("__symtable");
     if (NULL != sym) caml_register_symtable(sym);
 
-    void (*entrypoint)(void) = optsym("__entry");
+    entrypoint = optsym("__entry");
     if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);
   }
 #undef sym
