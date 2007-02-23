@@ -50,7 +50,7 @@ dynlink.cma: $(OBJS)
 	$(CAMLC) $(COMPFLAGS) -a -o dynlink.cma $(OBJS)
 
 dynlink.cmxa: $(NATOBJS)
-	$(CAMLOPT) $(COMPFLAGS) -ccopt -Wl,-E -a -o dynlink.cmxa $(NATOBJS)
+	$(CAMLOPT) $(COMPFLAGS) -ccopt "$(NATDYNLINKOPTS)" -a -o dynlink.cmxa $(NATOBJS)
 
 dynlinkaux.cmo dynlinkaux.cmi: $(COMPILEROBJS)
 	$(CAMLC) $(COMPFLAGS) -pack -o dynlinkaux.cmo $(COMPILEROBJS)

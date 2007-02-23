@@ -485,6 +485,7 @@ sharedcccompopts=''
 mksharedlib=''
 byteccrpath=''
 mksharedlibrpath=''
+natdynlinkopts=""
 
 if test $withsharedlibs = "yes"; then
   case "$host" in
@@ -494,6 +495,8 @@ if test $withsharedlibs = "yes"; then
       bytecclinkopts="$bytecclinkopts -Wl,-E"
       byteccrpath="-Wl,-rpath,"
       mksharedlibrpath="-Wl,-rpath,"
+      natdynlinkopts="-Wl,-E"
+      linker_has_option_E=true
       shared_libraries_supported=true;;
     alpha*-*-osf*)
       case "$bytecc" in
@@ -1434,6 +1437,7 @@ echo "EXE=$exe" >> Makefile
 echo "SUPPORTS_SHARED_LIBRARIES=$shared_libraries_supported" >> Makefile
 echo "SHAREDCCCOMPOPTS=$sharedcccompopts" >> Makefile
 echo "MKSHAREDLIBRPATH=$mksharedlibrpath" >> Makefile
+echo "NATDYNLINKOPTS=$natdynlinkopts" >> Makefile
 cat >> Makefile <<EOF
 SYSLIB=-l\$(1)
 #ml let syslib x = "-l"^x;;

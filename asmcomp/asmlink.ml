@@ -264,16 +264,25 @@ let make_shared_startup_file ppf filename genfuns =
 
 
 let call_linker_shared file_list output_name =
-  match Config.ccomp_type with
-  | "cc" ->
-      let cmd = 
-	Printf.sprintf "%s -shared %s -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
-          !Clflags.c_linker
-          (if !Clflags.gprofile then Config.cc_profile else "")
-          (Filename.quote output_name)
-          (Ccomp.quote_files (List.rev file_list))
-      in if Ccomp.command cmd <> 0 then raise(Error Linking_error)
-  | _ -> assert false
+  let files = Ccomp.quote_files (List.rev file_list) in
+  let cmd = match Config.system with
+    | "macosx" ->
+	Printf.sprintf 
+	  "gcc -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
+	  (Filename.quote output_name)
+	  files
+    | "mingw" ->
+	Printf.sprintf 
+	  "gcc -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  (Filename.quote output_name)
+	  files
+    | _ ->
+	Printf.sprintf 
+	  "gcc -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  (Filename.quote output_name)
+	  files
+  in
+  if Ccomp.command cmd <> 0 then raise(Error Linking_error)
 
 let compile_shared ppf file =
   let prefixname,objfiles,units =
@@ -297,10 +306,10 @@ let compile_shared ppf file =
     if Proc.assemble_file asmfile startup_objfile <> 0
     then raise(Error(Assembler_error asmfile));
     if !Clflags.keep_startup_file then () else remove_file asmfile;
-    call_linker_shared (startup_objfile::objfiles) (prefixname ^ ext_dll);
+    call_linker_shared (startup_objfile::objfiles) (prefixname ^ ".so");
     remove_file startup_objfile
   end
-  else call_linker_shared objfiles (prefixname ^ ext_dll)
+  else call_linker_shared objfiles (prefixname ^ ".so")
 
 
 let call_linker file_list startup_file output_name =

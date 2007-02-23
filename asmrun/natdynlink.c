@@ -5,9 +5,56 @@
 #include "callback.h"
 #include "alloc.h"
 
-#include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <windows.h>
+
+#define RTLD_NOW 0
+#define RTLD_GLOBAL 0
+
+static void * dlopen(char * libname, int flags)
+{
+  HMODULE m;
+  /* flags currently ignored */
+  m = LoadLibraryEx(libname, NULL, 0);
+  if (m == NULL) m = LoadLibrary(libname);
+  return (void *) m;
+}
+
+static void dlclose(void * handle)
+{
+  FreeLibrary((HMODULE) handle);
+}
+
+static void * dlsym(void * handle, char * name)
+{
+  return (void *) GetProcAddress((HMODULE) handle, name);
+}
+
+static char * dlerror(void)
+{
+  static char dlerror_buffer[256];
+  DWORD msglen =
+    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL,         /* message source */
+                  GetLastError(), /* error number */
+                  0,            /* default language */
+                  dlerror_buffer, /* destination */
+                  sizeof(dlerror_buffer), /* size of destination */
+                  NULL);         /* no inserts */
+  if (msglen == 0)
+    return "unknown error";
+  else
+    return dlerror_buffer;
+}
+#else
+#include <dlfcn.h>
+#endif
+
+
+
 
 /* Data segments are used by the Is_atom predicate (mlvalues.h)
    to detect static Caml blocks.
