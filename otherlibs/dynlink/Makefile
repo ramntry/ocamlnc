@@ -68,6 +68,7 @@ install:
 
 installopt:
 	cp $(NATOBJS) dynlink.cmxa dynlink.a $(LIBDIR)
+	cd $(LIBDIR); $(RANLIB) dynlink.a
 
 partialclean:
 	rm -f extract_crc *.cm[ioa]
