@@ -50,7 +50,11 @@ static char * dlerror(void)
     return dlerror_buffer;
 }
 #else
+
 #include <dlfcn.h>
+#include <sys/mman.h>
+#include <errno.h>
+#include <unistd.h>
 #endif
 
 
@@ -104,6 +108,26 @@ static void *getsym(void *handle, char *module, char *name, int opt){
 
 extern intnat caml_dynsym(const char *name);
 
+static void allow_write(void *begin, void *end) {
+  static long int pagesize = 0;
+
+  if (0 == pagesize) {
+    errno = 0;
+    pagesize = sysconf(_SC_PAGESIZE);
+    if (errno){
+      fprintf(stderr, "natdynlink: cannot get pagesize\n"); 
+      exit(2); 
+    }
+  }
+
+  begin -= (int) begin % pagesize;
+  int res = mprotect(begin, end - begin, PROT_WRITE | PROT_EXEC | PROT_READ);
+  if (0 != res) { 
+    fprintf(stderr, "natdynlink: mprotect failed %s\n", strerror(errno)); 
+    exit(2); 
+  }
+}
+
 static void caml_relocate(char *reloctable) {
   intnat reloc;
   char *name;
@@ -140,6 +164,7 @@ static void caml_relocate(char *reloctable) {
 	     *(intnat*)reloc,
 	     (intnat) (s - reloc ));
       */
+
       if (absolute) {
 	*((intnat*)reloc) += s;
       } else {
@@ -194,6 +219,10 @@ CAMLprim value caml_natdynlink_open
     sym2 = optsym("__data_end");
     if (NULL != sym && NULL != sym2)
       caml_dyn_data_segments = segment_cons(sym,sym2,caml_dyn_data_segments); 
+
+    sym = optsym("__code_begin");
+    sym2 = optsym("__code_end");
+    if (NULL != sym && NULL != sym2) allow_write(sym,sym2);
 
     sym = optsym("__reloctable");
     if (NULL != sym) caml_relocate(sym);

@@ -121,12 +121,14 @@ let export_symbol name =
   `	.globl	{emit_symbol name}\n`
 
 
-let _code () =
+let _code () = `	.text\n` 
+(*
   if !Clflags.closed 
   then `	.data\n`
     (* Relocation requires write-access to the memory pages that
        contain the code. Should use mprotect... *)
   else `	.text\n`
+*)
 
 
   
