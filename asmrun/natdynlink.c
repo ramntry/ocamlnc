@@ -9,8 +9,8 @@
 #include <string.h>
 
 #ifdef _WIN32
-#include <windows.h>
 
+#include <windows.h>
 #define RTLD_NOW 0
 #define RTLD_GLOBAL 0
 
@@ -23,17 +23,32 @@ static void * dlopen(char * libname, int flags)
   return (void *) m;
 }
 
+/* 
 static void dlclose(void * handle)
 {
   FreeLibrary((HMODULE) handle);
-}
+} 
+*/
 
 static void * dlsym(void * handle, char * name)
 {
   return (void *) GetProcAddress((HMODULE) handle, name);
 }
 
-static char * dlerror(void)
+#define dlerror winerror
+
+#else
+
+#include <dlfcn.h>
+
+#endif
+
+
+#if defined(_WIN32) || defined(__CYGWIN__)
+
+#include <windows.h>
+
+static char * winerror(void)
 {
   static char dlerror_buffer[256];
   DWORD msglen =
@@ -49,16 +64,51 @@ static char * dlerror(void)
   else
     return dlerror_buffer;
 }
+
+static void allow_write(void *begin, void *end) {
+  static long int pagesize = 0;
+  SYSTEM_INFO si;
+
+  if (0 == pagesize) {
+    GetSystemInfo (&si);
+    pagesize = si.dwPageSize;
+  }
+
+  begin -= (int) begin % pagesize;
+  long int old;
+  int res = VirtualProtect(begin, end - begin, PAGE_EXECUTE_WRITECOPY, &old);
+  if (0 == res) {
+    fprintf(stderr, "natdynlink: VirtualProtect failed  %s\n", winerror());
+    exit(2);
+  }
+}
+
 #else
 
-#include <dlfcn.h>
 #include <sys/mman.h>
 #include <errno.h>
 #include <unistd.h>
+
+static void allow_write(void *begin, void *end) {
+  static long int pagesize = 0;
+
+  if (0 == pagesize) {
+    errno = 0;
+    pagesize = sysconf(_SC_PAGESIZE);
+    if (errno){
+      fprintf(stderr, "natdynlink: cannot get pagesize\n"); 
+      exit(2); 
+    }
+  }
+
+  begin -= (int) begin % pagesize;
+  int res = mprotect(begin, end - begin, PROT_WRITE | PROT_EXEC | PROT_READ);
+  if (0 != res) { 
+    fprintf(stderr, "natdynlink: mprotect failed %s\n", strerror(errno)); 
+    exit(2); 
+  }
+}
 #endif
-
-
-
 
 /* Data segments are used by the Is_atom predicate (mlvalues.h)
    to detect static Caml blocks.
@@ -107,26 +157,6 @@ static void *getsym(void *handle, char *module, char *name, int opt){
 }
 
 extern intnat caml_dynsym(const char *name);
-
-static void allow_write(void *begin, void *end) {
-  static long int pagesize = 0;
-
-  if (0 == pagesize) {
-    errno = 0;
-    pagesize = sysconf(_SC_PAGESIZE);
-    if (errno){
-      fprintf(stderr, "natdynlink: cannot get pagesize\n"); 
-      exit(2); 
-    }
-  }
-
-  begin -= (int) begin % pagesize;
-  int res = mprotect(begin, end - begin, PROT_WRITE | PROT_EXEC | PROT_READ);
-  if (0 != res) { 
-    fprintf(stderr, "natdynlink: mprotect failed %s\n", strerror(errno)); 
-    exit(2); 
-  }
-}
 
 static void caml_relocate(char *reloctable) {
   intnat reloc;
