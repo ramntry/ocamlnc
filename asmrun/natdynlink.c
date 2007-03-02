@@ -91,8 +91,9 @@ int caml_is_in_data(void *p) {
 
 static void *getsym(void *handle, char *module, char *name, int opt){
   char *fullname = malloc(strlen(module) + strlen(name) + 5);
-  void *sym = dlsym (handle, fullname);
+  void *sym;
   sprintf(fullname, "caml%s%s", module, name);
+  sym = dlsym (handle, fullname);
   if (NULL == sym && !opt) {
     printf("natdynlink: cannot find symbol %s\n", fullname);
     exit(2);
@@ -172,7 +173,7 @@ CAMLprim value caml_natdynlink_open
 	    ? RTLD_NOW
 	    : RTLD_NOW | RTLD_GLOBAL
 	    ));
-    
+  
   if (NULL == handle)
     CAMLreturn(caml_copy_string(dlerror()));
 
