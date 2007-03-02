@@ -67,6 +67,8 @@ static char * winerror(void)
 
 static void allow_write(void *begin, void *end) {
   static long int pagesize = 0;
+  long int old;
+  int res;
   SYSTEM_INFO si;
 
   if (0 == pagesize) {
@@ -75,8 +77,7 @@ static void allow_write(void *begin, void *end) {
   }
 
   begin -= (int) begin % pagesize;
-  long int old;
-  int res = VirtualProtect(begin, end - begin, PAGE_EXECUTE_WRITECOPY, &old);
+  res = VirtualProtect(begin, end - begin, PAGE_EXECUTE_WRITECOPY, &old);
   if (0 == res) {
     fprintf(stderr, "natdynlink: VirtualProtect failed  %s\n", winerror());
     exit(2);
