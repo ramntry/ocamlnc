@@ -153,6 +153,7 @@ static void *getsym(void *handle, char *module, char *name, int opt){
     printf("natdynlink: cannot find symbol %s\n", fullname);
     exit(2);
   }
+  /*  printf("%s => %lx\n", fullname, sym); */
   free(fullname);
   return sym;
 }
@@ -180,10 +181,10 @@ static void caml_relocate(char *reloctable) {
       exit(2);
       /* TODO: exception */
     }
-    /* printf("-> %lx\n", (intnat)s);   */
+    /* printf("%s -> %lx\n", name, (intnat)s); */
 
     while (NULL != (void*) (reloc = (*((intnat*)reloctable)))) {
-      /* uintnat c = (*((unsigned char*)(reloc) - 1)); */
+      /* uintnat c = (*((unsigned char*)(reloc) - 1));  */
       reloctable += sizeof(intnat);
       absolute = *((unsigned char*)(reloctable));
       reloctable++;
@@ -257,11 +258,11 @@ CAMLprim value caml_natdynlink_open
     sym2 = optsym("__code_end");
     if (NULL != sym && NULL != sym2) allow_write(sym,sym2);
 
-    sym = optsym("__reloctable");
-    if (NULL != sym) caml_relocate(sym);
-
     sym = optsym("__symtable");
     if (NULL != sym) caml_register_symtable(sym);
+
+    sym = optsym("__reloctable");
+    if (NULL != sym) caml_relocate(sym);
 
     entrypoint = optsym("__entry");
     if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);

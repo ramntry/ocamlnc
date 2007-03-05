@@ -1,3 +1,5 @@
+include ../../config/Makefile
+
 CAMLOPT=../../ocamlopt
 COMPFLAGS=-verbose
 SHARED=-shared -closed -S
@@ -37,6 +39,9 @@ sub/plugin.so: api.cmx
 plugin4.so: api.cmx
 main.so: api.cmx
 
+plugin_ext.so: api.cmx plugin_ext.ml factorial.$(O)
+	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) -cclib factorial.$(O) plugin_ext.ml
+
 packed1_client.cmx: packed1.so
 
 pack_client.cmx: mypack.so
@@ -61,5 +66,5 @@ mylib.so: plugin.so plugin2.so
 .ml.so:
 	$(CAMLOPT) -c $(SHARED) $(COMPFLAGS) $<
 
-factorial.o: factorial.c
+factorial.$(O): factorial.c
 	$(CAMLOPT) -c factorial.c

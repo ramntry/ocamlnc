@@ -488,7 +488,7 @@ let emit_instr i =
     | Lop(Iextcall(s, alloc)) ->
         if alloc then begin
 	  if is_extern_symbol s 
-	  then `	mov	eax, ds:0\n{new_reloc s (-4) true}`
+	  then `	mov	eax, 0\n{new_reloc s (-4) true}`
 	  else `	mov	eax, OFFSET {emit_use_symbol s}\n`;
 	  emit_call "caml_c_call";
           record_frame i.live i.dbg
@@ -978,21 +978,30 @@ let emit_symtable symbols =
 
 (* Beginning / end of an assembly file *)
 
+let system_symbols_proc = [
+  "caml_alloc1";
+  "caml_alloc2";
+  "caml_alloc3";
+  "caml_allocN";  
+  "caml_call_gc";
+  "caml_c_call";
+  "caml_ml_array_bound_error";
+  "caml_raise_exn";
+]
+
+let system_symbols_data = [
+  "caml_young_ptr";
+  "caml_young_limit";
+  "caml_extra_params";
+  "caml_exception_pointer";
+]
+
 let system_exports () =
- List.iter add_def_symbol [
-    "caml_young_ptr";
-    "caml_young_limit";
-    "caml_alloc1";
-    "caml_alloc2";
-    "caml_alloc3";
-    "caml_allocN";  
-    "caml_call_gc";
-    "caml_c_call";
-    "caml_extra_params";
-    "caml_exception_pointer";
-    "caml_ml_array_bound_error";
-  ];
-  ()
+  List.iter add_def_symbol system_symbols_proc;
+  List.iter add_def_symbol system_symbols_data
+
+let _extern_proc s = `	EXTERN {emit_symbol s}: PROC\n`
+let _extern_data s = `	EXTERN {emit_symbol s}: DWORD\n`
 
 let begin_assembly() =
   let unit_name = Compilenv.current_unit_name () in
@@ -1001,20 +1010,16 @@ let begin_assembly() =
 
   `.386\n`;
   `	.MODEL	FLAT\n\n`;
-  if not !Clflags.closed then begin
-    `	EXTERN _caml_young_ptr: DWORD\n`;
-    `	EXTERN _caml_young_limit: DWORD\n`;
-    `	EXTERN _caml_exception_pointer: DWORD\n`;
-    `	EXTERN _caml_extra_params: DWORD\n`;
-    `	EXTERN _caml_call_gc: PROC\n`;
-    `	EXTERN _caml_c_call: PROC\n`;
-    `	EXTERN _caml_allocN: PROC\n`;
-    `	EXTERN _caml_alloc1: PROC\n`;
-    `	EXTERN _caml_alloc2: PROC\n`;
-    `	EXTERN _caml_alloc3: PROC\n`;
-    `	EXTERN _caml_ml_array_bound_error: PROC\n`;
-    `	EXTERN _caml_raise_exn: PROC\n`;
+  if not !Clflags.closed 
+  then begin
+    List.iter _extern_proc system_symbols_proc;
+    List.iter _extern_data system_symbols_data;
+  end else begin
+    let prims = (Compilenv.current_unit_infos()).Compilenv.ui_primitives in
+    List.iter _extern_proc prims;
+    List.iter add_def_symbol prims;
   end;
+
   `	.DATA\n`;
   let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
   export_symbol lbl_begin;

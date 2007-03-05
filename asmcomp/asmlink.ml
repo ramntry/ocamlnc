@@ -180,11 +180,19 @@ module IntSet = Set.Make(
     let compare = compare
   end)
 
+module StringSet = Set.Make(String)
+
 
 let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
   (* These apply funs are always present in the main program.
      TODO: add more, and do the same for send and curry funs
      (maybe up to 10-15?). *)
+
+let primitives units_list =
+ List.fold_right
+   (fun ui -> List.fold_right StringSet.add ui.ui_primitives)
+   units_list
+   StringSet.empty
 
 let generic_functions ppf shared units_list =
   let compile_phrase p = Asmgen.compile_phrase ppf p in
@@ -249,16 +257,19 @@ let make_startup_file ppf filename units_list =
   Emit.end_assembly();
   close_out oc
 
-let make_shared_startup_file ppf filename genfuns =
+let make_shared_startup_file ppf filename genfuns prims =
   let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_shared_startup"; 
+(*  let prims = StringSet.elements prims in
+  Compilenv.define_primitives prims; *)
   (* set the name of the "current" compunit *)
   Emit.begin_assembly();
   genfuns();
   compile_phrase (Cmmgen.frame_table ["_shared_startup"]);
+(*  compile_phrase (Cmm.Cdata (List.map (fun p -> Cmm.Cglobal_symbol p) prims)); *)
   Emit.end_assembly();
   close_out oc
 
@@ -335,13 +346,15 @@ let compile_shared ppf file =
 	  let objfiles = (prefix ^ Config.ext_lib) :: infos.lib_ccobjs in
 	  prefix,objfiles,List.map fst infos.lib_units
   in
+  let objfiles = !Clflags.ccobjs @ objfiles in
   let need,genfuns = generic_functions ppf true units in
-  if need then begin
+  let prims = primitives units in
+  if need || not (StringSet.is_empty prims) then begin
     let asmfile =
       if !Clflags.keep_startup_file
       then prefixname ^ ".startup" ^ ext_asm
       else Filename.temp_file "camlasm" ext_asm in
-    make_shared_startup_file ppf asmfile genfuns;
+    make_shared_startup_file ppf asmfile genfuns prims;
     let startup_objfile = prefixname ^ ".startup" ^ ext_obj in
     if Proc.assemble_file asmfile startup_objfile <> 0
     then raise(Error(Assembler_error asmfile));
