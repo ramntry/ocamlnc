@@ -67,4 +67,4 @@ mylib.so: plugin.so plugin2.so
 	$(CAMLOPT) -c $(SHARED) $(COMPFLAGS) $<
 
 factorial.$(O): factorial.c
-	$(CAMLOPT) -c factorial.c
+	$(CAMLOPT) -c -ccopt -DCAML_DLL factorial.c
