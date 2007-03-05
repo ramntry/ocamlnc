@@ -263,26 +263,66 @@ let make_shared_startup_file ppf filename genfuns =
   close_out oc
 
 
-let call_linker_shared file_list output_name =
+let call_linker_shared startup units file_list output_name =
   let files = Ccomp.quote_files (List.rev file_list) in
-  let cmd = match Config.system with
+  let cmd,cleanup = match Config.system with
     | "macosx" ->
 	Printf.sprintf 
 	  "gcc -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
 	  (Filename.quote output_name)
-	  files
+	  files,
+	(fun () -> ())
     | "mingw" ->
 	Printf.sprintf 
 	  "gcc -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
 	  (Filename.quote output_name)
-	  files
+	  files,
+	(fun () -> ())
+    | "win32" ->
+	let def_name = Filename.chop_extension output_name ^ ".def" in
+	let imp_name = Filename.temp_file "camlimp" "" in
+	let def = open_out def_name in
+	output_string def "EXPORTS\n";
+	List.iter
+	  (fun ui -> 
+	     List.iter
+	       (fun suffix -> Printf.fprintf def "caml%s%s\n" ui
+		  suffix)
+	       ["";"__frametable";"__symtable";
+		"__code_begin";"__code_end";
+		"__data_begin";"__data_end";
+		"__reloctable";
+		"__entry"]
+	  )
+	  (List.flatten (List.map (fun ui -> ui.ui_defines) units));
+	if startup then (
+	  output_string def "caml_shared_startup__frametable\n";
+	  output_string def "caml_shared_startup__symtable\n";
+	  output_string def "caml_shared_startup__reloctable\n";
+	  output_string def "caml_shared_startup__code_begin\n";
+	  output_string def "caml_shared_startup__code_end\n";
+	);
+	close_out def;
+	Printf.sprintf
+	  "link /nologo /dll /noentry /out:%s /implib:%s /def:%s %s >NUL"
+	  (Filename.quote output_name)
+	  (Filename.quote imp_name)
+	  (Filename.quote def_name)
+	  files,
+	(fun () ->
+	   if not !Clflags.keep_startup_file then remove_file def_name;
+	   remove_file imp_name;
+	   remove_file (imp_name ^ ".exp")
+	)
     | _ ->
 	Printf.sprintf 
 	  "gcc -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
 	  (Filename.quote output_name)
-	  files
+	  files,
+	(fun () -> ())
   in
-  if Ccomp.command cmd <> 0 then raise(Error Linking_error)
+  if Ccomp.command cmd <> 0 then (cleanup(); raise(Error Linking_error))
+  else cleanup()
 
 let compile_shared ppf file =
   let prefixname,objfiles,units =
@@ -306,10 +346,12 @@ let compile_shared ppf file =
     if Proc.assemble_file asmfile startup_objfile <> 0
     then raise(Error(Assembler_error asmfile));
     if !Clflags.keep_startup_file then () else remove_file asmfile;
-    call_linker_shared (startup_objfile::objfiles) (prefixname ^ ".so");
+    call_linker_shared 
+      true units
+      (startup_objfile::objfiles) (prefixname ^ ".so");
     remove_file startup_objfile
   end
-  else call_linker_shared objfiles (prefixname ^ ".so")
+  else call_linker_shared false units objfiles (prefixname ^ ".so")
 
 
 let call_linker file_list startup_file output_name =

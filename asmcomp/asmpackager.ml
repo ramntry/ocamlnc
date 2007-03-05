@@ -80,7 +80,10 @@ let check_units members =
 (* Make the .o file for the package *)
 
 let make_package_object ppf members targetobj targetname coercion =
-  let objtemp = Filename.temp_file "camlpackage" Config.ext_obj in
+  let objtemp =
+    if !Clflags.keep_asm_file
+    then chop_extension_if_any targetobj ^ ".pack" ^ Config.ext_obj
+    else Filename.temp_file "camlpackage" Config.ext_obj in
   let components =
     List.map
       (fun m ->

@@ -187,11 +187,11 @@ let emit_reg = function
 
 let emit_movl_symbol_reg s d reg =
   `	movl	{emit_int d}, {emit_reg reg}\n`;
-  `{new_reloc s (-4) true}\n`
+  new_reloc s (-4) true
 
 let emit_movl_reg_symbol s d reg =
   `	movl	{emit_reg reg}, {emit_int d}\n`;
-  `{new_reloc s (-4) true}\n`
+  new_reloc s (-4) true
 
 (* Output a reference to the lower 8 bits or lower 16 bits of a register *)
 
@@ -300,7 +300,7 @@ let emit_call_bound_error bd =
 let emit_call_bound_errors () =
   List.iter emit_call_bound_error !bound_error_sites;
   if !bound_error_call > 0 then begin
-    `{emit_label !bound_error_call}:`;
+    `{emit_label !bound_error_call}:\n`;
     emit_jmp "caml_ml_array_bound_error"
   end
 
@@ -548,7 +548,7 @@ let emit_instr fallthrough i =
         if alloc then begin
           if not macosx then
 	    if is_extern_symbol s 
-	    then `	movl	0, %eax\n{new_reloc s (-4) true}\n`
+	    then `	movl	0, %eax\n{new_reloc s (-4) true}`
             else `	movl	${emit_symbol s}, %eax\n`
           else begin
             external_symbols_indirect :=
@@ -759,7 +759,7 @@ let emit_instr fallthrough i =
 
     | Lop(Ispecific(Istore_symbol(s,addr))) when is_extern_symbol s ->
         `	movl	$0, {emit_addressing addr i.arg 0}\n`;
-	`{new_reloc s (-4) true}\n`;
+	new_reloc s (-4) true;
     | Lop(Ispecific(Istore_symbol(s, addr))) ->
 	assert(is_local_symbol s);
         `	movl	${emit_symbol s}, {emit_addressing addr i.arg 0}\n`
@@ -877,8 +877,10 @@ let emit_instr fallthrough i =
         if trap_frame_size > 8 then
           `	subl	${emit_int (trap_frame_size - 8)}, %esp\n`;
 	if !Clflags.closed then begin
-          `	pushl	0\n{new_reloc "caml_exception_pointer" (-4) true}\n`;
-          `	movl	%esp, 0\n{new_reloc "caml_exception_pointer" (-4) true}\n`;
+          `	pushl	0\n`;
+	  new_reloc "caml_exception_pointer" (-4) true;
+          `	movl	%esp, 0\n`;
+	  new_reloc "caml_exception_pointer" (-4) true;
 	end else begin
           `	pushl	{emit_symbol "caml_exception_pointer"}\n`;
           `	movl	%esp, {emit_symbol "caml_exception_pointer"}\n`;
@@ -886,7 +888,7 @@ let emit_instr fallthrough i =
         stack_offset := !stack_offset + trap_frame_size
     | Lpoptrap ->
 	if !Clflags.closed then
-          `	popl	0\n{new_reloc "caml_exception_pointer" (-4) true}\n`
+          `	popl	0\n{new_reloc "caml_exception_pointer" (-4) true}`
 	else
           `	popl	{emit_symbol "caml_exception_pointer"}\n`;
         `	addl	${emit_int (trap_frame_size - 4)}, %esp\n`;

@@ -8,8 +8,8 @@ PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so p
 all: $(PLUGINS) $(PLUGINS:.so=.cmx) main_rev main mylib.so
 
 clean:
-	rm -f *.so *.o *.cm* main
-	rm -f sub/*.so sub/*.o sub/*.cm*
+	rm -f *.so *.o *.cm* main main.exe main_rev main_rev.exe *.s *.asm *.obj
+	rm -f sub/*.so sub/*.o sub/*.cm* sub/*.s sub/*.asm sub/*.obj
 
 main: api.cmx main.cmx
 	$(CAMLOPT) -o main dynlink.cmxa api.cmx main.cmx

@@ -172,7 +172,6 @@ static void caml_relocate(char *reloctable) {
   reloctable++;
 
   while (0 != *(name = reloctable)) {
-    /*    printf("Symbol %s\n", name);  */
     reloctable += strlen(name) + 1;
 
     s = caml_dynsym(name);
@@ -181,10 +180,10 @@ static void caml_relocate(char *reloctable) {
       exit(2);
       /* TODO: exception */
     }
-    /* printf("-> %lx\n", (intnat)s);  */
+    /* printf("-> %lx\n", (intnat)s);   */
 
     while (NULL != (void*) (reloc = (*((intnat*)reloctable)))) {
-      /*      uintnat c = (*((unsigned char*)(reloc) - 1)); */
+      /* uintnat c = (*((unsigned char*)(reloc) - 1)); */
       reloctable += sizeof(intnat);
       absolute = *((unsigned char*)(reloctable));
       reloctable++;
@@ -195,12 +194,11 @@ static void caml_relocate(char *reloctable) {
 	     *(intnat*)reloc,
 	     (intnat) (s - reloc ));
       */
-
       if (absolute) {
-	*((intnat*)reloc) += s;
+	*((intnat*)reloc) += s; 
       } else {
 	*((intnat*)reloc) = s - reloc - 4;
-      }
+      } 
     }
     reloctable += sizeof(intnat);
   }
@@ -223,7 +221,9 @@ CAMLprim value caml_natdynlink_open
 {
   CAMLparam3 (private, filename, symbols);
   void *sym,*sym2;
-  void *handle =
+  void *handle;
+
+  handle =
     dlopen(String_val(filename),
 	   (private == Val_true
 	    ? RTLD_NOW
@@ -235,8 +235,10 @@ CAMLprim value caml_natdynlink_open
 
 #define optsym(n) getsym(handle,unit,n,1)
   while (symbols != Val_unit) {
-    char *unit = String_val(Field(symbols,0));
+    char *unit;
     void (*entrypoint)(void);
+
+    unit = String_val(Field(symbols,0));
 
     symbols = Field(symbols,1);
 
