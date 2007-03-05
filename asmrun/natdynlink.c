@@ -65,7 +65,7 @@ static char * winerror(void)
     return dlerror_buffer;
 }
 
-static void allow_write(void *begin, void *end) {
+static void allow_write(char *begin, char *end) {
   static long int pagesize = 0;
   long int old;
   int res;
