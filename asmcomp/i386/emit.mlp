@@ -65,6 +65,9 @@ let symbol_prefix =
   | "gnu" -> ""
   | _ -> "_"
 
+let escape_symbol s =
+  symbol_prefix ^ Emitaux.escape_symbol '$' s
+
 let emit_symbol s =
   emit_string symbol_prefix; Emitaux.emit_symbol '$' s
 
@@ -103,7 +106,8 @@ let add_export s =
 
 let new_reloc s offset absolute =
   let lbl = new_label () in
-  relocs := (s,lbl,offset,absolute) :: !relocs;
+  relocs := (escape_symbol s,label_prefix ^ string_of_int lbl,offset,absolute) 
+  :: !relocs;
   `{emit_label lbl}:\n`
 
 let emit_call s =
@@ -548,7 +552,7 @@ let emit_instr fallthrough i =
         if alloc then begin
           if not macosx then
 	    if is_extern_symbol s 
-	    then `	movl	0, %eax\n{new_reloc s (-4) true}`
+	    then `	movl	$0, %eax\n{new_reloc s (-4) true}`
             else `	movl	${emit_symbol s}, %eax\n`
           else begin
             external_symbols_indirect :=
@@ -1081,12 +1085,11 @@ let emit_reloctable relocs =
   _byte 0;
   Hashtbl.iter 
     (fun sym () ->
-       _str (symbol_prefix ^ sym); 
-       (* TODO: escaping as in Emitaux.emit_symbol *)
+       _str sym;
        _byte 0;
        List.iter
 	 (fun (lab,ofs,abs) -> 
-	    `	.long	{emit_label lab} + {emit_int ofs}\n`;
+	    `	.long	{emit_string lab} + {emit_int ofs}\n`;
 	    _byte (if abs then 1 else 0)
 	 )
 	 (Hashtbl.find_all rels sym);
@@ -1101,8 +1104,8 @@ let emit_symtable symbols =
   _int (Nativeint.of_int (List.length symbols));
   List.iter
     (fun sym ->
-       `	.long	{emit_symbol sym}\n`;
-       _str (symbol_prefix ^ sym);
+       `	.long	{emit_string sym}\n`;
+       _str sym;
        _byte 0;
        (* TODO: escaping as in Emitaux.emit_symbol *)
     )
@@ -1111,8 +1114,8 @@ let emit_symtable symbols =
 
 (* Beginning / end of an assembly file *)
 
-let system_exports () =
- List.iter add_export [
+let system_symbols = 
+  [
     "caml_young_ptr";
     "caml_young_limit";
     "caml_alloc1";
@@ -1125,20 +1128,13 @@ let system_exports () =
     "caml_exception_pointer";
     "caml_ml_array_bound_error";
     "caml_raise_exn";
-  ];
-  ()
-(*
-  List.iter
-    (fun (_,id) -> add_export (Compilenv.symbol_for_global id))
-    Predef.builtin_values
-*)
-
+  ]
 
 let begin_assembly() =
   exported_symbols := [];
   let unit_name = Compilenv.current_unit_name () in
-  if unit_name.[0] <> '_' then add_export (Compilenv.make_symbol None);
-  if unit_name = "_startup" then system_exports ();
+(*  if unit_name.[0] <> '_' then add_export (Compilenv.make_symbol None); *)
+  if unit_name = "_startup" then List.iter add_export system_symbols; 
 
   let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
   `	.data\n`;
@@ -1178,7 +1174,31 @@ let end_assembly() =
         else emit_bytes_directive  "	.byte	" s) };
   if macosx then emit_external_symbols ();
 
-  emit_symtable !exported_symbols;
+  _data ();
+  List.iter
+    (fun s ->   
+       if (String.length s > 12 && String.sub s 0 12 = "__imp__caml_") 
+       then begin
+	 if !Clflags.verbose then Printf.eprintf "import %s\n" s;
+	 `	.globl	{emit_string s}\n`;
+	 `{emit_string s}:	.long 0\n`;
+	 relocs := (String.sub s 6 (String.length s - 6),s,0,true) :: !relocs;
+       end else
+	 if !Clflags.verbose then Printf.eprintf "don't import %s\n" s
+    )
+    !Compilenv.extra_imports;
+
+  let exports = List.map escape_symbol !exported_symbols in
+
+  let unexports = List.map escape_symbol system_symbols in
+  let extra_exports =
+    List.filter (fun s -> not (List.mem s unexports)) !Compilenv.extra_exports
+  in
+
+  Compilenv.extra_exports := [];
+  Compilenv.extra_imports := [];
+
+  emit_symtable (extra_exports @ exports);
   exported_symbols := [];
   if !Clflags.closed then emit_reloctable !relocs;
   relocs := []

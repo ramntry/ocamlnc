@@ -370,7 +370,6 @@ let make_startup_file ppf filename units_list =
   close_out oc
 
 let make_shared_startup_file ppf filename genfuns defs undefs =
-  let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
@@ -380,7 +379,6 @@ let make_shared_startup_file ppf filename genfuns defs undefs =
   Compilenv.extra_exports := defs;
   Emit.begin_assembly();
   genfuns();
-  compile_phrase (Cmmgen.frame_table ["_shared_startup"]);
   Emit.end_assembly();
   close_out oc
 
