@@ -2,22 +2,23 @@ include ../../config/Makefile
 
 CAMLOPT=../../ocamlopt
 COMPFLAGS=-verbose
-SHARED=-shared -closed -S
+SHARED=-shared -closed -S -dstartup
 #SHARED=-shared
 
-PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so
+PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_ext2.so plugin_simple.so bug.so
 
-all: $(PLUGINS) $(PLUGINS:.so=.cmx) main_rev main mylib.so
+all: $(PLUGINS) $(PLUGINS:.so=.cmx) main main_ext mylib.so
 
 clean:
-	rm -f *.so *.o *.cm* main main.exe main_rev main_rev.exe *.s *.asm *.obj
+	rm -f *.so *.o *.cm* main main_ext *.exe *.s *.asm *.obj
 	rm -f sub/*.so sub/*.o sub/*.cm* sub/*.s sub/*.asm sub/*.obj
+	rm -f plugin_ext2.ml
 
 main: api.cmx main.cmx
 	$(CAMLOPT) -o main dynlink.cmxa api.cmx main.cmx
 
-main_rev: api.cmx main.cmx
-	$(CAMLOPT) -o main_rev dynlink.cmxa main.cmx api.cmx
+main_ext: api.cmx main.cmx factorial.s.$(O)
+	$(CAMLOPT) -o main_ext dynlink.cmxa api.cmx main.cmx factorial.s.$(O)
 
 sub/plugin3.so: sub/api.cmi sub/api.cmx sub/plugin3.ml
 	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(SHARED) $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
@@ -39,8 +40,12 @@ sub/plugin.so: api.cmx
 plugin4.so: api.cmx
 main.so: api.cmx
 
-plugin_ext.so: api.cmx plugin_ext.ml factorial.$(O)
-	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) -cclib factorial.$(O) plugin_ext.ml
+plugin_ext.so: api.cmx plugin_ext.ml factorial.d.$(O)
+	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) factorial.d.$(O) plugin_ext.ml
+
+plugin_ext2.so: api.cmx plugin_ext.ml
+	cp plugin_ext.ml plugin_ext2.ml
+	$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) plugin_ext2.ml
 
 packed1_client.cmx: packed1.so
 
@@ -66,5 +71,10 @@ mylib.so: plugin.so plugin2.so
 .ml.so:
 	$(CAMLOPT) -c $(SHARED) $(COMPFLAGS) $<
 
-factorial.$(O): factorial.c
-	$(CAMLOPT) -c -ccopt -DCAML_DLL factorial.c
+factorial.d.$(O): factorial.c
+	$(CAMLOPT) -c -ccopt "$(DLLCCCOMPOPTS)" factorial.c
+	cp factorial.$(O) factorial.d.$(O)
+
+factorial.s.$(O): factorial.c
+	$(CAMLOPT) -c factorial.c
+	cp factorial.$(O) factorial.s.$(O)

@@ -63,6 +63,9 @@ let add_used_symbol s =
 
 let symbol_prefix = "_"
 
+let escape_symbol s =
+  symbol_prefix ^ Emitaux.escape_symbol '$' s
+
 let emit_symbol s =
   emit_string "_"; Emitaux.emit_symbol '$' s
 
@@ -94,7 +97,8 @@ let relocs = ref []
 
 let new_reloc s offset absolute =
   let lbl = new_label () in
-  relocs := (s,lbl,offset,absolute) :: !relocs;
+  relocs := (escape_symbol s,"L" ^ string_of_int lbl,offset,absolute) :: 
+    !relocs;
   `{emit_label lbl}:\n`
 
 let emit_call s =
@@ -948,12 +952,11 @@ let emit_reloctable relocs =
   _byte 0;
   Hashtbl.iter 
     (fun sym () ->
-       _str (symbol_prefix ^ sym); 
-       (* TODO: escaping as in Emitaux.emit_symbol *)
+       _str sym; 
        _byte 0;
        List.iter
 	 (fun (lab,ofs,abs) -> 
-	    `	DWORD	{emit_label lab} + {emit_int ofs}\n`;
+	    `	DWORD	{emit_string lab} + {emit_int ofs}\n`;
 	    _byte (if abs then 1 else 0)
 	 )
 	 (Hashtbl.find_all rels sym);
@@ -968,10 +971,9 @@ let emit_symtable symbols =
   _int (Nativeint.of_int (List.length symbols));
   List.iter
     (fun sym ->
-       `	DWORD	{emit_symbol sym}\n`;
-       _str (symbol_prefix ^ sym);
+       `	DWORD	{emit_string sym}\n`;
+       _str sym;
        _byte 0;
-       (* TODO: escaping as in Emitaux.emit_symbol *)
     )
     symbols
 
@@ -1014,10 +1016,6 @@ let begin_assembly() =
   then begin
     List.iter _extern_proc system_symbols_proc;
     List.iter _extern_data system_symbols_data;
-  end else begin
-    let prims = (Compilenv.current_unit_infos()).Compilenv.ui_primitives in
-    List.iter _extern_proc prims;
-    List.iter add_def_symbol prims;
   end;
 
   `	.DATA\n`;
@@ -1052,15 +1050,44 @@ let end_assembly() =
       efa_def_label = (fun l -> `{emit_label l}	LABEL	DWORD\n`);
       efa_string = (fun s -> emit_bytes_directive  "	BYTE	" (s ^ "\000")) };
 
-  emit_symtable (StringSet.elements !symbols_defined);
+  let exports = List.map escape_symbol (StringSet.elements !symbols_defined) in
+
+  let unexports =
+    List.map escape_symbol (system_symbols_data @ system_symbols_proc) in
+  let extra_exports =
+    List.filter (fun s -> not (List.mem s unexports))
+      !Compilenv.extra_exports
+  in
+
+  List.iter
+    (fun s -> `	EXTERN {emit_string s}: PROC\n`)
+    extra_exports;
+
+  emit_symtable (extra_exports @ exports);
+
+  _data ();
+  List.iter
+    (fun s ->   
+       if (String.length s > 12 && String.sub s 0 12 = "__imp__caml_") 
+       then begin
+	 if !Clflags.verbose then Printf.eprintf "import %s\n" s;
+	 `	PUBLIC	{emit_string s}\n`;
+	 `{emit_string s}	LABEL DWORD\n`;
+	 `	DWORD 0\n`;
+	 relocs := (String.sub s 6 (String.length s - 6),s,0,true) :: !relocs;
+       end
+    )
+    !Compilenv.extra_imports;
+
+  Compilenv.extra_exports := [];
+  Compilenv.extra_imports := [];
+
   if !Clflags.closed then emit_reloctable !relocs;
   relocs := [];
 
   `\n;External functions\n\n`;
   StringSet.iter
-    (fun s ->
-      if not (StringSet.mem s !symbols_defined) then
-        `	EXTERN	{emit_symbol s}: PROC\n`)
+    (fun s -> if not (StringSet.mem s !symbols_defined) then _extern_proc s)
     !symbols_used;
   symbols_used := StringSet.empty;
   symbols_defined := StringSet.empty;

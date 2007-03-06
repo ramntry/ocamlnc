@@ -32,6 +32,8 @@ type error =
 
 exception Error of error
 
+module StringSet = Set.Make(String)
+
 (* Consistency check between interfaces and implementations *)
 
 let crc_interfaces = Consistbl.create ()
@@ -95,6 +97,118 @@ let add_ccobjs l =
     lib_ccobjs := l.lib_ccobjs @ !lib_ccobjs;
     lib_ccopts := l.lib_ccopts @ !lib_ccopts
   end
+
+(* Extract the list of external symbols in a object/library file.
+   First result is the list of defined symbols.
+   Second result is the list of undefined symbols. *)
+
+module CoffSymbolsReader = struct
+  exception Error
+
+  let read ic len =
+    let buf = String.create len in
+    really_input ic buf 0 len;
+    buf
+
+  let int32 buf loc =
+    Char.code buf.[loc] 
+    + (Char.code buf.[loc + 1]) lsl 8
+    + (Char.code buf.[loc + 2]) lsl 16
+    + (Char.code buf.[loc + 3]) lsl 24 
+
+  let int16 buf loc =
+    Char.code buf.[loc] 
+    + (Char.code buf.[loc + 1]) lsl 8
+
+  let int8 buf loc = Char.code buf.[loc] 
+
+  let strz buf loc c =
+    let i = 
+      try String.index_from buf loc c
+      with Not_found -> String.length buf in
+    String.sub buf loc (i - loc)
+    
+  let read_obj ic defs undefs =
+    let base = pos_in ic in
+    let buf = read ic 20 in
+    (match int16 buf 0 with
+       | 0x14c -> ()  (* i386 or later *)
+       | _ -> raise Error);
+    let symtable = int32 buf 8 in
+    let symcount = int32 buf 12 in
+
+    seek_in ic (base + symtable + 18 * symcount);
+    let buf = read ic 4 in
+    let strtbl_len = int32 buf 0 in
+    let strtbl = read ic (strtbl_len - 4) in
+    
+    let name buf = 
+      if int32 buf 0 <> 0 then strz (String.sub buf 0 8) 0 '\000'
+      else strz strtbl (int32 buf 4 - 4) '\000' in
+
+    let rec read_symbols strtbl rest =
+      if rest = 0 then ()
+      else let buf = read ic 18 in
+      let sect = int8 buf 12 and cl = int8 buf 16 and aux = int8 buf 17 in
+      if cl = 2 then
+	if sect <> 0 then defs := StringSet.add (name buf) !defs
+	else undefs := StringSet.add (name buf) !undefs
+      else ();
+      seek_in ic (pos_in ic + 18 * aux);
+      read_symbols strtbl (rest - aux - 1) in
+    
+    seek_in ic (base + symtable);
+    read_symbols strtbl symcount
+      
+  let magic_lib = "!<arch>\n"
+
+  let read_lib ic defs undefs =
+    let rec read_member () =
+      let buf = read ic 60 in
+      let base = pos_in ic in
+      let size = int_of_string (strz (String.sub buf 48 10) 0 ' ') in
+      let name = strz (String.sub buf 0 16) 0 ' '  in
+      begin match name with
+	| "/" | "" | "//" -> ()
+	| _ -> read_obj ic defs undefs
+      end;
+      seek_in ic (base + size + size mod 2); 
+      read_member ()
+    in
+    (try read_member () with End_of_file -> ())
+
+  let read defs undefs filename =
+    if filename = "" then ()
+    else let ic = open_in_bin (Ccomp.expand_libname filename) in
+    try
+      if in_channel_length ic > String.length magic_lib
+	&& read ic (String.length magic_lib) = magic_lib 
+      then read_lib ic defs undefs
+      else (seek_in ic 0; read_obj ic defs undefs);
+      close_in ic
+    with exn ->
+      close_in ic;
+      raise Error
+
+  let read_files files =
+    let defs = ref StringSet.empty and undefs = ref StringSet.empty in
+    List.iter (read defs undefs) files;
+    StringSet.elements !defs,
+    StringSet.elements (StringSet.diff !undefs !defs)
+
+end
+  
+
+let runtime_lib () =  
+  let libname =
+    if !Clflags.gprofile
+    then "libasmrunp" ^ ext_lib
+    else "libasmrun" ^ ext_lib in
+  try
+    if !Clflags.nopervasives then ""
+    else find_in_path !load_path libname
+  with Not_found ->
+    raise(Error(File_not_found libname))
 
 (* First pass: determine which units are needed *)
 
@@ -180,19 +294,10 @@ module IntSet = Set.Make(
     let compare = compare
   end)
 
-module StringSet = Set.Make(String)
-
-
 let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
   (* These apply funs are always present in the main program.
      TODO: add more, and do the same for send and curry funs
      (maybe up to 10-15?). *)
-
-let primitives units_list =
- List.fold_right
-   (fun ui -> List.fold_right StringSet.add ui.ui_primitives)
-   units_list
-   StringSet.empty
 
 let generic_functions ppf shared units_list =
   let compile_phrase p = Asmgen.compile_phrase ppf p in
@@ -254,22 +359,28 @@ let make_startup_file ppf filename units_list =
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
   compile_phrase (Cmmgen.sym_table ("_startup" :: name_list));
+
+  let defs,undefs = 
+    CoffSymbolsReader.read_files (runtime_lib () :: !Clflags.ccobjs) in
+  Compilenv.extra_exports := defs;
+  flush stdout;
+  
+
   Emit.end_assembly();
   close_out oc
 
-let make_shared_startup_file ppf filename genfuns prims =
+let make_shared_startup_file ppf filename genfuns defs undefs =
   let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_shared_startup"; 
-(*  let prims = StringSet.elements prims in
-  Compilenv.define_primitives prims; *)
   (* set the name of the "current" compunit *)
+  Compilenv.extra_imports := undefs;
+  Compilenv.extra_exports := defs;
   Emit.begin_assembly();
   genfuns();
   compile_phrase (Cmmgen.frame_table ["_shared_startup"]);
-(*  compile_phrase (Cmm.Cdata (List.map (fun p -> Cmm.Cglobal_symbol p) prims)); *)
   Emit.end_assembly();
   close_out oc
 
@@ -346,15 +457,18 @@ let compile_shared ppf file =
 	  let objfiles = (prefix ^ Config.ext_lib) :: infos.lib_ccobjs in
 	  prefix,objfiles,List.map fst infos.lib_units
   in
-  let objfiles = !Clflags.ccobjs @ objfiles in
+  let extraobjs = List.rev !Clflags.ccobjs in
+  let objfiles = extraobjs @ objfiles in
   let need,genfuns = generic_functions ppf true units in
-  let prims = primitives units in
-  if need || not (StringSet.is_empty prims) then begin
+
+  let defs,undefs = CoffSymbolsReader.read_files extraobjs in
+
+  if need || defs <> [] || undefs <> [] then begin
     let asmfile =
       if !Clflags.keep_startup_file
       then prefixname ^ ".startup" ^ ext_asm
       else Filename.temp_file "camlasm" ext_asm in
-    make_shared_startup_file ppf asmfile genfuns prims;
+    make_shared_startup_file ppf asmfile genfuns defs undefs;
     let startup_objfile = prefixname ^ ".startup" ^ ext_obj in
     if Proc.assemble_file asmfile startup_objfile <> 0
     then raise(Error(Assembler_error asmfile));
@@ -366,18 +480,7 @@ let compile_shared ppf file =
   end
   else call_linker_shared false units objfiles (prefixname ^ ".so")
 
-
 let call_linker file_list startup_file output_name =
-  let libname =
-    if !Clflags.gprofile
-    then "libasmrunp" ^ ext_lib
-    else "libasmrun" ^ ext_lib in
-  let runtime_lib =
-    try
-      if !Clflags.nopervasives then ""
-      else find_in_path !load_path libname
-    with Not_found ->
-      raise(Error(File_not_found libname)) in
   let c_lib =
     if !Clflags.nopervasives then "" else Config.native_c_libraries in
   match Config.ccomp_type with
@@ -396,7 +499,7 @@ let call_linker file_list startup_file output_name =
               (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
                         !load_path))
             (Ccomp.quote_files (List.rev !Clflags.ccobjs))
-            (Filename.quote runtime_lib)
+            (Filename.quote (runtime_lib ()))
             c_lib
         else
           Printf.sprintf "%s -o %s %s %s"
@@ -416,7 +519,7 @@ let call_linker file_list startup_file output_name =
             (Ccomp.quote_files (List.rev file_list))
             (Ccomp.quote_files 
               (List.rev_map Ccomp.expand_libname !Clflags.ccobjs))
-            (Filename.quote runtime_lib)
+            (Filename.quote (runtime_lib ()))
             c_lib
             (Ccomp.make_link_options !Clflags.ccopts) in
         if Ccomp.command cmd <> 0 then raise(Error Linking_error);
@@ -467,7 +570,9 @@ let link ppf objfiles output_name =
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
   Clflags.ccopts := !lib_ccopts @ !Clflags.ccopts; (* put user's opts first *)
-  let startup = Filename.temp_file "camlstartup" ext_asm in
+  let startup = 
+    if !Clflags.keep_startup_file then output_name ^ ".startup" ^ ext_asm
+    else Filename.temp_file "camlstartup" ext_asm in
   make_startup_file ppf startup units_tolink;
   let startup_obj = Filename.temp_file "camlstartup" ext_obj in
   if Proc.assemble_file startup startup_obj <> 0 then

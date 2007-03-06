@@ -101,10 +101,7 @@ let implementation ppf sourcefile outputprefix =
       +++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
       +++ Simplif.simplify_lambda
       +++ print_if ppf Clflags.dump_lambda Printlambda.lambda
-      ++ (fun lam ->
-	    Compilenv.define_primitives !Translmod.primitive_declarations;
-	    Asmgen.compile_implementation outputprefix ppf lam
-	 );
+      ++ Asmgen.compile_implementation outputprefix ppf;
       Compilenv.save_unit_info (outputprefix ^ ".cmx");
     end;
     Warnings.check_fatal ();
