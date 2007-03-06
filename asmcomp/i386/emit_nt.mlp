@@ -1075,7 +1075,8 @@ let end_assembly() =
 	 `{emit_string s}	LABEL DWORD\n`;
 	 `	DWORD 0\n`;
 	 relocs := (String.sub s 6 (String.length s - 6),s,0,true) :: !relocs;
-       end
+       end else
+	 if !Clflags.verbose then Printf.eprintf "don't import %s\n" s
     )
     !Compilenv.extra_imports;
 
