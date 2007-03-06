@@ -191,11 +191,15 @@ module CoffSymbolsReader = struct
       raise Error
 
   let read_files files =
-    let defs = ref StringSet.empty and undefs = ref StringSet.empty in
-    List.iter (read defs undefs) files;
-    StringSet.elements !defs,
-    StringSet.elements (StringSet.diff !undefs !defs)
-
+    match Config.system with
+      | "mingw" | "win32" | "cygwin" ->
+	  let defs = ref StringSet.empty and undefs = ref StringSet.empty in
+	  List.iter (read defs undefs) files;
+	  StringSet.elements !defs,
+	  StringSet.elements (StringSet.diff !undefs !defs)
+      | _ ->
+	  [],[]
+    
 end
   
 
