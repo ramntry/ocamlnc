@@ -40,7 +40,8 @@ OTHERS=array.cmo list.cmo char.cmo string.cmo sys.cmo \
 
 all: stdlib.cma std_exit.cmo camlheader camlheader_ur
 
-allopt: stdlib.cmxa std_exit.cmx allopt-$(PROFILING)
+#allopt: stdlib.cmxa std_exit.cmx allopt-$(PROFILING)
+allopt: stdlib.cmxa std_exit.cmx
 
 allopt-noprof:
 

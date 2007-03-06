@@ -84,7 +84,22 @@ static void allow_write(char *begin, char *end) {
   }
 }
 
+static void *staticsym(char *name) { return NULL; }
+
 #else
+
+static void *staticsym(char *name) {
+  static void *glb = NULL;
+  if (NULL == glb) {
+    glb = dlopen(NULL, RTLD_NOW);
+    if (NULL == glb) {
+      printf("Cannot get global dl handle\n");
+      exit(2);
+    }
+  }
+
+  return dlsym(glb, name);
+}
 
 #include <sys/mman.h>
 #include <errno.h>
@@ -176,6 +191,8 @@ static void caml_relocate(char *reloctable) {
     reloctable += strlen(name) + 1;
 
     s = caml_dynsym(name);
+    if (NULL == (void*) s) s = staticsym(name);
+
     if (NULL == (void*) s) {
       printf("Cannot resolve %s\n", name);
       exit(2);
