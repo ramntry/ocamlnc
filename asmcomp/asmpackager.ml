@@ -132,7 +132,7 @@ let build_package_cmx members cmxfile =
       ui_symbol = ui.ui_symbol;
       ui_defines =
           List.flatten (List.map (fun info -> info.ui_defines) units) @
-          [ui.ui_symbol];
+          [!Clflags.closed, ui.ui_symbol];
       ui_imports_cmi =
           (ui.ui_name, Env.crc_of_unit ui.ui_name) ::
           filter(Asmlink.extract_crc_interfaces());
@@ -146,7 +146,7 @@ let build_package_cmx members cmxfile =
       ui_send_fun =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =
-          List.exists (fun info -> info.ui_force_link) units
+          List.exists (fun info -> info.ui_force_link) units;
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 

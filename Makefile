@@ -271,7 +271,6 @@ installopt:
 	cp ocamlopt $(BINDIR)/ocamlopt$(EXE)
 	cd stdlib; $(MAKE) installopt
 	for i in $(OTHERLIBRARIES); do (cd otherlibs/$$i; $(MAKE) installopt) || exit $$?; done
-
 #	cd ocamldoc; $(MAKE) installopt
 #	if test -f ocamlc.opt; \
 #	  then cp ocamlc.opt $(BINDIR)/ocamlc.opt$(EXE); else :; fi

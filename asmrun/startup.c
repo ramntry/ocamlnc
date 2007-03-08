@@ -28,6 +28,7 @@
 #include "osdeps.h"
 #include "printexc.h"
 #include "sys.h"
+#include "natdynlink.h"
 #ifdef HAS_UI
 #include "ui.h"
 #endif
@@ -134,6 +135,7 @@ void caml_main(char **argv)
 #endif
   value res;
 
+  caml_init_dynunits();
   caml_init_ieee_floats();
   caml_init_custom_operations();
 #ifdef DEBUG

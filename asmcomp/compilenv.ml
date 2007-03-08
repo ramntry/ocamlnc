@@ -35,10 +35,12 @@ exception Error of error
    The .cmx file contains these infos (as an externed record) plus a CRC
    of these infos *)
 
+type subunit = bool * string  (* true -> compiled with -closed *)
+
 type unit_infos =
   { mutable ui_name: string;                    (* Name of unit implemented *)
     mutable ui_symbol: string;            (* Prefix for symbols *)
-    mutable ui_defines: string list;      (* Unit and sub-units implemented *)
+    mutable ui_defines: subunit list;      (* Unit and sub-units implemented *)
     mutable ui_imports_cmi: (string * Digest.t) list; (* Interfaces imported *)
     mutable ui_imports_cmx: (string * Digest.t) list; (* Infos imported *)
     mutable ui_approx: value_approximation;     (* Approx of the structure *)
@@ -89,7 +91,7 @@ let reset ?packname name =
   let symbol = symbolname_for_pack packname name in
   current_unit.ui_name <- name;
   current_unit.ui_symbol <- symbol;
-  current_unit.ui_defines <- [symbol];
+  current_unit.ui_defines <- [!Clflags.closed,symbol];
   current_unit.ui_imports_cmi <- [];
   current_unit.ui_imports_cmx <- [];
   current_unit.ui_curry_fun <- [];

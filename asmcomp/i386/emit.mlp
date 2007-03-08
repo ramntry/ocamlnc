@@ -126,15 +126,6 @@ let export_symbol name =
 
 
 let _code () = `	.text\n` 
-(*
-  if !Clflags.closed 
-  then `	.data\n`
-    (* Relocation requires write-access to the memory pages that
-       contain the code. Should use mprotect... *)
-  else `	.text\n`
-*)
-
-
   
 (* Some data directives have different names under Solaris *)
 

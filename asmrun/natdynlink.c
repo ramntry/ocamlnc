@@ -4,6 +4,7 @@
 #include "stack.h"
 #include "callback.h"
 #include "alloc.h"
+#include "natdynlink.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -191,7 +192,7 @@ static void caml_relocate(char *reloctable) {
     reloctable += strlen(name) + 1;
 
     s = caml_dynsym(name);
-    if (NULL == (void*) s) s = staticsym(name);
+    if (NULL == (void*) s) s = (intnat) staticsym(name);
 
     if (NULL == (void*) s) {
       printf("Cannot resolve %s\n", name);
@@ -201,10 +202,11 @@ static void caml_relocate(char *reloctable) {
     /* printf("%s -> %lx\n", name, (intnat)s); */
 
     while (NULL != (void*) (reloc = (*((intnat*)reloctable)))) {
-      /* uintnat c = (*((unsigned char*)(reloc) - 1));  */
+      /* uintnat c = (*((unsigned char*)(reloc) - 1)); */
       reloctable += sizeof(intnat);
       absolute = *((unsigned char*)(reloctable));
       reloctable++;
+
       /*
       printf("Reloc %lx (%lx) [%lx: %lx -> %lx]\n", reloc, 
 	     absolute,
@@ -212,6 +214,7 @@ static void caml_relocate(char *reloctable) {
 	     *(intnat*)reloc,
 	     (intnat) (s - reloc ));
       */
+
       if (absolute) {
 	*((intnat*)reloc) += s; 
       } else {
@@ -232,6 +235,14 @@ CAMLprim value caml_natdynlink_getmap(value unit)
 CAMLprim value caml_natdynlink_globals_inited(value unit)
 {
   return Val_int(caml_globals_inited);
+}
+
+void caml_init_dynunits() {
+  int i;
+  for (i = 0; NULL != caml_dynunits[i].reloctable; i++) {
+    allow_write(caml_dynunits[i].code_begin,caml_dynunits[i].code_end);
+    caml_relocate(caml_dynunits[i].reloctable);
+  }
 }
 
 CAMLprim value caml_natdynlink_open

@@ -1987,6 +1987,17 @@ let sym_table namelist =
         List.map mksym namelist @ 
 	[cint_zero])
 
+(* Generate the master table of relocation tables *)
+
+let reloc_table namelist =
+  let mksym name =
+    let suf s = Csymbol_address (Compilenv.make_symbol ~unitname:name (Some s))
+    in [ suf "reloctable" ; suf "code_begin" ; suf "code_end" ] in
+  Cdata(Cglobal_symbol "caml_dynunits" ::
+        Cdefine_symbol "caml_dynunits" ::
+        List.flatten (List.map mksym namelist) @ 
+	[cint_zero])
+
 (* Generate the table of module data and code segments *)
 
 let segment_table namelist symbol begname endname =

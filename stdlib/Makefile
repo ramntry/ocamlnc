@@ -52,7 +52,8 @@ install:
 	cp stdlib.cma std_exit.cmo *.cmi *.mli *.ml camlheader camlheader_ur \
            $(LIBDIR)
 
-installopt: installopt-default installopt-$(PROFILING)
+#installopt: installopt-default installopt-$(PROFILING)
+installopt: installopt-default installopt-noprof
 
 installopt-default:
 	cp stdlib.cmxa stdlib.a std_exit.o *.cmx $(LIBDIR)

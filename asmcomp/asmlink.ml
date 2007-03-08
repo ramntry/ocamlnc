@@ -332,14 +332,18 @@ let generic_functions ppf shared units_list =
 
 
 let make_startup_file ppf filename units_list =
+  Clflags.closed := false;
   let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_startup"; (* set the name of the "current" compunit *)
   Emit.begin_assembly();
-  let name_list =
+  let subunits =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
+  let closed_name_list = 
+    List.map snd (List.filter (fun (c,_) -> c) subunits) in
+  let name_list = List.map snd subunits in
   compile_phrase (Cmmgen.entry_point name_list);
   let _,genfuns =
     generic_functions ppf false (List.map (fun (info,_,_) -> info) units_list)
@@ -355,7 +359,7 @@ let make_startup_file ppf filename units_list =
           (fun (unit,_,crc) ->
              try (unit.ui_name, List.assoc unit.ui_name unit.ui_imports_cmi, 
 		  crc,
-		  unit.ui_defines)
+		  List.map snd unit.ui_defines)
              with Not_found -> assert false)
           units_list));
   compile_phrase(Cmmgen.data_segment_table ("_startup" :: name_list));
@@ -363,6 +367,7 @@ let make_startup_file ppf filename units_list =
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
   compile_phrase (Cmmgen.sym_table ("_startup" :: name_list));
+  compile_phrase (Cmmgen.reloc_table closed_name_list);
 
   let defs,undefs = 
     CoffSymbolsReader.read_files (runtime_lib () :: !Clflags.ccobjs) in
@@ -389,26 +394,34 @@ let make_shared_startup_file ppf filename genfuns defs undefs =
 
 let call_linker_shared startup units file_list output_name =
   let files = Ccomp.quote_files (List.rev file_list) in
+  let stdpath = Ccomp.quote_files
+    (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
+       !load_path) in
+  let ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
+
   let cmd,cleanup = match Config.system with
     | "macosx" ->
 	Printf.sprintf 
-	  "gcc -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
+	  "gcc %s -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
+	  ccopts
 	  (Filename.quote output_name)
 	  files,
 	(fun () -> ())
     | "mingw" ->
 	Printf.sprintf 
-	  "gcc -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  "gcc %s -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  ccopts
 	  (Filename.quote output_name)
 	  files,
 	(fun () -> ())
     | "win32" ->
+	(* TODO: ccopts *)
 	let def_name = Filename.chop_extension output_name ^ ".def" in
 	let imp_name = Filename.temp_file "camlimp" "" in
 	let def = open_out def_name in
 	output_string def "EXPORTS\n";
 	List.iter
-	  (fun ui -> 
+	  (fun (_,ui) -> 
 	     List.iter
 	       (fun suffix -> Printf.fprintf def "caml%s%s\n" ui
 		  suffix)
@@ -440,8 +453,9 @@ let call_linker_shared startup units file_list output_name =
 	)
     | _ ->
 	Printf.sprintf 
-	  "gcc -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  "gcc -shared -o %s %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
 	  (Filename.quote output_name)
+	  ccopts
 	  files,
 	(fun () -> ())
   in
