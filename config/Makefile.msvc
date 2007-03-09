@@ -77,10 +77,10 @@ EXTRALIBS=
 BYTECC=cl /nologo -D_CRT_SECURE_NO_DEPRECATE
 
 ### Additional compile-time options for $(BYTECC).  (For static linking.)
-BYTECCCOMPOPTS=/Ox /MT
+BYTECCCOMPOPTS=/Ox /MD
 
 ### Additional link-time options for $(BYTECC).  (For static linking.)
-BYTECCLINKOPTS=/MT
+BYTECCLINKOPTS=/MD
 
 ### Additional compile-time options for $(BYTECC).  (For building a DLL.)
 DLLCCCOMPOPTS=/Ox /MD -DCAML_DLL
@@ -132,10 +132,10 @@ SYSTEM=win32
 NATIVECC=cl /nologo -D_CRT_SECURE_NO_DEPRECATE
 
 ### Additional compile-time options for $(NATIVECC).
-NATIVECCCOMPOPTS=/Ox /MT
+NATIVECCCOMPOPTS=/Ox /MD
 
 ### Additional link-time options for $(NATIVECC)
-NATIVECCLINKOPTS=/MT
+NATIVECCLINKOPTS=/MD
 
 ### Build partially-linked object file
 PARTIALLD=link /lib /nologo

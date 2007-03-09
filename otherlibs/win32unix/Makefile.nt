@@ -19,7 +19,7 @@ include ../../config/Makefile
 CC=$(BYTECC)
 CFLAGS=-I../../byterun -I../unix
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -closed
 COMPFLAGS=-warn-error A -g
 
 # Files in this directory
@@ -55,12 +55,14 @@ all: dllunix.dll libunix.$(A) unix.cma
 
 allopt: libunix.$(A) unix.cmxa
 
-dllunix.dll: $(DOBJS)
-	$(call MKDLL,dllunix.dll,tmp.$(A),$(DOBJS) ../../byterun/ocamlrun.$(A) $(LIBS))
-	rm tmp.*
+dllunix.dll: libunix.$(A)
+	../../tools/mkdll libunix.$(A) > stubs.c
+	cl /MD -c stubs.c
+	$(call MKDLL,dllunix.dll,tmp.$(A),libunix.$(A) stubs.obj $(LIBS))
+	rm -f tmp.*
 
-libunix.$(A): $(SOBJS)
-	$(call MKLIB,libunix.$(A),$(SOBJS))
+libunix.$(A): $(DOBJS)
+	$(call MKLIB,libunix.$(A),$(DOBJS))
 
 $(DOBJS) $(SOBJS): unixsupport.h
 

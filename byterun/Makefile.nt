@@ -41,17 +41,21 @@ PUBLIC_INCLUDES=alloc.h callback.h config.h custom.h fail.h intext.h \
 
 all: ocamlrun.exe libcamlrun.$(A)
 
-ocamlrun.exe: ocamlrun.dll main.$(DO)
-	$(call MKEXE,ocamlrun.exe,main.$(DO) ocamlrun.$(A))
+#ocamlrun.exe: ocamlrun.dll main.$(DO)
+#	$(call MKEXE,ocamlrun.exe,main.$(DO) ocamlrun.$(A))
 
-ocamlrun.dll: $(DOBJS)
-	$(call MKDLL,ocamlrun.dll,ocamlrun.$(A),$(DOBJS) $(BYTECCLIBS))
+ocamlrun.exe: libcamlrun.$(A) prims.$(SO) main.$(SO)
+	$(call MKEXE,ocamlrun.exe,main.$(SO) prims.$(SO) libcamlrun.$(A))
+
+#ocamlrun.dll: $(DOBJS)
+#	$(call MKDLL,ocamlrun.dll,ocamlrun.$(A),$(DOBJS) $(BYTECCLIBS))
 
 libcamlrun.$(A): $(SOBJS)
 	$(call MKLIB,libcamlrun.$(A),$(SOBJS))
 
-ocamlrund.exe: opnames.h $(DBGOBJS)
-	$(call MKEXE,ocamlrund.exe,$(BYTECCDBGCOMPOPTS) $(DBGOBJS))
+#ocamlrund.exe: opnames.h $(DBGOBJS)
+#	$(call MKEXE,ocamlrund.exe,$(BYTECCDBGCOMPOPTS) $(DBGOBJS))
+
 
 install:
 	cp ocamlrun.exe $(BINDIR)/ocamlrun.exe
