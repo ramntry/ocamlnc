@@ -171,7 +171,8 @@ let contains_calls = ref false
 
 let assemble_file infile outfile =
   Ccomp.command ("ml /nologo /coff /Cp /c /Fo" ^
-                 Filename.quote outfile ^ " " ^ Filename.quote infile ^ ">NUL")
+                 Filename.quote outfile ^ " " ^ Filename.quote infile ^ 
+		 (if !Clflags.verbose then "" else ">NUL"))
   (* /Cp preserve case of all used identifiers
      /c  assemble only
      /Fo output file name *)

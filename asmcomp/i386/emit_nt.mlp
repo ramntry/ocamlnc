@@ -143,6 +143,10 @@ let emit_movl_symbol_reg s d reg =
   `	mov	{emit_reg reg}, ds:{emit_int d}\n`;
   new_reloc s (-4) true
 
+let emit_movl_symbol_addr_reg s d reg =
+  `	mov	{emit_reg reg}, {emit_int d}\n`;
+  new_reloc s (-4) true
+
 let emit_movl_reg_symbol s d reg =
   `	movl	ds:{emit_int d}, {emit_reg reg}\n`;
   new_reloc s (-4) true
@@ -470,7 +474,7 @@ let emit_instr i =
           `	fld	{emit_label lbl}\n`
         end
     | Lop(Iconst_symbol s) when is_extern_symbol s ->
-	emit_movl_symbol_reg s 0 i.res.(0)
+	emit_movl_symbol_addr_reg s 0 i.res.(0)
     | Lop(Iconst_symbol s) ->
         `	mov	{emit_reg i.res.(0)}, OFFSET {emit_use_symbol s}\n`
     | Lop(Icall_ind) ->
@@ -1066,24 +1070,32 @@ let end_assembly() =
   emit_symtable (extra_exports @ exports);
 
   _data ();
+  let unit_name = Compilenv.current_unit_name () in
+  let is_startup = unit_name = "_startup" in
+
   List.iter
     (fun s ->   
        if (String.length s > 12 && String.sub s 0 12 = "__imp__caml_") 
        then begin
-	 if !Clflags.verbose then Printf.eprintf "import %s\n" s;
+(*	 if !Clflags.verbose then Printf.eprintf "import %s\n" s; *)
 	 `	PUBLIC	{emit_string s}\n`;
+	 let sym = String.sub s 6 (String.length s - 6) in
 	 `{emit_string s}	LABEL DWORD\n`;
-	 `	DWORD 0\n`;
-	 relocs := (String.sub s 6 (String.length s - 6),s,0,true) :: !relocs;
-       end else
-	 if !Clflags.verbose then Printf.eprintf "don't import %s\n" s
+	 if is_startup then
+	   `	DWORD {emit_string sym}\n`
+	 else begin
+	   `	DWORD 0\n`;
+	   relocs := (sym,s,0,true) :: !relocs;
+	 end
+       end
+(*       else if !Clflags.verbose then Printf.eprintf "don't import %s\n" s *)
     )
     !Compilenv.extra_imports;
 
   Compilenv.extra_exports := [];
   Compilenv.extra_imports := [];
 
-  if !Clflags.closed then emit_reloctable !relocs;
+  emit_reloctable !relocs;
   relocs := [];
 
   `\n;External functions\n\n`;

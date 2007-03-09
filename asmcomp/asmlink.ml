@@ -32,8 +32,6 @@ type error =
 
 exception Error of error
 
-module StringSet = Set.Make(String)
-
 (* Consistency check between interfaces and implementations *)
 
 let crc_interfaces = Consistbl.create ()
@@ -97,111 +95,6 @@ let add_ccobjs l =
     lib_ccobjs := l.lib_ccobjs @ !lib_ccobjs;
     lib_ccopts := l.lib_ccopts @ !lib_ccopts
   end
-
-(* Extract the list of external symbols in a object/library file.
-   First result is the list of defined symbols.
-   Second result is the list of undefined symbols. *)
-
-module CoffSymbolsReader = struct
-  exception Error
-
-  let read ic len =
-    let buf = String.create len in
-    really_input ic buf 0 len;
-    buf
-
-  let int32 buf loc =
-    Char.code buf.[loc] 
-    + (Char.code buf.[loc + 1]) lsl 8
-    + (Char.code buf.[loc + 2]) lsl 16
-    + (Char.code buf.[loc + 3]) lsl 24 
-
-  let int16 buf loc =
-    Char.code buf.[loc] 
-    + (Char.code buf.[loc + 1]) lsl 8
-
-  let int8 buf loc = Char.code buf.[loc] 
-
-  let strz buf loc c =
-    let i = 
-      try String.index_from buf loc c
-      with Not_found -> String.length buf in
-    String.sub buf loc (i - loc)
-    
-  let read_obj ic defs undefs =
-    let base = pos_in ic in
-    let buf = read ic 20 in
-    (match int16 buf 0 with
-       | 0x14c -> ()  (* i386 or later *)
-       | _ -> raise Error);
-    let symtable = int32 buf 8 in
-    let symcount = int32 buf 12 in
-
-    seek_in ic (base + symtable + 18 * symcount);
-    let buf = read ic 4 in
-    let strtbl_len = int32 buf 0 in
-    let strtbl = read ic (strtbl_len - 4) in
-    
-    let name buf = 
-      if int32 buf 0 <> 0 then strz (String.sub buf 0 8) 0 '\000'
-      else strz strtbl (int32 buf 4 - 4) '\000' in
-
-    let rec read_symbols strtbl rest =
-      if rest = 0 then ()
-      else let buf = read ic 18 in
-      let sect = int8 buf 12 and cl = int8 buf 16 and aux = int8 buf 17 in
-      if cl = 2 then
-	if sect <> 0 then defs := StringSet.add (name buf) !defs
-	else undefs := StringSet.add (name buf) !undefs
-      else ();
-      seek_in ic (pos_in ic + 18 * aux);
-      read_symbols strtbl (rest - aux - 1) in
-    
-    seek_in ic (base + symtable);
-    read_symbols strtbl symcount
-      
-  let magic_lib = "!<arch>\n"
-
-  let read_lib ic defs undefs =
-    let rec read_member () =
-      let buf = read ic 60 in
-      let base = pos_in ic in
-      let size = int_of_string (strz (String.sub buf 48 10) 0 ' ') in
-      let name = strz (String.sub buf 0 16) 0 ' '  in
-      begin match name with
-	| "/" | "" | "//" -> ()
-	| _ -> read_obj ic defs undefs
-      end;
-      seek_in ic (base + size + size mod 2); 
-      read_member ()
-    in
-    (try read_member () with End_of_file -> ())
-
-  let read defs undefs filename =
-    if filename = "" then ()
-    else let ic = open_in_bin (Ccomp.expand_libname filename) in
-    try
-      if in_channel_length ic > String.length magic_lib
-	&& read ic (String.length magic_lib) = magic_lib 
-      then read_lib ic defs undefs
-      else (seek_in ic 0; read_obj ic defs undefs);
-      close_in ic
-    with exn ->
-      close_in ic;
-      raise Error
-
-  let read_files files =
-    match Config.system with
-      | "mingw" | "win32" | "cygwin" ->
-	  let defs = ref StringSet.empty and undefs = ref StringSet.empty in
-	  List.iter (read defs undefs) files;
-	  StringSet.elements !defs,
-	  StringSet.elements (StringSet.diff !undefs !defs)
-      | _ ->
-	  [],[]
-    
-end
-  
 
 let runtime_lib () =  
   let libname =
@@ -369,12 +262,9 @@ let make_startup_file ppf filename units_list =
   compile_phrase (Cmmgen.sym_table ("_startup" :: name_list));
   compile_phrase (Cmmgen.reloc_table closed_name_list);
 
-  let defs,undefs = 
-    CoffSymbolsReader.read_files (runtime_lib () :: !Clflags.ccobjs) in
+  let defs,undefs = Ccomp.coff_symbols (runtime_lib () :: !Clflags.ccobjs) in
+  Compilenv.extra_imports := undefs;
   Compilenv.extra_exports := defs;
-  flush stdout;
-  
-
   Emit.end_assembly();
   close_out oc
 
@@ -393,7 +283,6 @@ let make_shared_startup_file ppf filename genfuns defs undefs =
 
 
 let call_linker_shared startup units file_list output_name =
-  let files = Ccomp.quote_files (List.rev file_list) in
   let stdpath = Ccomp.quote_files
     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
        !load_path) in
@@ -401,6 +290,7 @@ let call_linker_shared startup units file_list output_name =
 
   let cmd,cleanup = match Config.system with
     | "macosx" ->
+	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf 
 	  "gcc %s -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
 	  ccopts
@@ -408,6 +298,7 @@ let call_linker_shared startup units file_list output_name =
 	  files,
 	(fun () -> ())
     | "mingw" ->
+	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf 
 	  "gcc %s -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
 	  ccopts
@@ -416,6 +307,9 @@ let call_linker_shared startup units file_list output_name =
 	(fun () -> ())
     | "win32" ->
 	(* TODO: ccopts *)
+	let files = 
+	  Ccomp.quote_files 
+	    (List.map Ccomp.expand_libname (List.rev file_list)) in
 	let def_name = Filename.chop_extension output_name ^ ".def" in
 	let imp_name = Filename.temp_file "camlimp" "" in
 	let def = open_out def_name in
@@ -441,17 +335,20 @@ let call_linker_shared startup units file_list output_name =
 	);
 	close_out def;
 	Printf.sprintf
-	  "link /nologo /dll /noentry /out:%s /implib:%s /def:%s %s >NUL"
+	  "link /nologo /dll /noentry /out:%s /implib:%s /def:%s %s kernel32.lib %s"
 	  (Filename.quote output_name)
 	  (Filename.quote imp_name)
 	  (Filename.quote def_name)
-	  files,
+	  files
+	  (if !Clflags.verbose then "" else ">NUL")
+	  ,
 	(fun () ->
 	   if not !Clflags.keep_startup_file then remove_file def_name;
 	   remove_file imp_name;
 	   remove_file (imp_name ^ ".exp")
 	)
     | _ ->
+	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf 
 	  "gcc -shared -o %s %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
 	  (Filename.quote output_name)
@@ -463,21 +360,21 @@ let call_linker_shared startup units file_list output_name =
   else cleanup()
 
 let compile_shared ppf file =
-  let prefixname,objfiles,units =
+  let prefixname,objfiles,units,extraobjs =
     match read_file file with
       | Unit (filename,ui,_) -> 
 	  let prefix = chop_extension_if_any filename in
-	  prefix,[prefix ^ Config.ext_obj],[ui]
+	  prefix,[prefix ^ Config.ext_obj],[ui],[]
       | Library (filename,infos) -> 
 	  let prefix = chop_extension_if_any filename in
-	  let objfiles = (prefix ^ Config.ext_lib) :: infos.lib_ccobjs in
-	  prefix,objfiles,List.map fst infos.lib_units
+	  prefix,[prefix ^ Config.ext_lib],List.map fst infos.lib_units,
+	  infos.lib_ccobjs
   in
-  let extraobjs = List.rev !Clflags.ccobjs in
+  let extraobjs = List.rev !Clflags.ccobjs @ extraobjs in
   let objfiles = extraobjs @ objfiles in
   let need,genfuns = generic_functions ppf true units in
 
-  let defs,undefs = CoffSymbolsReader.read_files extraobjs in
+  let defs,undefs = Ccomp.coff_symbols extraobjs in
 
   if need || defs <> [] || undefs <> [] then begin
     let asmfile =

@@ -184,6 +184,10 @@ let emit_movl_symbol_reg s d reg =
   `	movl	{emit_int d}, {emit_reg reg}\n`;
   new_reloc s (-4) true
 
+let emit_movl_symbol_addr_reg s d reg =
+  `	movl	${emit_int d}, {emit_reg reg}\n`;
+  new_reloc s (-4) true
+
 let emit_movl_reg_symbol s d reg =
   `	movl	{emit_reg reg}, {emit_int d}\n`;
   new_reloc s (-4) true
@@ -520,7 +524,7 @@ let emit_instr fallthrough i =
           `	fldl	{emit_label lbl}\n`
         end
     | Lop(Iconst_symbol s) when is_extern_symbol s ->
-	emit_movl_symbol_reg s 0 i.res.(0)
+	emit_movl_symbol_addr_reg s 0 i.res.(0)
     | Lop(Iconst_symbol s) ->
         `	movl	${emit_symbol s}, {emit_reg i.res.(0)}\n`
     | Lop(Icall_ind) ->
@@ -1191,6 +1195,6 @@ let end_assembly() =
 
   emit_symtable (extra_exports @ exports);
   exported_symbols := [];
-  if !Clflags.closed then emit_reloctable !relocs;
+  emit_reloctable !relocs;
   relocs := []
 
