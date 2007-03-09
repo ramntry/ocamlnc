@@ -152,6 +152,12 @@ primreq: $(PRIMREQ)
 clean::
 	rm -f primreq
 
+# Scan C object files for imported symbols
+
+mkdll: mkdll.cmo
+	$(CAMLC) -o mkdll ../utils/config.cmo ../utils/clflags.cmo ../utils/misc.cmo ../utils/ccomp.cmo mkdll.cmo
+
+
 # Common stuff
 
 .SUFFIXES:
