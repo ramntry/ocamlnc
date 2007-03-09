@@ -15,7 +15,7 @@ clean:
 	rm -f plugin_ext2.ml
 
 main: api.cmx main.cmx
-	$(CAMLOPT) -o main dynlink.cmxa api.cmx main.cmx
+	$(CAMLOPT) -o main -linkall dynlink.cmxa api.cmx main.cmx
 
 main_ext: api.cmx main.cmx factorial.s.$(O)
 	$(CAMLOPT) -o main_ext dynlink.cmxa api.cmx main.cmx factorial.s.$(O)
