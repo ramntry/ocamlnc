@@ -63,10 +63,12 @@ and cmxa_magic_number = "Caml1999Z010"
 
 type value_approximation
 
+type subunit = bool * string
+
 type unit_infos =
   { mutable ui_name: string;                    (* Name of unit implemented *)
     mutable ui_symbol: string;            (* Prefix for symbols *)
-    mutable ui_defines: string list;      (* Unit and sub-units implemented *)
+    mutable ui_defines: subunit list;      (* Unit and sub-units implemented *)
     mutable ui_imports_cmi: (string * Digest.t) list; (* Interfaces imported *)
     mutable ui_imports_cmx: (string * Digest.t) list; (* Infos imported *)
     mutable ui_approx: value_approximation;     (* Approx of the structure *)
@@ -226,7 +228,9 @@ let loadunits priv filename units state =
   let dll = dll_filename filename in
   if not (Sys.file_exists dll) then raise (Error (File_not_found dll));
   
-  let defines = List.flatten (List.map (fun (ui,_) -> ui.ui_defines) units) in
+  let defines = 
+    List.map snd (
+      List.flatten (List.map (fun (ui,_) -> ui.ui_defines) units)) in
   let s = ndl_open priv dll ("_shared_startup"::defines) in
   if Obj.repr s <> Obj.repr () then raise (Error (Cannot_open_dll s));
   
