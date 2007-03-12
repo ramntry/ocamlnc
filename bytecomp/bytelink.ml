@@ -462,6 +462,8 @@ let build_custom_runtime prim_name exec_name =
          file is created in the current working directory. *)
       remove_file
         (Filename.chop_suffix (Filename.basename prim_name) ".c" ^ ".obj");
+      remove_file (Filename.chop_suffix exec_name ".exe" ^ ".lib");
+      remove_file (Filename.chop_suffix exec_name ".exe" ^ ".exp");
       if retcode <> 0
       then retcode
       else Ccomp.merge_manifest exec_name

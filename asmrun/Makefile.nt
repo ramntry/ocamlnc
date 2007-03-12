@@ -16,7 +16,7 @@
 include ../config/Makefile
 
 CC=$(NATIVECC)
-CFLAGS=-I../byterun -DNATIVE_CODE -DTARGET_$(ARCH) -DSYS_$(SYSTEM) $(NATIVECCCOMPOPTS)
+CFLAGS=-I../byterun -DIN_OCAMLRUN -DNATIVE_CODE -DTARGET_$(ARCH) -DSYS_$(SYSTEM) $(NATIVECCCOMPOPTS)
 
 COBJS=startup.$(O) main.$(O) fail.$(O) roots.$(O) signals.$(O) \
   misc.$(O) freelist.$(O) major_gc.$(O) minor_gc.$(O) memory.$(O) alloc.$(O) \

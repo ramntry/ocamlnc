@@ -26,44 +26,40 @@ COMMONOBJS=interp.o misc.o stacks.o fix_code.o startup.o \
   win32.o printexc.o callback.o debugger.o weak.o compact.o \
   finalise.o custom.o backtrace.o globroots.o dynlink.o
 
-DOBJS=$(COMMONOBJS:.o=.$(DO)) prims.$(DO)
-SOBJS=$(COMMONOBJS:.o=.$(SO)) main.$(SO)
-DBGOBJS=$(COMMONOBJS:.o=.$(DBGO)) prims.$(DBGO) main.$(DBGO) instrtrace.$(DBGO)
-
+OBJS=$(COMMONOBJS:.o=.$(O)) exports.$(O) main.$(O)
+DBGOBJS=$(COMMONOBJS:.o=.$(DBGO)) prims.$(DBGO) exports.$(O) main.$(DBGO) instrtrace.$(DBGO)
 
 PRIMS=alloc.c array.c compare.c extern.c floats.c gc_ctrl.c hash.c \
   intern.c interp.c ints.c io.c lexing.c md5.c meta.c obj.c parsing.c \
   signals.c str.c sys.c terminfo.c callback.c weak.c finalise.c stacks.c \
   dynlink.c
 
+EXPORTS=$(COMMONOBJS:.o=.c)
+
 PUBLIC_INCLUDES=alloc.h callback.h config.h custom.h fail.h intext.h \
   memory.h misc.h mlvalues.h printexc.h signals.h compatibility.h
 
-all: ocamlrun.exe libcamlrun.$(A)
+all: ocamlrun.exe libcamlrun.$(A) ocamlrun.$(A)
 
-#ocamlrun.exe: ocamlrun.dll main.$(DO)
-#	$(call MKEXE,ocamlrun.exe,main.$(DO) ocamlrun.$(A))
+ocamlrun.exe: libcamlrun.$(A) prims.$(O) main.$(O)
+	$(call MKEXE,ocamlrun.exe,main.$(O) prims.$(O) libcamlrun.$(A))
 
-ocamlrun.exe: libcamlrun.$(A) prims.$(SO) main.$(SO)
-	$(call MKEXE,ocamlrun.exe,main.$(SO) prims.$(SO) libcamlrun.$(A))
+libcamlrun.$(A): $(OBJS)
+	$(call MKLIB,libcamlrun.$(A),$(OBJS))
 
-#ocamlrun.dll: $(DOBJS)
-#	$(call MKDLL,ocamlrun.dll,ocamlrun.$(A),$(DOBJS) $(BYTECCLIBS))
+ocamlrun.$(A): caml_stubs.$(O)
+	$(call MKLIB,ocamlrun.$(A),caml_stubs.$(O))
 
-libcamlrun.$(A): $(SOBJS)
-	$(call MKLIB,libcamlrun.$(A),$(SOBJS))
-
-#ocamlrund.exe: opnames.h $(DBGOBJS)
-#	$(call MKEXE,ocamlrund.exe,$(BYTECCDBGCOMPOPTS) $(DBGOBJS))
+ocamlrund.exe: opnames.h $(DBGOBJS)
+	$(call MKEXE,ocamlrund.exe,$(BYTECCDBGCOMPOPTS) $(DBGOBJS))
 
 
 install:
 	cp ocamlrun.exe $(BINDIR)/ocamlrun.exe
-	cp ocamlrun.dll $(BINDIR)/ocamlrun.dll
-	cp ocamlrun.$(A) $(LIBDIR)/ocamlrun.$(A)
-	cp libcamlrun.$(A) $(LIBDIR)/libcamlrun.$(A)
 	test -d $(LIBDIR)/caml || mkdir -p $(LIBDIR)/caml
 	for i in $(PUBLIC_INCLUDES); do sed -f ../tools/cleanup-header $$i > $(LIBDIR)/caml/$$i; done
+	cp ocamlrun.$(A) $(LIBDIR)/ocamlrun.$(A)
+	cp libcamlrun.$(A) $(LIBDIR)/libcamlrun.$(A)
 
 clean:
 	rm -f *.exe *.dll *.$(O) *.$(A)
@@ -72,6 +68,11 @@ clean:
 primitives : $(PRIMS)
 	sed -n -e "s/CAMLprim value \([a-z0-9_][a-z0-9_]*\).*/\1/p" \
 	    $(PRIMS) > primitives
+
+exports: $(EXPORTS)
+	$(CPP) -DCOMPUTE_EXPORTS $(EXPORTS) \
+	| sed -n -e "s/CAMLexport .*\(caml[a-zA-Z0-9_]*\).*/\1/p" \
+	| sort | uniq > exports
 
 prims.c : primitives
 	(echo '#include "mlvalues.h"'; \
@@ -83,6 +84,22 @@ prims.c : primitives
 	 echo 'char * caml_names_of_builtin_cprim[] = {'; \
 	 sed -e 's/.*/	"&",/' primitives; \
 	 echo '	 0 };') > prims.c
+
+exports.c: exports
+	(echo '#include "exports.h"'; \
+	 sed -e 's/.*/extern void *&;/' exports; \
+	 sed -e 's/.*/void *_imp__& = (void*)(\&&);/' exports; \
+	 echo 'void * caml_export_symbols[] = {'; \
+	 sed -e 's/.*/	(void*)(\&&),/' exports; \
+	 echo '	 0 };'; \
+	 echo 'char * caml_names_of_export_symbols[] = {'; \
+	 sed -e 's/.*/	"_imp__&",/' exports; \
+	 echo '	 0 };') > exports.c
+
+
+caml_stubs.c: exports
+	sed -e 's/.*/__declspec(dllexport) void *_imp__& = 0;/' exports \
+	> caml_stubs.c
 
 opnames.h : instruct.h
 	sed -e '/\/\*/d' \
@@ -99,23 +116,22 @@ jumptbl.h : instruct.h
 version.h : ../VERSION
 	echo "#define OCAML_VERSION \"`head -1 ../VERSION`\"" >version.h
 
-main.$(DO): main.c
-	$(CC) $(DLLCCCOMPOPTS) -c main.c
-	mv main.$(O) main.$(DO)
+.SUFFIXES: .$(O) .$(DBGO)
 
-.SUFFIXES: .$(DO) .$(SO) .$(DBGO)
-
-.c.$(DO):
-	$(CC) $(CFLAGS) $(DLLCCCOMPOPTS) -c $<
-	mv $*.$(O) $*.$(DO)
-.c.$(SO):
+.c.$(O):
 	$(CC) $(CFLAGS) $(BYTECCCOMPOPTS) -c $<
-	mv $*.$(O) $*.$(SO)
+
 .c.$(DBGO):
 	$(CC) $(CFLAGS) $(BYTECCDBGCOMPOPTS) -c $<
 	mv $*.$(O) $*.$(DBGO)
 
 .depend.nt: .depend
-	sed -e '/\.d\.o/q' -e 's/^\(.*\)\.o:/\1.$$(DO) \1.$$(SO) \1.$$(DBGO):/' .depend > .depend.nt
+	rm -f .depend.win32
+	echo "win32.o: win32.c fail.h compatibility.h misc.h config.h \\" >> .depend.win32
+	echo " ../config/m.h ../config/s.h mlvalues.h memory.h gc.h \\" >> .depend.win32
+	echo " major_gc.h freelist.h minor_gc.h osdeps.h signals.h exports.h" >> .depend.win32
+	cat .depend >> .depend.win32
+	sed -e '/\.d\.o/q' -e 's/^\(.*\)\.o:/\1.$$(O) \1.$$(DBGO):/' .depend.win32 > .depend.nt
+	rm -f .depend.win32
 
 include .depend.nt

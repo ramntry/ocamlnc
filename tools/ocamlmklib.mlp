@@ -197,9 +197,10 @@ let prepostfix pre name post =
 let build_libs () =
   if !c_objs <> [] then begin
     if !dynlink then begin
+      (* TODO: delete tmp_implib.{lib,exp} *)
       let retcode = command
         (mkdll (prepostfix "dll" !output_c ext_dll)
-               !implib
+               (if !implib = "" then "tmp_implib.lib" else !implib)
                (sprintf "%s %s %s %s %s"
                     (String.concat " " !c_objs)
                     (String.concat " " !c_opts)

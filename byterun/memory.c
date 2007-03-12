@@ -369,7 +369,7 @@ void caml_initialize (value *fp, value val)
    unless you are sure the value being overwritten is not a shared block and
    the value being written is not a young block. */
 /* [caml_modify] never calls the GC. */
-void caml_modify (value *fp, value val)
+CAMLexport void caml_modify (value *fp, value val)
 {
   Modify (fp, val);
 }

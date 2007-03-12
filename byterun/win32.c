@@ -32,6 +32,10 @@
 #include "osdeps.h"
 #include "signals.h"
 
+#ifndef NATIVE_CODE
+#include "exports.h"
+#endif
+
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
 #endif
@@ -121,6 +125,21 @@ char * caml_search_dll_in_path(struct ext_table * path, char * name)
   return res;
 }
 
+static void patch_import_symbols(void *handle)
+{
+#ifndef NATIVE_CODE
+  int i;
+  void *sym;
+  for (i = 0; caml_names_of_export_symbols[i] != NULL; i++) {
+    sym = caml_dlsym(handle, caml_names_of_export_symbols[i]);
+    if (NULL == sym)
+      caml_fatal_error_arg("Fatal error: cannot patch symbol %s\n", 
+			    caml_names_of_export_symbols[i]);
+    *((void **) sym) = caml_export_symbols[i];
+  }
+#endif
+}
+
 void * caml_dlopen(char * libname, int for_execution)
 {
   HMODULE m;
@@ -129,6 +148,7 @@ void * caml_dlopen(char * libname, int for_execution)
   /* Under Win 95/98/ME, LoadLibraryEx can fail in cases where LoadLibrary
      would succeed.  Just try again with LoadLibrary for good measure. */
   if (m == NULL) m = LoadLibrary(libname);
+  if (NULL != m) patch_import_symbols(m);
   return (void *) m;
 }
 
