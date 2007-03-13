@@ -58,7 +58,7 @@ libunix.$(A): $(OBJS)
 	OCAMLLIB=../../byterun $(MKLIB) -o unix $(OBJS) -ldopt $(LIBS)
 
 unix.cma: $(MLOBJS)
-	$(MKLIB) -o unix -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(MLOBJS)
+	$(MKLIB) -o unix -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(MLOBJS) -cclib $(LIBS)
 
 unix.cmxa: $(MLOBJS:.cmo=.cmx)
 	$(MKLIB) -o unix -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(MLOBJS:.cmo=.cmx) -cclib $(LIBS)
