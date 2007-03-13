@@ -55,13 +55,13 @@ all: libunix.$(A) unix.cma
 allopt: libunix.$(A) unix.cmxa
 
 libunix.$(A): $(OBJS)
-	OCAMLLIB=../../byterun $(MKLIB) -o unix $(OBJS) $(LIBS)
+	OCAMLLIB=../../byterun $(MKLIB) -o unix $(OBJS) -ldopt $(LIBS)
 
 unix.cma: $(MLOBJS)
 	$(MKLIB) -o unix -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(MLOBJS)
 
 unix.cmxa: $(MLOBJS:.cmo=.cmx)
-	$(MKLIB) -o unix -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(MLOBJS:.cmo=.cmx)
+	$(MKLIB) -o unix -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(MLOBJS:.cmo=.cmx) -cclib $(LIBS)
 	OCAMLLIB=../../byterun $(CAMLOPT) -shared unix.cmxa
 
 partialclean:
