@@ -99,7 +99,7 @@ let new_reloc s offset absolute =
   let lbl = new_label () in
   relocs := (escape_symbol s,"L" ^ string_of_int lbl,offset,absolute) :: 
     !relocs;
-  `{emit_label lbl}:\n`
+  `{emit_label lbl} LABEL DWORD\n`
 
 let emit_call s =
   if is_local_symbol s 
@@ -927,6 +927,9 @@ let emit_item = function
       `	REAL4	{emit_float f}\n`
   | Cdouble f ->
       `	REAL8	{emit_float f}\n`
+  | Csymbol_address s when is_extern_symbol s ->
+      `	DWORD	0\n`;
+      new_reloc s (-4) false
   | Csymbol_address s ->
       `	DWORD	{emit_use_symbol s}\n`
   | Clabel_address lbl ->
