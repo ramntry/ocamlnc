@@ -55,7 +55,7 @@ all: libunix.$(A) unix.cma
 allopt: libunix.$(A) unix.cmxa
 
 libunix.$(A): $(OBJS)
-	$(MKLIB) -o unix $(OBJS) -ldopt "$(LIBS) ../../byterun/ocamlrun.$(A)"
+	$(MKLIB) -o unix $(OBJS) $(LIBS) -ldopt "../../byterun/ocamlrun.$(A)"
 
 unix.cma: $(MLOBJS)
 	$(MKLIB) -o unix -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(MLOBJS)
