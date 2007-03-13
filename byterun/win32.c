@@ -32,6 +32,7 @@
 #include "osdeps.h"
 #include "signals.h"
 #include "exports.h"
+#include "sys.h"
 
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
