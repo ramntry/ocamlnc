@@ -38,10 +38,10 @@ extern sighandler caml_win32_signal(int sig, sighandler action);
 
 CAMLexport intnat volatile caml_signals_are_pending = 0;
 CAMLexport intnat volatile caml_pending_signals[NSIG];
-CAMLexport int volatile caml_something_to_do = 0;
+int volatile caml_something_to_do = 0;
 int volatile caml_force_major_slice = 0;
 value caml_signal_handlers = 0;
-CAMLexport void (* volatile caml_async_action_hook)(void) = NULL;
+void (* volatile caml_async_action_hook)(void) = NULL;
 
 static void caml_process_pending_signals(void)
 {

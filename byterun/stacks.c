@@ -22,12 +22,12 @@
 #include "mlvalues.h"
 #include "stacks.h"
 
-CAMLexport value * caml_stack_low;
-CAMLexport value * caml_stack_high;
-CAMLexport value * caml_stack_threshold;
-CAMLexport value * caml_extern_sp;
-CAMLexport value * caml_trapsp;
-CAMLexport value * caml_trap_barrier;
+value * caml_stack_low;
+value * caml_stack_high;
+value * caml_stack_threshold;
+value * caml_extern_sp;
+value * caml_trapsp;
+value * caml_trap_barrier;
 value caml_global_data;
 
 uintnat caml_max_stack_size;            /* also used in gc_ctrl.c */

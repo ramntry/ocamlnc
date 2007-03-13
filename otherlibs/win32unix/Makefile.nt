@@ -55,13 +55,14 @@ all: libunix.$(A) unix.cma
 allopt: libunix.$(A) unix.cmxa
 
 libunix.$(A): $(OBJS)
-	$(MKLIB) -o unix $(OBJS) $(LIBS) -ldopt "../../byterun/ocamlrun.$(A)"
+	OCAMLLIB=../../byterun $(MKLIB) -o unix $(OBJS) $(LIBS)
 
 unix.cma: $(MLOBJS)
 	$(MKLIB) -o unix -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(MLOBJS)
 
 unix.cmxa: $(MLOBJS:.cmo=.cmx)
 	$(MKLIB) -o unix -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(MLOBJS:.cmo=.cmx)
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared unix.cmxa
 
 partialclean:
 	rm -f *.cm*
@@ -77,7 +78,7 @@ install:
 	cp unixsupport.h $(LIBDIR)/caml
 
 installopt:
-	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.$(A) $(LIBDIR)
+	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.$(A) unix.so $(LIBDIR)
 
 $(UNIX_FILES) $(UNIX_CAML_FILES): %: ../unix/%
 	cp ../unix/$* $*

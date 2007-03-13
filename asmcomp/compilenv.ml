@@ -47,6 +47,7 @@ type unit_infos =
     mutable ui_curry_fun: int list;             (* Currying functions needed *)
     mutable ui_apply_fun: int list;             (* Apply functions needed *)
     mutable ui_send_fun: int list;              (* Send functions needed *)
+    mutable ui_primitives: string list;         (* C primitives defined *)
     mutable ui_force_link: bool }               (* Always linked *)
 
 (* Each .a library has a matching .cmxa file that provides the following
@@ -70,6 +71,7 @@ let current_unit =
     ui_curry_fun = [];
     ui_apply_fun = [];
     ui_send_fun = [];
+    ui_primitives = [];
     ui_force_link = false }
 
 let symbolname_for_pack pack name =
@@ -97,6 +99,7 @@ let reset ?packname name =
   current_unit.ui_curry_fun <- [];
   current_unit.ui_apply_fun <- [];
   current_unit.ui_send_fun <- [];
+  current_unit.ui_primitives <- [];
   current_unit.ui_force_link <- false
 
 let current_unit_infos () =

@@ -145,6 +145,8 @@ let build_package_cmx members cmxfile =
           union(List.map (fun info -> info.ui_apply_fun) units);
       ui_send_fun =
           union(List.map (fun info -> info.ui_send_fun) units);
+      ui_primitives =
+          union(List.map (fun info -> info.ui_primitives) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
     } in

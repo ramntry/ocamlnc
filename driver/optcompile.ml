@@ -102,6 +102,11 @@ let implementation ppf sourcefile outputprefix =
       +++ Simplif.simplify_lambda
       +++ print_if ppf Clflags.dump_lambda Printlambda.lambda
       ++ Asmgen.compile_implementation outputprefix ppf;
+
+      let prims = List.filter (fun s -> s.[0] <> '%') 
+	  !Translmod.nprimitive_declarations in
+      (Compilenv.current_unit_infos()).Compilenv.ui_primitives <- prims;
+
       Compilenv.save_unit_info (outputprefix ^ ".cmx");
     end;
     Warnings.check_fatal ();

@@ -39,16 +39,13 @@ EXPORTS=$(COMMONOBJS:.o=.c)
 PUBLIC_INCLUDES=alloc.h callback.h config.h custom.h fail.h intext.h \
   memory.h misc.h mlvalues.h printexc.h signals.h compatibility.h
 
-all: ocamlrun.exe libcamlrun.$(A) ocamlrun.$(A)
+all: ocamlrun.exe libcamlrun.$(A) ocamlrun.$(O)
 
 ocamlrun.exe: libcamlrun.$(A) prims.$(O) main.$(O)
 	$(call MKEXE,ocamlrun.exe,main.$(O) prims.$(O) libcamlrun.$(A))
 
 libcamlrun.$(A): $(OBJS)
 	$(call MKLIB,libcamlrun.$(A),$(OBJS))
-
-ocamlrun.$(A): caml_stubs.$(O)
-	$(call MKLIB,ocamlrun.$(A),caml_stubs.$(O))
 
 ocamlrund.exe: opnames.h $(DBGOBJS)
 	$(call MKEXE,ocamlrund.exe,$(BYTECCDBGCOMPOPTS) $(DBGOBJS))
@@ -58,7 +55,7 @@ install:
 	cp ocamlrun.exe $(BINDIR)/ocamlrun.exe
 	test -d $(LIBDIR)/caml || mkdir -p $(LIBDIR)/caml
 	for i in $(PUBLIC_INCLUDES); do sed -f ../tools/cleanup-header $$i > $(LIBDIR)/caml/$$i; done
-	cp ocamlrun.$(A) $(LIBDIR)/ocamlrun.$(A)
+	cp ocamlrun.$(O) $(LIBDIR)/ocamlrun.$(O)
 	cp libcamlrun.$(A) $(LIBDIR)/libcamlrun.$(A)
 
 clean:
@@ -71,7 +68,7 @@ primitives : $(PRIMS)
 
 exports: $(EXPORTS)
 	$(CPP) -DCOMPUTE_EXPORTS $(EXPORTS) \
-	| sed -n -e "s/CAMLexport .*\(caml[a-zA-Z0-9_]*\).*/\1/p" \
+	| sed -n -e "s/CAMLexport [^,]*\(caml[a-zA-Z0-9_]*\).*/\1/p" \
 	| sort | uniq > exports
 
 prims.c : primitives
@@ -97,9 +94,9 @@ exports.c: exports
 	 echo '	 0 };') > exports.c
 
 
-caml_stubs.c: exports
+ocamlrun.c: exports
 	sed -e 's/.*/__declspec(dllexport) void *_imp__& = 0;/' exports \
-	> caml_stubs.c
+	> ocamlrun.c
 
 opnames.h : instruct.h
 	sed -e '/\/\*/d' \

@@ -33,6 +33,15 @@ and rpath = ref []          (* rpath options *)
 and implib = ref ""         (* windows implib flag *)
 and verbose = ref false
 
+let standard_library =
+  try
+    Sys.getenv "OCAMLLIB"
+  with Not_found ->
+  try
+    Sys.getenv "CAMLLIB"
+  with Not_found ->
+    libdir
+
 let starts_with s pref =
   String.length s >= String.length pref &&
   String.sub s 0 (String.length pref) = pref
@@ -197,6 +206,14 @@ let prepostfix pre name post =
 let build_libs () =
   if !c_objs <> [] then begin
     if !dynlink then begin
+      (match system with
+	 | "win32" -> 
+	     ld_opts := 
+	       (Filename.concat standard_library 
+		  ("ocamlrun" ^ ext_obj)) 
+	     :: !ld_opts
+	 | _ -> ());
+
       (* TODO: delete tmp_implib.{lib,exp} *)
       let retcode = command
         (mkdll (prepostfix "dll" !output_c ext_dll)

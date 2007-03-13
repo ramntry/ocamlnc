@@ -224,6 +224,26 @@ let generic_functions ppf shared units_list =
       curry
 
 
+module StringSet = Set.Make(String)
+
+let all_primitives units main =
+  let prims = 
+    List.fold_right 
+      (fun ui -> List.fold_right StringSet.add ui.ui_primitives)
+      units StringSet.empty in
+
+  let prims =
+    if main then
+      List.fold_right StringSet.add 
+	[ "caml_string_equal"; "caml_modify"   ]
+	(* these primitives are not declared as externals in stdlib
+	   modules *)
+	prims
+    else
+      Array.fold_right StringSet.remove Runtimedef.builtin_primitives prims in
+
+  StringSet.elements prims
+
 let make_startup_file ppf filename units_list =
   Clflags.closed := false;
   let compile_phrase p = Asmgen.compile_phrase ppf p in
@@ -238,9 +258,8 @@ let make_startup_file ppf filename units_list =
     List.map snd (List.filter (fun (c,_) -> c) subunits) in
   let name_list = List.map snd subunits in
   compile_phrase (Cmmgen.entry_point name_list);
-  let _,genfuns =
-    generic_functions ppf false (List.map (fun (info,_,_) -> info) units_list)
-  in
+  let units = List.map (fun (info,_,_) -> info) units_list in
+  let _,genfuns = generic_functions ppf false units in
   genfuns();
   Array.iter
     (fun name -> compile_phrase (Cmmgen.predef_exception name))
@@ -262,20 +281,17 @@ let make_startup_file ppf filename units_list =
   compile_phrase (Cmmgen.sym_table ("_startup" :: name_list));
   compile_phrase (Cmmgen.reloc_table closed_name_list);
 
-  let defs,undefs = Ccomp.coff_symbols (runtime_lib () :: !Clflags.ccobjs) in
-  Compilenv.extra_imports := undefs;
-  Compilenv.extra_exports := defs;
+  Compilenv.extra_exports := all_primitives units true;
   Emit.end_assembly();
   close_out oc
 
-let make_shared_startup_file ppf filename genfuns defs undefs =
+let make_shared_startup_file ppf filename genfuns prims =
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_shared_startup"; 
   (* set the name of the "current" compunit *)
-  Compilenv.extra_imports := undefs;
-  Compilenv.extra_exports := defs;
+  Compilenv.extra_exports := prims;
   Emit.begin_assembly();
   genfuns();
   Emit.end_assembly();
@@ -335,10 +351,13 @@ let call_linker_shared startup units file_list output_name =
 	);
 	close_out def;
 	Printf.sprintf
-	  "link /nologo /dll /noentry /out:%s /implib:%s /def:%s %s kernel32.lib %s"
+	  "link /nologo /dll /out:%s /implib:%s /def:%s %s kernel32.lib %s %s"
 	  (Filename.quote output_name)
 	  (Filename.quote imp_name)
 	  (Filename.quote def_name)
+	  (Filename.quote 
+	     (Filename.concat Config.standard_library 
+		("ocamlrun" ^ Config.ext_obj)))
 	  files
 	  (if !Clflags.verbose then "" else ">NUL")
 	  ,
@@ -374,14 +393,13 @@ let compile_shared ppf file =
   let objfiles = extraobjs @ objfiles in
   let need,genfuns = generic_functions ppf true units in
 
-  let defs,undefs = Ccomp.coff_symbols extraobjs in
-
-  if need || defs <> [] || undefs <> [] then begin
+  let prims = all_primitives units false in
+  if need || prims <> [] then begin
     let asmfile =
       if !Clflags.keep_startup_file
       then prefixname ^ ".startup" ^ ext_asm
       else Filename.temp_file "camlasm" ext_asm in
-    make_shared_startup_file ppf asmfile genfuns defs undefs;
+    make_shared_startup_file ppf asmfile genfuns prims;
     let startup_objfile = prefixname ^ ".startup" ^ ext_obj in
     if Proc.assemble_file asmfile startup_objfile <> 0
     then raise(Error(Assembler_error asmfile));

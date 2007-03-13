@@ -1054,46 +1054,19 @@ let end_assembly() =
       efa_def_label = (fun l -> `{emit_label l}	LABEL	DWORD\n`);
       efa_string = (fun s -> emit_bytes_directive  "	BYTE	" (s ^ "\000")) };
 
-  let exports = List.map escape_symbol (StringSet.elements !symbols_defined) in
-
-  let unexports =
-    List.map escape_symbol (system_symbols_data @ system_symbols_proc) in
-  let extra_exports =
-    List.filter (fun s -> not (List.mem s unexports))
-      !Compilenv.extra_exports
-  in
+  let exports = List.map escape_symbol 
+    (StringSet.elements !symbols_defined @ !Compilenv.extra_exports) in
 
   List.iter
-    (fun s -> `	EXTERN {emit_string s}: PROC\n`)
-    extra_exports;
+    (fun s -> `	EXTERN {emit_symbol s}: PROC\n`)
+    !Compilenv.extra_exports;
 
-  emit_symtable (extra_exports @ exports);
+  emit_symtable exports;
 
   _data ();
   let unit_name = Compilenv.current_unit_name () in
-  let is_startup = unit_name = "_startup" in
-
-  List.iter
-    (fun s ->   
-       if (String.length s > 12 && String.sub s 0 12 = "__imp__caml_") 
-       then begin
-(*	 if !Clflags.verbose then Printf.eprintf "import %s\n" s; *)
-	 `	PUBLIC	{emit_string s}\n`;
-	 let sym = String.sub s 6 (String.length s - 6) in
-	 `{emit_string s}	LABEL DWORD\n`;
-	 if is_startup then
-	   `	DWORD {emit_string sym}\n`
-	 else begin
-	   `	DWORD 0\n`;
-	   relocs := (sym,s,0,true) :: !relocs;
-	 end
-       end
-(*       else if !Clflags.verbose then Printf.eprintf "don't import %s\n" s *)
-    )
-    !Compilenv.extra_imports;
 
   Compilenv.extra_exports := [];
-  Compilenv.extra_imports := [];
 
   emit_reloctable !relocs;
   relocs := [];

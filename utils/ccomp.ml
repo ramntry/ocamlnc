@@ -148,9 +148,12 @@ module CoffSymbolsReader = struct
   let read_obj ic defs undefs =
     let base = pos_in ic in
     let buf = read ic 20 in
+    if int16 buf 2 = 0xffff then ()
+    else begin
     (match int16 buf 0 with
        | 0x14c -> ()  (* i386 or later *)
-       | _ -> raise Error);
+       | 0 -> () (* any *)
+       | i -> raise Error);
     let symtable = int32 buf 8 in
     let symcount = int32 buf 12 in
 
@@ -168,15 +171,18 @@ module CoffSymbolsReader = struct
       else let buf = read ic 18 in
       let sect = int8 buf 12 and cl = int8 buf 16 and aux = int8 buf 17
 						  and v = int32 buf 8 in
-      if cl = 2 then
-	if sect <> 0 || v <> 0 then defs := StringSet.add (name buf) !defs
-	else undefs := StringSet.add (name buf) !undefs
-      else ();
+      if cl = 2 then begin
+	let s = name buf in
+	if s.[0] <> '\127' then
+	  if sect <> 0 || v <> 0 then defs := StringSet.add s !defs
+	  else undefs := StringSet.add (name buf) !undefs
+      end;
       seek_in ic (pos_in ic + 18 * aux);
       read_symbols strtbl (rest - aux - 1) in
     
     seek_in ic (base + symtable);
-    read_symbols strtbl symcount
+    read_symbols strtbl symcount;
+    end
       
   let magic_lib = "!<arch>\n"
 
@@ -201,10 +207,13 @@ module CoffSymbolsReader = struct
     try
       let ic = open_in_bin filename in
       try
+	let islib = 
+	  in_channel_length ic > String.length magic_lib
+	  && read ic (String.length magic_lib) = magic_lib in
 	if !Clflags.verbose
-	then Printf.printf "(read symbols from %s)\n" filename;
-	if in_channel_length ic > String.length magic_lib
-	  && read ic (String.length magic_lib) = magic_lib 
+	then Printf.printf "(read symbols from %s (islib=%B))\n" 
+	  filename islib;
+	if islib
 	then read_lib ic defs undefs
 	else (seek_in ic 0; read_obj ic defs undefs);
 	close_in ic

@@ -23,4 +23,6 @@ val quote_files: string list -> string
 val make_link_options: string list -> string
 val merge_manifest: string -> int
 
+(*
 val coff_symbols: string list -> string list * string list
+*)

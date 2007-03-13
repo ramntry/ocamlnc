@@ -5,10 +5,12 @@
 #include "callback.h"
 #include "alloc.h"
 #include "natdynlink.h"
+#include "osdeps.h"
 
 #include <stdio.h>
 #include <string.h>
 
+/*
 #ifdef _WIN32
 
 #include <windows.h>
@@ -18,18 +20,15 @@
 static void * dlopen(char * libname, int flags)
 {
   HMODULE m;
-  /* flags currently ignored */
   m = LoadLibraryEx(libname, NULL, 0);
   if (m == NULL) m = LoadLibrary(libname);
   return (void *) m;
 }
 
-/* 
 static void dlclose(void * handle)
 {
   FreeLibrary((HMODULE) handle);
 } 
-*/
 
 static void * dlsym(void * handle, char * name)
 {
@@ -43,6 +42,8 @@ static void * dlsym(void * handle, char * name)
 #include <dlfcn.h>
 
 #endif
+
+*/
 
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -88,6 +89,8 @@ static void allow_write(char *begin, char *end) {
 static void *staticsym(char *name) { return NULL; }
 
 #else
+
+#include <dlfcn.h>
 
 static void *staticsym(char *name) {
   static void *glb = NULL;
@@ -164,7 +167,7 @@ static void *getsym(void *handle, char *module, char *name, int opt){
   char *fullname = malloc(strlen(module) + strlen(name) + 5);
   void *sym;
   sprintf(fullname, "caml%s%s", module, name);
-  sym = dlsym (handle, fullname);
+  sym = caml_dlsym (handle, fullname);
   if (NULL == sym && !opt) {
     printf("natdynlink: cannot find symbol %s\n", fullname);
     exit(2);
@@ -253,14 +256,16 @@ CAMLprim value caml_natdynlink_open
   void *handle;
 
   handle =
-    dlopen(String_val(filename),
+    caml_dlopen(String_val(filename), 1);
+  /*
 	   (private == Val_true
 	    ? RTLD_NOW
 	    : RTLD_NOW | RTLD_GLOBAL
 	    ));
+  */
   
   if (NULL == handle)
-    CAMLreturn(caml_copy_string(dlerror()));
+    CAMLreturn(caml_copy_string(caml_dlerror()));
 
 #define optsym(n) getsym(handle,unit,n,1)
   while (symbols != Val_unit) {
