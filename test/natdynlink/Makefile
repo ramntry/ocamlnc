@@ -5,9 +5,9 @@ COMPFLAGS=-verbose
 SHARED=-shared -closed -S -dstartup
 #SHARED=-shared
 
-PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_ext2.so plugin_simple.so bug.so
+PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so
 
-all: $(PLUGINS) $(PLUGINS:.so=.cmx) main main_ext mylib.so
+all: $(PLUGINS) $(PLUGINS:.so=.cmx) main mylib.so
 
 clean:
 	rm -f *.so *.o *.cm* main main_ext *.exe *.s *.asm *.obj
