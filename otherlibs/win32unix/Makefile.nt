@@ -68,7 +68,7 @@ partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.$(A) *.dll *.$(O)
+	rm -f *.$(A) *.dll *.$(O) *.so
 	rm -f $(UNIX_FILES) $(UNIX_CAML_FILES)
 
 install:

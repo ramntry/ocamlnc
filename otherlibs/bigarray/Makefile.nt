@@ -22,7 +22,7 @@ CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -I ../win32unix -clos
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
 COMPFLAGS=-warn-error A -g
 
-C_OBJS=bigarray_stubs.obj mmap_win32.obj
+C_OBJS=bigarray_stubs.$(O) mmap_win32.$(O)
 
 CAML_OBJS=bigarray.cmo
 
