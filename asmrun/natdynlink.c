@@ -136,7 +136,7 @@ static void *getsym(void *handle, char *module, char *name, int opt){
     printf("natdynlink: cannot find symbol %s\n", fullname);
     exit(2);
   }
-  /*  printf("%s => %lx\n", fullname, sym); */
+  /* printf("%s => %lx\n", fullname, (uintnat) sym); */
   free(fullname);
   return sym;
 }

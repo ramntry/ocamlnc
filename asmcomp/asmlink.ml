@@ -298,10 +298,43 @@ let make_shared_startup_file ppf filename genfuns prims =
   close_out oc
 
 
+let create_def_file output_name units startup =
+  let def_name = Filename.chop_extension output_name ^ ".def" in
+  let def = open_out def_name in
+  output_string def "EXPORTS\n";
+  List.iter
+    (fun (_,ui) -> 
+       List.iter
+	 (fun suffix -> Printf.fprintf def "caml%s%s\n" ui
+	    suffix)
+	 ["";"__frametable";"__symtable";
+	  "__code_begin";"__code_end";
+	  "__data_begin";"__data_end";
+	  "__reloctable";
+	  "__entry"]
+    )
+    (List.flatten (List.map (fun ui -> ui.ui_defines) units));
+  if startup then (
+    output_string def "caml_shared_startup__frametable\n";
+    output_string def "caml_shared_startup__symtable\n";
+    output_string def "caml_shared_startup__reloctable\n";
+    output_string def "caml_shared_startup__code_begin\n";
+    output_string def "caml_shared_startup__code_end\n";
+  );
+  close_out def;
+  def_name
+
 let call_linker_shared startup units file_list output_name =
   let stdpath = Ccomp.quote_files
     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
        !load_path) in
+  let extra_files = match Config.system with
+    | "win32" | "mingw" -> 
+	[ Filename.concat Config.standard_library 
+	     ("ocamlrun" ^ Config.ext_obj) ]
+    | _ -> [] in
+  let file_list = extra_files @ file_list in
+
   let ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
 
   let cmd,cleanup = match Config.system with
@@ -315,49 +348,27 @@ let call_linker_shared startup units file_list output_name =
 	(fun () -> ())
     | "mingw" ->
 	let files = Ccomp.quote_files (List.rev file_list) in
+	let def_name = create_def_file output_name units startup in
 	Printf.sprintf 
-	  "gcc %s -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  "gcc %s -L. -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive %s"
 	  ccopts
 	  (Filename.quote output_name)
-	  files,
-	(fun () -> ())
+	  files
+	  def_name,
+	(fun () -> if not !Clflags.keep_startup_file then remove_file def_name)
+
     | "win32" ->
 	(* TODO: ccopts *)
 	let files = 
 	  Ccomp.quote_files 
 	    (List.map Ccomp.expand_libname (List.rev file_list)) in
-	let def_name = Filename.chop_extension output_name ^ ".def" in
 	let imp_name = Filename.temp_file "camlimp" "" in
-	let def = open_out def_name in
-	output_string def "EXPORTS\n";
-	List.iter
-	  (fun (_,ui) -> 
-	     List.iter
-	       (fun suffix -> Printf.fprintf def "caml%s%s\n" ui
-		  suffix)
-	       ["";"__frametable";"__symtable";
-		"__code_begin";"__code_end";
-		"__data_begin";"__data_end";
-		"__reloctable";
-		"__entry"]
-	  )
-	  (List.flatten (List.map (fun ui -> ui.ui_defines) units));
-	if startup then (
-	  output_string def "caml_shared_startup__frametable\n";
-	  output_string def "caml_shared_startup__symtable\n";
-	  output_string def "caml_shared_startup__reloctable\n";
-	  output_string def "caml_shared_startup__code_begin\n";
-	  output_string def "caml_shared_startup__code_end\n";
-	);
-	close_out def;
+	let def_name = create_def_file output_name units startup in
 	Printf.sprintf
-	  "link /nologo /dll /out:%s /implib:%s /def:%s %s kernel32.lib %s %s"
+	  "link /nologo /dll /out:%s /implib:%s /def:%s %s kernel32.lib %s"
 	  (Filename.quote output_name)
 	  (Filename.quote imp_name)
 	  (Filename.quote def_name)
-	  (Filename.quote 
-	     (Filename.concat Config.standard_library 
-		("ocamlrun" ^ Config.ext_obj)))
 	  files
 	  (if !Clflags.verbose then "" else ">NUL")
 	  ,
