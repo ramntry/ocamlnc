@@ -1057,15 +1057,9 @@ let end_assembly() =
   let exports = List.map escape_symbol 
     (StringSet.elements !symbols_defined @ !Compilenv.extra_exports) in
 
-  List.iter
-    (fun s -> `	EXTERN {emit_symbol s}: PROC\n`)
-    !Compilenv.extra_exports;
+  List.iter _extern_proc !Compilenv.extra_exports;
 
   emit_symtable exports;
-
-  _data ();
-  let unit_name = Compilenv.current_unit_name () in
-
   Compilenv.extra_exports := [];
 
   emit_reloctable !relocs;

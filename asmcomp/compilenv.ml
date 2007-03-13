@@ -239,5 +239,4 @@ let report_error ppf = function
       fprintf ppf "%s@ contains the description for unit@ %s" filename modname
 
 
-let extra_imports = ref []
 let extra_exports = ref []

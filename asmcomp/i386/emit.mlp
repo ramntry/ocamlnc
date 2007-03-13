@@ -1169,31 +1169,12 @@ let end_assembly() =
         else emit_bytes_directive  "	.byte	" s) };
   if macosx then emit_external_symbols ();
 
-  _data ();
-  List.iter
-    (fun s ->   
-       if (String.length s > 12 && String.sub s 0 12 = "__imp__caml_") 
-       then begin
-	 if !Clflags.verbose then Printf.eprintf "import %s\n" s;
-	 `	.globl	{emit_string s}\n`;
-	 `{emit_string s}:	.long 0\n`;
-	 relocs := (String.sub s 6 (String.length s - 6),s,0,true) :: !relocs;
-       end else
-	 if !Clflags.verbose then Printf.eprintf "don't import %s\n" s
-    )
-    !Compilenv.extra_imports;
+  let exports = List.map escape_symbol 
+    (!exported_symbols @ !Compilenv.extra_exports) in
 
-  let exports = List.map escape_symbol !exported_symbols in
-
-  let unexports = List.map escape_symbol system_symbols in
-  let extra_exports =
-    List.filter (fun s -> not (List.mem s unexports)) !Compilenv.extra_exports
-  in
-
+  emit_symtable exports;
   Compilenv.extra_exports := [];
-  Compilenv.extra_imports := [];
 
-  emit_symtable (extra_exports @ exports);
   exported_symbols := [];
   emit_reloctable !relocs;
   relocs := []

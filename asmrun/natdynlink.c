@@ -10,42 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/*
-#ifdef _WIN32
-
-#include <windows.h>
-#define RTLD_NOW 0
-#define RTLD_GLOBAL 0
-
-static void * dlopen(char * libname, int flags)
-{
-  HMODULE m;
-  m = LoadLibraryEx(libname, NULL, 0);
-  if (m == NULL) m = LoadLibrary(libname);
-  return (void *) m;
-}
-
-static void dlclose(void * handle)
-{
-  FreeLibrary((HMODULE) handle);
-} 
-
-static void * dlsym(void * handle, char * name)
-{
-  return (void *) GetProcAddress((HMODULE) handle, name);
-}
-
-#define dlerror winerror
-
-#else
-
-#include <dlfcn.h>
-
-#endif
-
-*/
-
-
 #if defined(_WIN32) || defined(__CYGWIN__)
 
 #include <windows.h>
