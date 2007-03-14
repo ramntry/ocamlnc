@@ -62,7 +62,8 @@ let slot_for_getglobal id =
     raise(Error(Undefined_global(Ident.name id)))
 
 let slot_for_setglobal id =
-  enter_numtable global_table id
+  if Tbl.mem id !global_table.num_tbl then 0xffff
+  else enter_numtable global_table id
 
 let slot_for_literal cst =
   let n = incr_numtable global_table in
