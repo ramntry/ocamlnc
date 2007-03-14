@@ -15,8 +15,10 @@
 
 (* Dynamic loading of .cmx files *)
 
-external ndl_open: bool -> string -> string list -> 
-  string = "caml_natdynlink_open"
+type handle
+
+external ndl_open: string -> handle * string = "caml_natdynlink_open"
+external ndl_run: handle -> string -> unit = "caml_natdynlink_run"
 external ndl_getmap : unit -> string = "caml_natdynlink_getmap"
 external ndl_globals_inited : unit -> int = "caml_natdynlink_globals_inited"
 
@@ -37,77 +39,45 @@ type error =
   | File_not_found of string
   | Cannot_open_dll of string
 
-(*
-    Not_a_cmx_file of string
-  | Corrupted_unit_info of string
-  | Inconsistent_interface of string * string * string
-  | Inconsistent_implementation of string * string * string
-  | Unavailable_unit of string
-  | Not_yet_available_unit of string
-  | Exception of exn
-  | Reloading_symbol of string * string * string
-
-  | Unsafe_file
-  | Linking_error of string * string
-  | File_not_found of string
-  | Cannot_open_dll of string
-*)
-
-
 exception Error of error
 
 (* Copied from other places to avoid dependencies *)
 
-let cmx_magic_number = "Caml1999Y011"
-and cmxa_magic_number = "Caml1999Z010"
+type dynunit = {
+  name: string;
+  crc: Digest.t;
+  imports_cmi: (string * Digest.t) list;
+  imports_cmx: (string * Digest.t) list;
+  defines: string list;
+}
 
-type value_approximation
+type dynheader = {
+  magic: string;
+  units: dynunit list;
+}
 
-type subunit = bool * string
+let dyn_magic_number = "Caml2007D001"
 
-type unit_infos =
-  { mutable ui_name: string;                    (* Name of unit implemented *)
-    mutable ui_symbol: string;            (* Prefix for symbols *)
-    mutable ui_defines: subunit list;      (* Unit and sub-units implemented *)
-    mutable ui_imports_cmi: (string * Digest.t) list; (* Interfaces imported *)
-    mutable ui_imports_cmx: (string * Digest.t) list; (* Infos imported *)
-    mutable ui_approx: value_approximation;     (* Approx of the structure *)
-    mutable ui_curry_fun: int list;             (* Currying functions needed *)
-    mutable ui_apply_fun: int list;             (* Apply functions needed *)
-    mutable ui_send_fun: int list;              (* Send functions needed *)
-    mutable ui_force_link: bool }               (* Always linked *)
+let chop_extension_if_any fname =
+  try Filename.chop_extension fname with Invalid_argument _ -> fname
 
-type library_infos =
-  { lib_units: (unit_infos * Digest.t) list;  (* List of unit infos w/ CRCs *)
-    lib_ccobjs: string list;            (* C object files needed *)
-    lib_ccopts: string list }           (* Extra opts to C compiler *)
-
-type kind = Unit of unit_infos * Digest.t | Library of library_infos
-
-let global_infos_table =
-  (Hashtbl.create 17 : (string, (unit_infos * Digest.t) option) Hashtbl.t)
+let dll_filename filename = 
+  let s = chop_extension_if_any filename ^ ".so" in
+  if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
+  else s
 
 let read_file filename =
-  let ic = open_in_bin filename in
-  try
-    let buffer = String.create (String.length cmx_magic_number) in
-    really_input ic buffer 0 (String.length cmx_magic_number);
-    if buffer = cmx_magic_number then begin
-      let ui = (input_value ic : unit_infos) in
-      let crc = Digest.input ic in
-      close_in ic;
-      Unit (ui, crc)
-    end else if buffer = cmxa_magic_number then begin
-      let infos = (input_value ic : library_infos) in
-      close_in ic;
-      Library infos
-    end else begin
-      close_in ic;
-      raise(Error(Not_a_bytecode_file filename))
-    end;
-  with End_of_file | Failure _ ->
-    close_in ic;
-    raise(Error(Not_a_bytecode_file filename))
+  let dll = dll_filename filename in
+  if not (Sys.file_exists dll) then raise (Error (File_not_found dll));
+
+  let (handle,data) as res = ndl_open dll in
+  if Obj.tag (Obj.repr res) = Obj.string_tag
+  then raise (Error (Cannot_open_dll (Obj.magic res)));
+
+  let header : dynheader = Marshal.from_string data 0 in
+  if header.magic <> dyn_magic_number
+  then raise(Error(Not_a_bytecode_file dll));
+  (dll, handle, header.units)
 
 let cmx_not_found_crc =
   "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
@@ -132,7 +102,7 @@ let allow_extension = ref true
 let add_check_ifaces allow_ext filename ui ifaces =
   List.fold_left
     (fun ifaces (name, crc) ->
-       if name = ui.ui_name 
+       if name = ui.name 
        then StrMap.add name (crc,filename) ifaces
        else 
 	 try
@@ -143,7 +113,7 @@ let add_check_ifaces allow_ext filename ui ifaces =
 	 with Not_found ->
 	   if allow_ext then StrMap.add name (crc,filename) ifaces
 	   else raise (Error(Unavailable_unit name))
-    ) ifaces ui.ui_imports_cmi
+    ) ifaces ui.imports_cmi
 
 let check_implems filename ui implems =
   List.iter
@@ -174,7 +144,7 @@ let check_implems filename ui implems =
 	   | Loaded -> ()
        with Not_found ->
 	 raise (Error(Unavailable_unit name))
-    ) ui.ui_imports_cmx
+    ) ui.imports_cmx
 
 (* Prevent redefinition of a unit symbol *)
 
@@ -191,16 +161,8 @@ let check_symbols filename ui symbols =
 	 StrMap.add name filename syms
     )
     symbols
-    ui.ui_defines
+    ui.defines
 *)
-
-let chop_extension_if_any fname =
-  try Filename.chop_extension fname with Invalid_argument _ -> fname
-
-let dll_filename filename = 
-  let s = chop_extension_if_any filename ^ ".so" in
-  if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
-  else s
 
 let empty_state = {
   ifaces = StrMap.empty;
@@ -210,36 +172,31 @@ let empty_state = {
 
 let global_state = ref empty_state
 
-let loadunits priv filename units state =
+let loadunits priv filename handle units state =
 (*  let new_symbols = 
-    List.fold_left (fun accu (ui,_) -> check_symbols filename ui accu)
+    List.fold_left (fun accu ui -> check_symbols filename ui accu)
       state.loaded_symbols units in *)
   let new_ifaces = 
     List.fold_left 
-      (fun accu (ui,_) -> add_check_ifaces !allow_extension filename ui accu)
+      (fun accu ui -> add_check_ifaces !allow_extension filename ui accu)
       state.ifaces units in
   let new_implems =
     List.fold_left
-      (fun accu (ui,crc) -> 
+      (fun accu ui -> 
 	 check_implems filename ui accu;
-	 StrMap.add ui.ui_name (crc,filename,Loaded) accu)
+	 StrMap.add ui.name (ui.crc,filename,Loaded) accu)
       state.implems units in
 
-  let dll = dll_filename filename in
-  if not (Sys.file_exists dll) then raise (Error (File_not_found dll));
-  
-  let defines = 
-    List.map snd (
-      List.flatten (List.map (fun (ui,_) -> ui.ui_defines) units)) in
-  let s = ndl_open priv dll ("_shared_startup"::defines) in
-  if Obj.repr s <> Obj.repr () then raise (Error (Cannot_open_dll s));
-  
+  let defines = List.flatten (List.map (fun ui -> ui.defines) units) in
+
+  ndl_run handle "_shared_startup";
+  List.iter (ndl_run handle) defines;
   { implems = new_implems; ifaces = new_ifaces; 
     (*loaded_symbols = new_symbols*) }
 
-let load priv filename state = match read_file filename with
-  | Unit (ui,crc) -> loadunits priv filename [(ui,crc)] state
-  | Library infos -> loadunits priv filename infos.lib_units state
+let load priv filename state = 
+  let (filename,handle,units) = read_file filename in
+  loadunits priv filename handle units state
 
 let loadfile filename = global_state := load false filename !global_state
 let loadfile_private filename = ignore (load true filename !global_state)

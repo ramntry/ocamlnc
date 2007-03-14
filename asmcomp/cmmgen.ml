@@ -1960,10 +1960,12 @@ let global_table namelist =
         List.map mksym namelist @
         [cint_zero])
 
-let globals_map v =
-  Cdata(Cglobal_symbol "caml_globals_map" ::
-        emit_constant "caml_globals_map"
+let global_data name v =
+  Cdata(Cglobal_symbol name ::
+          emit_constant name
           (Const_base (Const_string (Marshal.to_string v []))) [])
+
+let globals_map v = global_data "caml_globals_map" v
 
 (* Generate the master table of frame descriptors *)
 
@@ -2027,3 +2029,33 @@ let predef_exception name =
           Cint(block_header 0 1);
           Cdefine_symbol bucketname;
           Csymbol_address symname ])
+
+(* Header for a plugin *)
+
+let mapflat f l = List.flatten (List.map f l)
+
+type dynunit = {
+  name: string;
+  crc: Digest.t;
+  imports_cmi: (string * Digest.t) list;
+  imports_cmx: (string * Digest.t) list;
+  defines: string list;
+}
+
+type dynheader = {
+  magic: string;
+  units: dynunit list;
+}
+
+let dyn_magic_number = "Caml2007D001"
+
+let plugin_header units =
+  let mk (ui,crc) =
+    { name = ui.Compilenv.ui_name;
+      crc = crc;
+      imports_cmi = ui.Compilenv.ui_imports_cmi;
+      imports_cmx = ui.Compilenv.ui_imports_cmx;
+      defines = List.map snd ui.Compilenv.ui_defines 
+    } in
+  global_data "caml_plugin_header"
+    { magic = dyn_magic_number; units = List.map mk units }

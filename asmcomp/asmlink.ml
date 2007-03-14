@@ -281,15 +281,15 @@ let make_startup_file ppf filename units_list =
   Emit.end_assembly();
   close_out oc
 
-let make_shared_startup_file ppf filename genfuns prims =
+let make_shared_startup_file ppf units filename genfuns prims =
   let oc = open_out filename in
   Emitaux.output_channel := oc;
-  Location.input_name := "caml_startup"; (* set name of "current" input *)
+  Location.input_name := "caml_startup";
   Compilenv.reset "_shared_startup"; 
-  (* set the name of the "current" compunit *)
   Compilenv.extra_exports := prims;
   Emit.begin_assembly();
   genfuns();
+  Asmgen.compile_phrase ppf (Cmmgen.plugin_header units);
   Emit.end_assembly();
   close_out oc
 
@@ -298,6 +298,7 @@ let create_def_file output_name units startup =
   let def_name = Filename.chop_extension output_name ^ ".def" in
   let def = open_out def_name in
   output_string def "EXPORTS\n";
+  output_string def "caml_plugin_header\n";
   List.iter
     (fun (_,ui) -> 
        List.iter
@@ -386,37 +387,35 @@ let call_linker_shared startup units file_list output_name =
   else cleanup()
 
 let compile_shared ppf file =
-  let prefixname,objfiles,units,extraobjs =
+  let prefixname,objfiles,units_crcs,extraobjs =
     match read_file file with
-      | Unit (filename,ui,_) -> 
+      | Unit (filename,ui,crc) -> 
 	  let prefix = chop_extension_if_any filename in
-	  prefix,[prefix ^ Config.ext_obj],[ui],[]
+	  prefix,[prefix ^ Config.ext_obj],[(ui,crc)],[]
       | Library (filename,infos) -> 
 	  let prefix = chop_extension_if_any filename in
-	  prefix,[prefix ^ Config.ext_lib],List.map fst infos.lib_units,
+	  prefix,[prefix ^ Config.ext_lib],infos.lib_units,
 	  infos.lib_ccobjs
   in
+  let units = List.map fst units_crcs in
   let extraobjs = List.rev !Clflags.ccobjs @ extraobjs in
   let objfiles = extraobjs @ objfiles in
   let need,genfuns = generic_functions ppf true units in
 
   let prims = all_primitives units false in
-  if need || prims <> [] then begin
-    let asmfile =
-      if !Clflags.keep_startup_file
-      then prefixname ^ ".startup" ^ ext_asm
-      else Filename.temp_file "camlasm" ext_asm in
-    make_shared_startup_file ppf asmfile genfuns prims;
-    let startup_objfile = prefixname ^ ".startup" ^ ext_obj in
-    if Proc.assemble_file asmfile startup_objfile <> 0
-    then raise(Error(Assembler_error asmfile));
-    if !Clflags.keep_startup_file then () else remove_file asmfile;
-    call_linker_shared 
-      true units
-      (startup_objfile::objfiles) (prefixname ^ ".so");
-    remove_file startup_objfile
-  end
-  else call_linker_shared false units objfiles (prefixname ^ ".so")
+  let asmfile =
+    if !Clflags.keep_startup_file
+    then prefixname ^ ".startup" ^ ext_asm
+    else Filename.temp_file "camlasm" ext_asm in
+  make_shared_startup_file ppf units_crcs asmfile genfuns prims;
+  let startup_objfile = prefixname ^ ".startup" ^ ext_obj in
+  if Proc.assemble_file asmfile startup_objfile <> 0
+  then raise(Error(Assembler_error asmfile));
+  if !Clflags.keep_startup_file then () else remove_file asmfile;
+  call_linker_shared 
+    true units
+    (startup_objfile::objfiles) (prefixname ^ ".so");
+  remove_file startup_objfile
 
 let call_linker file_list startup_file output_name =
   let c_lib =

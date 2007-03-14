@@ -229,59 +229,63 @@ void caml_init_dynunits() {
   }
 }
 
-CAMLprim value caml_natdynlink_open
-(value private, value filename, value symbols)
+CAMLprim value caml_natdynlink_open(value filename)
 {
-  CAMLparam3 (private, filename, symbols);
-  void *sym,*sym2;
+  CAMLparam1 (filename);
+  CAMLlocal1 (res);
+  void *sym;
   void *handle;
 
-  handle =
-    caml_dlopen(String_val(filename), 1);
-  /*
-	   (private == Val_true
-	    ? RTLD_NOW
-	    : RTLD_NOW | RTLD_GLOBAL
-	    ));
-  */
+  /* TODO: dlclose in case of error... */
+
+  handle = caml_dlopen(String_val(filename), 1);
   
   if (NULL == handle)
     CAMLreturn(caml_copy_string(caml_dlerror()));
 
+  sym = caml_dlsym(handle, "caml_plugin_header");
+  if (NULL == sym) 
+    CAMLreturn(caml_copy_string("not an OCaml plugin"));
+
+  res = alloc_small(2,0);
+  Field(res, 0) = (value) handle;
+  Field(res, 1) = (value) (sym);
+  CAMLreturn(res);
+}
+
+CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
+  CAMLparam1 (symbol);
+  void *sym,*sym2;
+
 #define optsym(n) getsym(handle,unit,n,1)
-  while (symbols != Val_unit) {
-    char *unit;
-    void (*entrypoint)(void);
+  char *unit;
+  void (*entrypoint)(void);
 
-    unit = String_val(Field(symbols,0));
-
-    symbols = Field(symbols,1);
-
-    sym = optsym("__frametable");
-    if (NULL != sym) caml_register_frametable(sym);
-
-    sym = optsym("");
-    if (NULL != sym) caml_register_dyn_global(sym);
-
-    sym = optsym("__data_begin");
-    sym2 = optsym("__data_end");
-    if (NULL != sym && NULL != sym2)
-      caml_dyn_data_segments = segment_cons(sym,sym2,caml_dyn_data_segments); 
-
-    sym = optsym("__code_begin");
-    sym2 = optsym("__code_end");
-    if (NULL != sym && NULL != sym2) allow_write(sym,sym2);
-
-    sym = optsym("__symtable");
-    if (NULL != sym) caml_register_symtable(sym);
-
-    sym = optsym("__reloctable");
-    if (NULL != sym) caml_relocate(sym);
-
-    entrypoint = optsym("__entry");
-    if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);
-  }
-#undef sym
+  unit = String_val(symbol);
+  
+  sym = optsym("__frametable");
+  if (NULL != sym) caml_register_frametable(sym);
+  
+  sym = optsym("");
+  if (NULL != sym) caml_register_dyn_global(sym);
+  
+  sym = optsym("__data_begin");
+  sym2 = optsym("__data_end");
+  if (NULL != sym && NULL != sym2)
+    caml_dyn_data_segments = segment_cons(sym,sym2,caml_dyn_data_segments); 
+  
+  sym = optsym("__code_begin");
+  sym2 = optsym("__code_end");
+  if (NULL != sym && NULL != sym2 && sym != sym2) allow_write(sym,sym2);
+  
+  sym = optsym("__symtable");
+  if (NULL != sym) caml_register_symtable(sym);
+  
+  sym = optsym("__reloctable");
+  if (NULL != sym) caml_relocate(sym);
+  
+  entrypoint = optsym("__entry");
+  if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);
 #undef optsym
 
   CAMLreturn (Val_unit);
