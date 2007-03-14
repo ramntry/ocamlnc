@@ -22,36 +22,30 @@ CC=$(BYTECC)
 CFLAGS=-I../../byterun \
           -DBNG_ARCH_$(BNG_ARCH) -DBNG_ASM_LEVEL=$(BNG_ASM_LEVEL)
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../boot -w s
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s -closed
 COMPFLAGS=-warn-error A -g
+MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
 
 CAMLOBJS=int_misc.cmo nat.cmo big_int.cmo arith_flags.cmo \
   ratio.cmo num.cmo arith_status.cmo
 
 CMIFILES=big_int.cmi nat.cmi num.cmi ratio.cmi arith_status.cmi
 
-DCOBJS=bng.$(DO) nat_stubs.$(DO)
-SCOBJS=bng.$(SO) nat_stubs.$(SO)
+COBJS=bng.$(O) nat_stubs.$(O)
 
-all: dllnums.dll libnums.$(A) nums.cma $(CMIFILES)
+all: libnums.$(A) nums.cma $(CMIFILES)
 
 allopt: libnums.$(A) nums.cmxa $(CMIFILES)
 
 nums.cma: $(CAMLOBJS)
-	$(CAMLC) -a -o nums.cma $(CAMLOBJS) -dllib -lnums -cclib -lnums
+	$(MKLIB) -o nums -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAMLOBJS)
 
 nums.cmxa: $(CAMLOBJS:.cmo=.cmx)
-	$(CAMLOPT) -a -o nums.cmxa $(CAMLOBJS:.cmo=.cmx) -cclib -lnums
+	$(MKLIB) -o nums -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAMLOBJS:.cmo=.cmx)
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared nums.cmxa
 
-dllnums.dll: $(DCOBJS)
-	$(call MKDLL,dllnums.dll,tmp.$(A),\
-	  $(DCOBJS) ../../byterun/ocamlrun.$(A))
-	rm tmp.*
-
-libnums.$(A): $(SCOBJS)
-	$(call MKLIB,libnums.$(A),$(SCOBJS))
-
-$(CAMLOBJS:.cmo=.cmx): ../../ocamlopt
+libnums.$(A): $(COBJS)
+	OCAMLLIB=../../byterun $(MKLIB) -o nums $(COBJS)
 
 install:
 	cp dllnums.dll $(STUBLIBDIR)/dllnums.dll
@@ -59,7 +53,7 @@ install:
 	cp nums.cma $(CMIFILES) $(LIBDIR)
 
 installopt:
-	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) $(LIBDIR)
+	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) nums.so $(LIBDIR)
 
 partialclean:
 	rm -f *.cm*
@@ -68,7 +62,7 @@ clean: partialclean
 	rm -f *.dll *.$(A) *.$(O)
 	cd test ; $(MAKEREC) clean
 
-.SUFFIXES: .ml .mli .cmi .cmo .cmx .$(DO) .$(SO)
+.SUFFIXES: .ml .mli .cmi .cmo .cmx .$(O)
 
 .mli.cmi:
 	$(CAMLC) -c $(COMPFLAGS) $<
@@ -79,19 +73,13 @@ clean: partialclean
 .ml.cmx:
 	$(CAMLOPT) -c $(COMPFLAGS) $<
 
-.c.$(DO):
-	$(BYTECC) $(DLLCCCOMPOPTS) $(CFLAGS) -c $<
-	mv $*.$(O) $*.$(DO)
-
-.c.$(SO):
+.c.$(O):
 	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
-	mv $*.$(O) $*.$(SO)
 
-bng.$(DO) bng.$(SO): bng.h bng_digit.c \
+bng.$(O): bng.h bng_digit.c \
        bng_alpha.c bng_amd64.c bng_ia32.c bng_mips.c bng_ppc.c bng_sparc.c
 
 depend:
-	sed -e 's/\.o/.$(DO)/g' .depend > .depend.nt
-	sed -e 's/\.o/.$(SO)/g' .depend >> .depend.nt
+	sed -e 's/\.o/.$(O)/g' .depend > .depend.nt
 
 include .depend.nt
