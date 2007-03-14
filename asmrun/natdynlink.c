@@ -247,7 +247,7 @@ CAMLprim value caml_natdynlink_open(value filename)
   if (NULL == sym) 
     CAMLreturn(caml_copy_string("not an OCaml plugin"));
 
-  res = alloc_small(2,0);
+  res = caml_alloc_tuple(2);
   Field(res, 0) = (value) handle;
   Field(res, 1) = (value) (sym);
   CAMLreturn(res);
