@@ -50,7 +50,24 @@ static void allow_write(char *begin, char *end) {
   }
 }
 
-static void *staticsym(char *name) { return NULL; }
+#include "exports.h"
+#include "prims.h"
+
+static void *staticsym(char *name) { 
+  int i;
+
+  /* +5 :  jump over the _imp_ prefix */
+  for (i = 0; caml_names_of_export_symbols[i] != NULL; i++)
+    if (strcmp(name, caml_names_of_export_symbols[i]+5) == 0)
+      return caml_export_symbols[i];
+
+  /* +1 : jump over the _ prefix */
+  for (i = 0; caml_names_of_builtin_cprim[i] != NULL; i++)
+    if (strcmp(name+1, caml_names_of_builtin_cprim[i]) == 0)
+      return caml_builtin_cprim[i];
+
+  return NULL; 
+}
 
 #else
 

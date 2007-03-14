@@ -233,12 +233,8 @@ let all_primitives units main =
       units StringSet.empty in
 
   let prims =
-    if main then
-      List.fold_right StringSet.add 
-	[ "caml_string_equal"; "caml_modify"   ]
-	(* these primitives are not declared as externals in stdlib
-	   modules *)
-	prims
+    if main 
+    then prims
     else
       Array.fold_right StringSet.remove Runtimedef.builtin_primitives prims in
 
