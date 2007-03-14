@@ -788,6 +788,10 @@ let emit_instr fallthrough i =
     | Lop(Ispecific(Ipush_symbol s)) ->
         `	pushl	${emit_symbol s}\n`;
         stack_offset := !stack_offset + 4
+    | Lop(Ispecific(Ipush_load (Ibased(s, d)))) when is_extern_symbol s ->
+        `	pushl	{emit_signed_int d}\n`;
+	new_reloc s (-4) true;
+        stack_offset := !stack_offset + 4
     | Lop(Ispecific(Ipush_load addr)) ->
         `	pushl	{emit_addressing addr i.arg 0}\n`;
         stack_offset := !stack_offset + 4
@@ -1053,7 +1057,7 @@ let emit_item = function
       `	.double	{emit_string f}\n`
   | Csymbol_address s when is_extern_symbol s ->
       `	.double	0\n`;
-      new_reloc s (-4) false
+      new_reloc s (-4) true
   | Csymbol_address s ->
       `	.long	{emit_symbol s}\n`
   | Clabel_address lbl ->

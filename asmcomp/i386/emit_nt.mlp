@@ -723,6 +723,10 @@ let emit_instr i =
     | Lop(Ispecific(Ipush_symbol s)) ->
         `	push	OFFSET {emit_use_symbol s}\n`;
         stack_offset := !stack_offset + 4
+    | Lop(Ispecific(Ipush_load (Ibased(s, d)))) when is_extern_symbol s ->
+        `	push	ds:{emit_signed_int d}\n`;
+	new_reloc s (-4) true;
+        stack_offset := !stack_offset + 4
     | Lop(Ispecific(Ipush_load addr)) ->
         `	push	DWORD PTR {emit_addressing addr i.arg 0}\n`;
         stack_offset := !stack_offset + 4
@@ -929,7 +933,7 @@ let emit_item = function
       `	REAL8	{emit_float f}\n`
   | Csymbol_address s when is_extern_symbol s ->
       `	DWORD	0\n`;
-      new_reloc s (-4) false
+      new_reloc s (-4) true
   | Csymbol_address s ->
       `	DWORD	{emit_use_symbol s}\n`
   | Clabel_address lbl ->
