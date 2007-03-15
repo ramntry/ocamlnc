@@ -12,13 +12,13 @@
 
 (* $Id$ *)
 
-(* Link a set of .cmx/.o files and produce an executable *)
+(* Link a set of .cmx/.o files and produce an executable or a plugin *)
 
 open Format
 
 val link: formatter -> string list -> string -> unit
 
-val compile_shared: formatter -> string -> unit
+val link_shared: formatter -> string list -> string -> unit
 
 val check_consistency: string -> Compilenv.unit_infos -> Digest.t -> unit
 val extract_crc_interfaces: unit -> (string * Digest.t) list

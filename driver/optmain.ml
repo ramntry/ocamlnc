@@ -22,17 +22,13 @@ let output_prefix name =
     | Some n -> if !compile_only then (output_name := None; n) else name in
   Misc.chop_extension_if_any oname
 
-let make_shared ppf target =
-  if !Clflags.shared then Asmlink.compile_shared ppf target
-
 let process_interface_file ppf name =
   Optcompile.interface ppf name (output_prefix name)
 
 let process_implementation_file ppf name =
   let opref = output_prefix name in
   Optcompile.implementation ppf name opref;
-  objfiles := (opref ^ ".cmx") :: !objfiles;
-  if !compile_only then make_shared ppf (opref ^ ".cmx")
+  objfiles := (opref ^ ".cmx") :: !objfiles
 
 let process_file ppf name =
   if Filename.check_suffix name ".ml"
@@ -156,7 +152,7 @@ let main () =
              " Check principality of type inference";
        "-rectypes", Arg.Set recursive_types,
              " Allow arbitrary recursive types";
-       "-shared", Arg.Set shared, " Produce a dynlinkable library";
+       "-shared", Arg.Set shared, " Produce a dynlinkable plugin";
        "-S", Arg.Set keep_asm_file, " Keep intermediate assembly file";
        "-thread", Arg.Set use_threads,
              " Generate code that supports the system threads library";
@@ -213,22 +209,31 @@ let main () =
        "-", Arg.String (process_file ppf),
             "<file>  Treat <file> as a file name (even if it starts with `-')"
       ]) (process_file ppf) usage;
+    if 
+      List.length (List.filter (fun x -> !x) 
+		     [make_archive;make_package;shared]) > 1 
+    then begin
+      prerr_endline "Please specify at most one of -pack, -a, -shared";
+      exit 2
+    end;
     if !make_archive then begin
       Optcompile.init_path();
       let target = extract_output !output_name in
       Asmlibrarian.create_archive (List.rev !objfiles) target;
-      make_shared ppf target
     end
     else if !make_package then begin
       Optcompile.init_path();
       let target = extract_output !output_name in
       Asmpackager.package_files ppf (List.rev !objfiles) target;
-      make_shared ppf target
+    end
+    else if !shared then begin
+      Optcompile.init_path();
+      let target = extract_output !output_name in
+      Asmlink.link_shared ppf (List.rev !objfiles) target;
     end
     else if not !compile_only && !objfiles <> [] then begin
       Optcompile.init_path();
-      if !shared then List.iter (Asmlink.compile_shared ppf) !objfiles
-      else Asmlink.link ppf (List.rev !objfiles) (default_output !output_name)
+      Asmlink.link ppf (List.rev !objfiles) (default_output !output_name)
     end;
     exit 0
   with x ->

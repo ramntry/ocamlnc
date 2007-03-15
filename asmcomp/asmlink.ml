@@ -107,6 +107,19 @@ let runtime_lib () =
   with Not_found ->
     raise(Error(File_not_found libname))
 
+let object_file_name name =
+  let file_name =
+    try
+      find_in_path !load_path name
+    with Not_found ->
+      fatal_error "Asmlink.object_file_name: not found" in
+  if Filename.check_suffix file_name ".cmx" then
+    Filename.chop_suffix file_name ".cmx" ^ ext_obj
+  else if Filename.check_suffix file_name ".cmxa" then
+    Filename.chop_suffix file_name ".cmxa" ^ ext_lib
+  else
+    fatal_error "Asmlink.object_file_name: bad ext"
+
 (* First pass: determine which units are needed *)
 
 let missing_globals = (Hashtbl.create 17 : (string, string list ref) Hashtbl.t)
@@ -386,36 +399,29 @@ let call_linker_shared startup units file_list output_name =
   if Ccomp.command cmd <> 0 then (cleanup(); raise(Error Linking_error))
   else cleanup()
 
-let compile_shared ppf file =
-  let prefixname,objfiles,units_crcs,extraobjs =
-    match read_file file with
-      | Unit (filename,ui,crc) -> 
-	  let prefix = chop_extension_if_any filename in
-	  prefix,[prefix ^ Config.ext_obj],[(ui,crc)],[]
-      | Library (filename,infos) -> 
-	  let prefix = chop_extension_if_any filename in
-	  prefix,[prefix ^ Config.ext_lib],infos.lib_units,
-	  infos.lib_ccobjs
-  in
-  let units = List.map fst units_crcs in
-  let extraobjs = List.rev !Clflags.ccobjs @ extraobjs in
-  let objfiles = extraobjs @ objfiles in
+let link_shared ppf objfiles output_name =
+  let units_tolink = List.fold_right scan_file objfiles [] in
+  List.iter
+    (fun (info, file_name, crc) -> check_consistency file_name info crc)
+    units_tolink;
+  Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
+  let units = List.map (fun (ui,_,_) -> ui) units_tolink in
+  let objfiles = List.map object_file_name objfiles @ !Clflags.ccobjs in
   let need,genfuns = generic_functions ppf true units in
 
   let prims = all_primitives units false in
-  let asmfile =
+  let startup =
     if !Clflags.keep_startup_file
-    then prefixname ^ ".startup" ^ ext_asm
-    else Filename.temp_file "camlasm" ext_asm in
-  make_shared_startup_file ppf units_crcs asmfile genfuns prims;
-  let startup_objfile = prefixname ^ ".startup" ^ ext_obj in
-  if Proc.assemble_file asmfile startup_objfile <> 0
-  then raise(Error(Assembler_error asmfile));
-  if !Clflags.keep_startup_file then () else remove_file asmfile;
-  call_linker_shared 
-    true units
-    (startup_objfile::objfiles) (prefixname ^ ".so");
-  remove_file startup_objfile
+    then output_name ^ ".startup" ^ ext_asm
+    else Filename.temp_file "camlstartup" ext_asm in
+  make_shared_startup_file ppf 
+    (List.map (fun (ui,_,crc) -> (ui,crc)) units_tolink) startup genfuns prims;
+  let startup_obj = output_name ^ ".startup" ^ ext_obj in
+  if Proc.assemble_file startup startup_obj <> 0
+  then raise(Error(Assembler_error startup));
+  if not !Clflags.keep_startup_file then remove_file startup;
+  call_linker_shared true units (startup_obj::objfiles) output_name;
+  remove_file startup_obj
 
 let call_linker file_list startup_file output_name =
   let c_lib =
@@ -471,19 +477,6 @@ let call_linker file_list startup_file output_name =
         in if Ccomp.command cmd <> 0 then raise(Error Linking_error)
       end
   | _ -> assert false
-
-let object_file_name name =
-  let file_name =
-    try
-      find_in_path !load_path name
-    with Not_found ->
-      fatal_error "Asmlink.object_file_name: not found" in
-  if Filename.check_suffix file_name ".cmx" then
-    Filename.chop_suffix file_name ".cmx" ^ ext_obj
-  else if Filename.check_suffix file_name ".cmxa" then
-    Filename.chop_suffix file_name ".cmxa" ^ ext_lib
-  else
-    fatal_error "Asmlink.object_file_name: bad ext"
 
 (* Main entry point *)
 

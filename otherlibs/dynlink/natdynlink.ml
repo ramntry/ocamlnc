@@ -58,13 +58,9 @@ type dynheader = {
 
 let dyn_magic_number = "Caml2007D001"
 
-let chop_extension_if_any fname =
-  try Filename.chop_extension fname with Invalid_argument _ -> fname
-
-let dll_filename filename = 
-  let s = chop_extension_if_any filename ^ ".so" in
-  if Filename.is_implicit s then Filename.concat (Sys.getcwd ()) s
-  else s
+let dll_filename fname = 
+  if Filename.is_implicit fname then Filename.concat (Sys.getcwd ()) fname
+  else fname
 
 let read_file filename =
   let dll = dll_filename filename in
