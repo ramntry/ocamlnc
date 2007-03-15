@@ -46,7 +46,7 @@ MLOBJS=unix.cmo unixLabels.cmo
 
 all: libunix.a unix.cma
 
-allopt: libunix.a unix.cmxa
+allopt: libunix.a unix.cmxa unix.cmxs
 
 libunix.a: $(OBJS)
 	$(MKLIB) -o unix $(OBJS)
@@ -57,13 +57,16 @@ unix.cma: $(MLOBJS)
 unix.cmxa: $(MLOBJS:.cmo=.cmx)
 	$(MKLIB) -o unix -ocamlopt '$(CAMLOPT)' -linkall $(MLOBJS:.cmo=.cmx)
 
+unix.cmxs: unix.cmxa
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o unix.cmxs -I . unix.cmxa
+
 unix.cmx: ../../ocamlopt
 
 partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.a *.o *.so
+	rm -f *.a *.o *.so *.cmxs
 
 install:
 	if test -f dllunix.so; then cp dllunix.so $(STUBLIBDIR)/dllunix.so; fi
@@ -71,6 +74,7 @@ install:
 	cd $(LIBDIR); $(RANLIB) libunix.a
 	cp unix.cma $(MLOBJS:.cmo=.cmi) $(MLOBJS:.cmo=.mli) $(LIBDIR)
 	cp unixsupport.h $(LIBDIR)/caml
+	cp unix.cmxs $(LIBDIR)/
 
 installopt:
 	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.a $(LIBDIR)

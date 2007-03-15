@@ -23,7 +23,7 @@ true: traverse
 <camlp4/camlp4*.native>: use_dynlink
 "camlp4/Camlp4/Printers/OCaml.ml" or "camlp4/Camlp4/Printers/OCamlr.ml": warn_Alezv
 <camlp4/Camlp4Printers/**.ml>: include_unix
-<camlp4/{Camlp4Parsers,Camlp4Printers}/*.cmx>: shared(-shared)
+# <camlp4/{Camlp4Parsers,Camlp4Printers}/*.cmx>: shared(-shared)
 "camlp4/Camlp4/Struct/DynLoader.ml": include_dynlink
 <camlp4/Camlp4Top/**>: include_toplevel
 

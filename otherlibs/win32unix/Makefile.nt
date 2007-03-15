@@ -62,13 +62,15 @@ unix.cma: $(MLOBJS)
 
 unix.cmxa: $(MLOBJS:.cmo=.cmx)
 	$(MKLIB) -o unix -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(MLOBJS:.cmo=.cmx) -cclib $(LIBS)
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared unix.cmxa
+
+unix.cmxs: unix.cmxa
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o unix.cmxs -I . unix.cmxa
 
 partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.$(A) *.dll *.$(O) *.so
+	rm -f *.$(A) *.dll *.$(O) *.cmxs
 	rm -f $(UNIX_FILES) $(UNIX_CAML_FILES)
 
 install:
@@ -78,7 +80,7 @@ install:
 	cp unixsupport.h $(LIBDIR)/caml
 
 installopt:
-	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.$(A) unix.so $(LIBDIR)
+	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.$(A) unix.cmxs $(LIBDIR)
 
 $(UNIX_FILES) $(UNIX_CAML_FILES): %: ../unix/%
 	cp ../unix/$* $*

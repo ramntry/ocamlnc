@@ -124,9 +124,7 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries 
-
-#ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
+  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
 
 # The compilation of ocaml will fail if the runtime has changed.
 # Never mind, just do make bootstrap to reach fixpoint again.
@@ -270,14 +268,14 @@ installopt:
 	cd asmrun; $(MAKE) install
 	cp ocamlopt $(BINDIR)/ocamlopt$(EXE)
 	cd stdlib; $(MAKE) installopt
+	cd ocamldoc; $(MAKE) installopt
 	for i in $(OTHERLIBRARIES); do (cd otherlibs/$$i; $(MAKE) installopt) || exit $$?; done
-#	cd ocamldoc; $(MAKE) installopt
-#	if test -f ocamlc.opt; \
-#	  then cp ocamlc.opt $(BINDIR)/ocamlc.opt$(EXE); else :; fi
-#	if test -f ocamlopt.opt; \
-#	  then cp ocamlopt.opt $(BINDIR)/ocamlopt.opt$(EXE); else :; fi
-#	if test -f lex/ocamllex.opt; \
-#	  then cp lex/ocamllex.opt $(BINDIR)/ocamllex.opt$(EXE); else :; fi
+	if test -f ocamlc.opt; \
+	  then cp ocamlc.opt $(BINDIR)/ocamlc.opt$(EXE); else :; fi
+	if test -f ocamlopt.opt; \
+	  then cp ocamlopt.opt $(BINDIR)/ocamlopt.opt$(EXE); else :; fi
+	if test -f lex/ocamllex.opt; \
+	  then cp lex/ocamllex.opt $(BINDIR)/ocamllex.opt$(EXE); else :; fi
 
 clean:: partialclean
 
@@ -611,8 +609,6 @@ camlp4out: ocamlc otherlibraries ocamlbuild-partial-boot ocamlbuild.byte
 	./build/camlp4-byte-only.sh
 camlp4opt: ocamlopt otherlibrariesopt ocamlbuild-partial-boot ocamlbuild.native
 	./build/camlp4-native-only.sh
-partialclean::
-	rm -rf _build/camlp4
 
 # Ocamlbuild
 
@@ -620,12 +616,12 @@ ocamlbuild.byte: ocamlc otherlibraries ocamlbuild-partial-boot
 	./build/ocamlbuild-byte-only.sh
 ocamlbuild.native: ocamlopt otherlibrariesopt ocamlbuild-partial-boot
 	./build/ocamlbuild-native-only.sh
-partialclean::
-	rm -rf _build/ocamlbuild
 
 .PHONY: ocamlbuild-partial-boot
 ocamlbuild-partial-boot:
 	./build/partial-boot.sh
+partialclean::
+	rm -rf _build
 
 # Check that the stack limit is reasonable.
 
