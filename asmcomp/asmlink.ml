@@ -455,7 +455,7 @@ let call_linker file_list startup_file output_name =
       if not !Clflags.output_c_object then begin
 	let imp_name = Filename.temp_file "camlimp" "" in
         let cmd =
-          Printf.sprintf "%s /Fe%s %s %s %s %s %s %s %s /link /implib:%s"
+          Printf.sprintf "%s /Fe%s %s %s %s %s %s %s %s /implib:%s"
             !Clflags.c_linker
             (Filename.quote output_name)
             (Clflags.std_include_flag "-I")
@@ -468,7 +468,10 @@ let call_linker file_list startup_file output_name =
             (Ccomp.make_link_options !Clflags.ccopts) 
 	    (Filename.quote imp_name)
 	in
-        if Ccomp.command cmd <> 0 then raise(Error Linking_error);
+	let res = Ccomp.command cmd in
+	remove_file imp_name;
+	remove_file (imp_name ^ ".exp");
+	if res <> 0 then raise(Error Linking_error);
         if Ccomp.merge_manifest output_name <> 0 then raise(Error Linking_error)
       end else begin
         let cmd =
