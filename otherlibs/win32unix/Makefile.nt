@@ -52,7 +52,7 @@ UNIX_CAML_FILES = unix.mli unixLabels.mli unixLabels.ml
 
 all: libunix.$(A) unix.cma
 
-allopt: libunix.$(A) unix.cmxa
+allopt: libunix.$(A) unix.cmxa unix.cmxs
 
 libunix.$(A): $(OBJS)
 	OCAMLLIB=../../byterun $(MKLIB) -o unix $(OBJS) -ldopt $(LIBS)

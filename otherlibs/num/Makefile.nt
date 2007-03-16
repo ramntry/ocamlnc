@@ -35,14 +35,16 @@ COBJS=bng.$(O) nat_stubs.$(O)
 
 all: libnums.$(A) nums.cma $(CMIFILES)
 
-allopt: libnums.$(A) nums.cmxa $(CMIFILES)
+allopt: libnums.$(A) nums.cmxa nums.cmxs $(CMIFILES)
 
 nums.cma: $(CAMLOBJS)
 	$(MKLIB) -o nums -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAMLOBJS)
 
 nums.cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(MKLIB) -o nums -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAMLOBJS:.cmo=.cmx)
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared nums.cmxa
+
+nums.cmxs: nums.cmxa
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o nums.cmxs -I . nums.cmxa
 
 libnums.$(A): $(COBJS)
 	OCAMLLIB=../../byterun $(MKLIB) -o nums $(COBJS)
@@ -53,7 +55,7 @@ install:
 	cp nums.cma $(CMIFILES) $(LIBDIR)
 
 installopt:
-	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) nums.so $(LIBDIR)
+	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) nums.so nums.cmxs $(LIBDIR)
 
 partialclean:
 	rm -f *.cm*
