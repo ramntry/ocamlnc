@@ -360,6 +360,7 @@ CAMLexport void caml_expand_command_line(int * argcp, char *** argvp)
 
 int caml_read_directory(char * dirname, struct ext_table * contents)
 {
+  int dirnamelen;
   char * template;
 #if _MSC_VER <= 1200
   int h;
@@ -369,9 +370,15 @@ int caml_read_directory(char * dirname, struct ext_table * contents)
   struct _finddata_t fileinfo;
   char * p;
 
-  template = caml_stat_alloc(strlen(dirname) + 5);
+  dirnamelen = strlen(dirname);
+  template = caml_stat_alloc(dirnamelen + 5);
   strcpy(template, dirname);
-  strcat(template, "\\*.*");
+  switch (dirname[dirnamelen - 1]) {
+  case '/': case '\\': case ':':
+    strcat(template, "*.*"); break;
+  default:
+    strcat(template, "\\*.*");
+  }
   h = _findfirst(template, &fileinfo);
   caml_stat_free(template);
   if (h == -1) return errno == ENOENT ? 0 : -1;
@@ -416,7 +423,7 @@ void caml_signal_thread(void * lpParam)
 
 #endif /* NATIVE_CODE */
 
-#ifdef NATIVE_CODE
+#if defined(NATIVE_CODE) && !defined(_WIN64)
 
 /* Handling of system stack overflow.  
  * Based on code provided by Olivier Andrieu.
@@ -453,6 +460,7 @@ void caml_signal_thread(void * lpParam)
  * Win9x. There is an equivalent mechanism on Win9x with
  * PAGE_NOACCESS.
  *
+ * Currently, does not work under Win64.
  */
 
 static uintnat win32_alt_stack[0x80];
@@ -505,13 +513,8 @@ static LONG CALLBACK
 {
   DWORD code   = exn_info->ExceptionRecord->ExceptionCode;
   CONTEXT *ctx = exn_info->ContextRecord;
-#ifdef _WIN64
-  DWORD64 *ctx_ip = &(ctx->Rip);
-  DWORD64 *ctx_sp = &(ctx->Rsp);
-#else
   DWORD *ctx_ip = &(ctx->Eip);
   DWORD *ctx_sp = &(ctx->Esp);
-#endif
 
   if (code == EXCEPTION_STACK_OVERFLOW && In_code_area (*ctx_ip))
     {
@@ -540,3 +543,20 @@ void caml_win32_overflow_detection()
 
 #endif
 
+/* Seeding of pseudo-random number generators */
+
+intnat caml_win32_random_seed (void)
+{
+  intnat seed;
+  SYSTEMTIME t;
+
+  GetLocalTime(&t);
+  seed = t.wMonth;
+  seed = (seed << 5) ^ t.wDay;
+  seed = (seed << 4) ^ t.wHour;
+  seed = (seed << 5) ^ t.wMinute;
+  seed = (seed << 5) ^ t.wSecond;
+  seed = (seed << 9) ^ t.wMilliseconds;
+  seed ^= GetCurrentProcessId();
+  return seed;
+}

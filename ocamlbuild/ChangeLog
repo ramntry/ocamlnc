@@ -1,3 +1,294 @@
+2007-03-13  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Fix a bug in expand_module.
+
+	* ocaml_utils.ml: Handle correctly pathnames instead of just basenames.
+
+2007-03-13  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Use sys_file_exists instead of Sys.file_exists.
+
+	* my_unix.ml: Since Sys.file_exists don't treat well captial letters.
+	* my_std.ml: Fix a bug.
+	* pathname.ml: Here is a an exception to the previous rule so, put a
+	comment.
+
+2007-03-11  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Fix the List.union order.
+
+	* my_std.ml: Fix and improve List.union.
+	* pathname.ml: Use it and fix merge_include_dirs.
+	* test/good-output: Update since the union order was wrong.
+
+2007-03-11  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Re fix menhir and include dirs.
+
+	* ocaml_tools.ml: Specifiy ocamlc and -I with --ocamlc.
+
+2007-03-11  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Fix a bug: Add include directories to menhir.
+
+	* ocaml_tools.ml: Ditto.
+	* my_std.ml,
+	* signatures.mli: Specification typo.
+
+2007-03-07  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Handle specially archives files during an import.
+
+	* shell.ml: Ditto.
+
+2007-03-07  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Use cp -p in copy_rule, and fix some typos in the manual.
+
+	* manual/manual.tex: Typos.
+	* rule.ml,
+	* rule.mli: Add cp_p and use it for copy_rule.
+
+2007-03-05  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Relaxe executor on exception condition.
+
+	Patch from Berke.
+	* executor.ml: Ignore Not_found and exceptional conditions.
+	* TODO: Add an entry (needs to better understand POSIX).
+
+2007-03-04  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Split where in bindir and libdir.
+
+	* ocamlbuild_where.mli: Ditto.
+	* ocaml_specific.ml: Update.
+	* options.ml: Use bindir.
+	* plugin.ml: Update.
+	* start.sh: Update.
+
+2007-03-04  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Virtual solvers for ocaml tools.
+
+	* options.ml: Setup virtual command solver for commands like ocamlc,
+	ocamlopt... This allow to have full pathname but let also failback to
+	classic search path.
+	* ocaml_compiler.ml: Add a tag to differentiate dependencies at link
+	time.
+	* ocamlbuild-presentation.rslide: Add an item as suggested by a friend.
+
+2007-03-02  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Same thing for the second link function.
+
+	* ocaml_compiler.ml: Ignore stdlib.
+
+2007-03-02  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Move the stdlib hack.
+
+	* ocaml_compiler.ml: Should works better.
+
+2007-03-02  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Little fix about library linking.
+
+	* ocaml_utils.ml: Avoid linking twice in some cases.
+	* ocaml_compiler.ml: Handle specially the OCaml stdlib.
+
+2007-03-01  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Remove a rec.
+
+	* glob.ml: Parse is not rec.
+
+2007-03-01  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	true: traverse and FAQ.
+
+	* main.ml: Move the inital config upper to be loaded before the others
+	and hygiene.
+	* FAQ: New.
+
+2007-02-28  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Improve the glob dir handling.
+
+	* glob.ml: Extend the ast instead of parsing an extended string.
+
+2007-02-28  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Ensure that the whole boolean expression is only valid in the directory.
+
+	* glob.ml: Ditto.
+
+2007-02-28  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Put -g on link only for programs.
+
+	* ocaml_specific.ml: Ditto.
+
+2007-02-26  Berke Durak  <berke.durak@inria.fr>
+
+	Added disclaimer to default rules table.
+
+	* manual/manual.tex: .
+
+2007-02-26  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Add the -documentation option.
+
+	* main.ml: Implement it.
+	* flags.ml,
+	* flags.mli: Add get_flags.
+	* man/ocamlbuild.1: Update.
+	* signatures.mli,
+	* options.ml: Add show_documention.
+	* rule.ml,
+	* rule.mli: Add pretty_print.
+
+2007-02-26  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Add the -dont-catch-errors option.
+
+	* main.ml: Implement it.
+	* options.ml: Parse it.
+	* signatures.mli: Declare it.
+	* _tags: Use debug.
+
+2007-02-26  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Deal with the camlp4 library name.
+
+	* ocaml_specific.ml: Introduce use_old_camlp4 for the old one.
+
+2007-02-26  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Minor `ocaml_lib' improvments.
+
+	* signatures.mli: Declare and doc it.
+	* ocamlbuild_plugin.ml: Export it.
+	* ocaml_specific.ml,
+	* ocaml_specific.mli: Add some dirs to std libs.
+	Move the ocaml_lib implem to ...
+	* ocaml_utils.mli,
+	* ocaml_utils.ml: ... here. Improve it by adding the ~tag_name option.
+	* ocaml_compiler.ml: The hash now contains the tag.
+	* _tags: *.top use unix too.
+
+2007-02-22  Berke Durak  <berke.durak@inria.fr>
+
+	Should use Log.eprintf for show_tags.
+
+	* main.ml: .
+
+2007-02-22  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	( & ), sanitize.sh, and the manual...
+
+	* signatures.mli: Add ( & ).
+
+	* hygiene.ml: Also clean the sanitize.sh script itself.
+	* my_std.ml: Add ( & ).
+	* manual/manual.tex: Some fixes and a section that I wrote but that's
+	needs reflexion about what solution we want to support.
+
+2007-02-22  Berke Durak  <berke.durak@inria.fr>
+
+	Implemented fixes suggested  by Commissar Leroy.
+
+	* fda.ml: .
+	* hygiene.ml: .
+	* hygiene.mli: .
+	* man/ocamlbuild.1: .
+	* manual/manual.tex: .
+	* ocaml_specific.ml: .
+	* options.ml: .
+	* signatures.mli: .
+
+2007-02-20  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Add -show-tags.
+
+	* hygiene.ml: Rewrap the error message.
+	* main.ml: Do the show_tags job. Move one hook.
+	* ocaml_specific.ml: Add -g also in native code.
+	* options.ml,
+	* signatures.mli: Add the -show-tags option.
+	* tags.ml: Fix print.
+	* TODO: Add a done entry.
+
+2007-02-16  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Relaxing plural options to spaces.
+
+	* lexers.mli,
+	* lexers.mll: Add comma_or_blank_sep_strings.
+	* options.ml: Use it.
+
+2007-02-16  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Add a plugin example.
+
+	* manual/myocamlbuild.ml: New.
+
+2007-02-16  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Typos.
+
+	* ocamlbuild-presentation.rslide: .
+	* manual/trace.out: .
+
+2007-02-16  Berke Durak  <berke.durak@inria.fr>
+
+	Fixed a few typos and sentences.
+
+	* ocamlbuild-presentation.rslide: .
+
+2007-02-15  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Little changes...
+
+	* ocamlbuild-presentation.rslide: .
+
+2007-02-15  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Slides almost done...
+
+	* manual/trace.out: New. Of course you needed it.
+	* ocamlbuild-presentation.rslide: Ditto.
+
+2007-02-15  Berke Durak  <berke.durak@inria.fr>
+
+	Improving slides.
+
+	* ocamlbuild-presentation.rslide: .
+
+2007-02-15  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Slides...
+
+	* ocamlbuild-presentation.rslide: .
+
+2007-02-15  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Working on slides...
+
+	* ocamlbuild-presentation.rslide: .
+
+2007-02-15  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	More slides...
+
+	* ocamlbuild-presentation.rslide: .
+
+2007-02-12  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
+
+	Keep include dirs uniq.
+
+	* ocaml_compiler.ml: Ditto.
+
 2007-02-12  Nicolas Pouillard  <nicolas.pouillard@gmail.com>
 
 	Keep include dirs uniq.

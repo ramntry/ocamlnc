@@ -64,7 +64,7 @@ module type STRING = sig
 
   val eq_sub_strings : string -> int -> string -> int -> int -> bool
 
-  (** [is_prefix u v] is v a prefix of u ? *)
+  (** [is_prefix u v] is u a prefix of v ? *)
   val is_prefix : string -> string -> bool
   (** [is_suffix u v] : is v a suffix of u ? *)
   val is_suffix : string -> string -> bool
@@ -314,7 +314,15 @@ module type MISC = sig
   val copy_chan : in_channel -> out_channel -> unit
   val copy_file : string -> string -> unit
   val print_string_list : Format.formatter -> string list -> unit
+
+  (** A shortcut to force lazy value (See {Lazy.force}). *)
   val ( !* ) : 'a Lazy.t -> 'a
+
+  (** The right associative application.
+      Useful when writing to much parentheses:
+      << f (g x ... t) >> becomes << f& g x ... t >>
+      << f (g (h x)) >>   becomes << f& g& h x >> *)
+  val ( & ) : ('a -> 'b) -> 'a -> 'b
 
   (** [r @:= l] is equivalent to [r := !r @ l] *)
   val ( @:= ) : 'a list ref -> 'a list -> unit
@@ -339,8 +347,8 @@ module type OPTIONS = sig
   val ocamlmklib : command_spec ref
   val ocamlmktop : command_spec ref
   val hygiene : bool ref
-  val sterilize : bool ref
-  val sterilization_script : string ref
+  val sanitize : bool ref
+  val sanitization_script : string ref
   val ignore_auto : bool ref
   val plugin : bool ref
   val just_plugin : bool ref
@@ -349,8 +357,10 @@ module type OPTIONS = sig
   val nostdlib : bool ref
   val program_to_execute : bool ref
   val must_clean : bool ref
+  val catch_errors : bool ref
   val internal_log_file : string option ref
   val use_menhir : bool ref
+  val show_documentation : bool ref
 
   val targets : string list ref
   val ocaml_libs : string list ref
@@ -362,6 +372,7 @@ module type OPTIONS = sig
   val program_args : string list ref
   val ignore_list : string list ref
   val tags : string list ref
+  val show_tags : string list ref
 
   val ext_obj : string ref
   val ext_lib : string ref
@@ -473,6 +484,32 @@ module type PLUGIN = sig
   (** [use_lib module_path lib_path]*)
   val use_lib : Pathname.t -> Pathname.t -> unit
 
+  (** [ocaml_lib <options> library_pathname]
+      Declare an ocaml library.
+
+      Example: ocaml_lib "foo/bar"
+        This will setup the tag use_bar tag.
+        At link time it will include:
+          foo/bar.cma or foo/bar.cmxa
+        If you supply the ~dir:"boo" option -I boo
+          will be added at link and compile time. 
+        Use ~extern:true for non-ocamlbuild handled libraries.
+        Use ~byte:false or ~native:false to disable byte or native mode.
+        Use ~tag_name:"usebar" to override the default tag name. *)
+  val ocaml_lib :
+    ?extern:bool ->
+    ?byte:bool ->
+    ?native:bool ->
+    ?dir:Pathname.t ->
+    ?tag_name:string ->
+    Pathname.t -> unit
+
+  (** [expand_module include_dirs module_name extensions]
+      Example:
+        [expand_module ["a";"b";"c"] "Foo" ["cmo";"cmi"] =
+         ["a/foo.cmo"; "a/Foo.cmo"; "a/foo.cmi"; "a/Foo.cmi";
+          "b/foo.cmo"; "b/Foo.cmo"; "b/foo.cmi"; "b/Foo.cmi";
+          "c/foo.cmo"; "c/Foo.cmo"; "c/foo.cmi"; "c/Foo.cmi"]] *)
   val expand_module :
     Pathname.t list -> Pathname.t -> string list -> Pathname.t list
 

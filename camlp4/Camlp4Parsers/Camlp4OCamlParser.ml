@@ -311,6 +311,7 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
   value rec is_expr_constr_call =
     fun
     [ <:expr< $id:i$ >> -> is_ident_constr_call i
+    | <:expr< `$_$ >> -> True
     | <:expr< $_$.$e$ >> -> is_expr_constr_call e
     | <:expr@_loc< $e$ $_$ >> ->
         let res = is_expr_constr_call e in
@@ -342,7 +343,6 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
   clear constructor_arg_list;
   clear poly_type;
   clear class_name_and_param;
-  clear class_fun_def;
   clear class_longident_and_param;
   clear class_type_longident_and_param;
   clear class_type_plus;
@@ -742,14 +742,14 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
         | "#"; i = class_longident -> <:ctyp< # $i$ >>
         | "<"; ml = opt_meth_list; v = opt_dot_dot; ">" ->
             <:ctyp< < $ml$ $..:v$ > >>
-        | "["; rfl = row_field; "]" ->
+        | "["; OPT "|"; rfl = row_field; "]" ->
             <:ctyp< [ = $rfl$ ] >>
         | "["; ">"; "]" -> <:ctyp< [ > $<:ctyp<>>$ ] >>
-        | "["; ">"; rfl = row_field; "]" ->
+        | "["; ">"; OPT "|"; rfl = row_field; "]" ->
             <:ctyp< [ > $rfl$ ] >>
-        | "[<"; rfl = row_field; "]" ->
+        | "[<"; OPT "|"; rfl = row_field; "]" ->
             <:ctyp< [ < $rfl$ ] >>
-        | "[<"; rfl = row_field; ">"; ntl = name_tags; "]" ->
+        | "[<"; OPT "|"; rfl = row_field; ">"; ntl = name_tags; "]" ->
             <:ctyp< [ < $rfl$ > $ntl$ ] >>
         ] ]
     ;

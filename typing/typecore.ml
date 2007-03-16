@@ -26,6 +26,7 @@ type error =
     Unbound_value of Longident.t
   | Unbound_constructor of Longident.t
   | Unbound_label of Longident.t
+  | Polymorphic_label of Longident.t
   | Constructor_arity_mismatch of Longident.t * int * int
   | Label_mismatch of Longident.t * (type_expr * type_expr) list
   | Pattern_type_clash of (type_expr * type_expr) list
@@ -449,7 +450,9 @@ let rec type_pat env sp =
             Env.lookup_label lid env
           with Not_found ->
             raise(Error(sp.ppat_loc, Unbound_label lid)) in
-        let (_, ty_arg, ty_res) = instance_label false label in
+        begin_def ();
+        let (vars, ty_arg, ty_res) = instance_label false label in
+        if vars = [] then end_def ();
         begin try
           unify env ty_res ty
         with Unify trace ->
@@ -457,6 +460,16 @@ let rec type_pat env sp =
         end;
         let arg = type_pat env sarg in
         unify_pat env arg ty_arg;
+        if vars <> [] then begin
+          end_def ();
+          generalize ty_arg;
+          List.iter generalize vars;
+          let instantiated tv =
+            let tv = expand_head env tv in
+            tv.desc <> Tvar || tv.level <> generic_level in
+          if List.exists instantiated vars then
+            raise (Error(sp.ppat_loc, Polymorphic_label lid))
+        end;
         (label, arg)
       in
       rp {
@@ -2007,6 +2020,9 @@ let report_error ppf = function
       fprintf ppf "Unbound constructor %a" longident lid
   | Unbound_label lid ->
       fprintf ppf "Unbound record field label %a" longident lid
+  | Polymorphic_label lid ->
+      fprintf ppf "@[The record field label %a is polymorphic.@ %s@]"
+        longident lid "You cannot instantiate it in a pattern."
   | Constructor_arity_mismatch(lid, expected, provided) ->
       fprintf ppf
        "@[The constructor %a@ expects %i argument(s),@ \

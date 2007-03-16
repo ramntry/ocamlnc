@@ -26,8 +26,8 @@ let build_dir = ref "_build"
 let include_dirs = ref []
 let exclude_dirs = ref []
 let nothing_should_be_rebuilt = ref false
-let sterilize = ref true
-let sterilization_script = ref "sterilize.sh"
+let sanitize = ref true
+let sanitization_script = ref "sanitize.sh"
 let hygiene = ref true
 let ignore_auto = ref true
 let plugin = ref true
@@ -36,17 +36,45 @@ let native_plugin = ref true
 let make_links = ref true
 let nostdlib = ref false
 let use_menhir = ref false
-let ocamlc = ref (A"ocamlc.opt")
-let ocamlopt = ref (A"ocamlopt.opt")
-let ocamldep = ref (A"ocamldep.opt")
-let ocamldoc = ref (A"ocamldoc.opt")
-let ocamlyacc = ref (A"ocamlyacc")
-let ocamllex = ref (A"ocamllex")
-let ocamlmklib = ref (A"ocamlmklib")
-let ocamlmktop = ref (A"ocamlmktop")
+let catch_errors = ref true
+
+let mk_virtual_solvers =
+  let dir = Ocamlbuild_where.bindir in
+  List.iter begin fun cmd ->
+    let opt = cmd ^ ".opt" in
+    let a_opt = A opt in
+    let a_cmd = A cmd in
+    let search_in_path = memo Command.search_in_path in
+    let solver () =
+      if sys_file_exists !dir then
+        let long = filename_concat !dir cmd in
+        let long_opt = long ^ ".opt" in
+        if sys_file_exists long_opt then A long_opt
+        else if sys_file_exists long then A long
+        else try let _ = search_in_path opt in a_opt
+        with Not_found -> a_cmd
+      else
+        try let _ = search_in_path opt in a_opt
+        with Not_found -> a_cmd
+    in Command.setup_virtual_command_solver (String.uppercase cmd) solver
+  end
+
+let () =
+  mk_virtual_solvers
+    ["ocamlc"; "ocamlopt"; "ocamldep"; "ocamldoc";
+     "ocamlyacc"; "ocamllex"; "ocamlmklib"; "ocamlmktop"]
+let ocamlc = ref (V"OCAMLC")
+let ocamlopt = ref (V"OCAMLOPT")
+let ocamldep = ref (V"OCAMLDEP")
+let ocamldoc = ref (V"OCAMLDOC")
+let ocamlyacc = ref (V"OCAMLYACC")
+let ocamllex = ref (V"OCAMLLEX")
+let ocamlmklib = ref (V"OCAMLMKLIB")
+let ocamlmktop = ref (V"OCAMLMKTOP")
 let ocamlrun = ref N
 let program_to_execute = ref false
 let must_clean = ref false
+let show_documentation = ref false
 let ext_lib = ref "a"
 let ext_obj = ref "o"
 let ext_dll = ref "so"
@@ -61,6 +89,7 @@ let ocaml_lexflags_internal = ref []
 let program_args_internal = ref []
 let ignore_list_internal = ref []
 let tags_internal = ref [["quiet"]]
+let show_tags_internal = ref []
 
 let my_include_dirs = ref [[Filename.current_dir_name]]
 let my_exclude_dirs = ref [[".svn"; "CVS"]]
@@ -83,7 +112,7 @@ let () = set_log_file "_log"
 let dummy = "*invalid-dummy-string*";; (* Dummy string for delimiting the latest argument *)
 
 let add_to rxs x =
-  let xs = Lexers.comma_sep_strings (Lexing.from_string x) in
+  let xs = Lexers.comma_or_blank_sep_strings (Lexing.from_string x) in
   rxs := xs :: !rxs
 let add_to' rxs x =
   if x <> dummy then
@@ -97,12 +126,13 @@ let spec =
    "-version", Unit (fun () -> print_endline version; raise Exit_OK), " Display the version";
    "-quiet", Unit (fun () -> Log.level := 0), " Make as quiet as possible";
    "-verbose", Int (fun i -> Log.level := i + 2), "<level> Set the verbosity level";
+   "-documentation", Set show_documentation, " Show rules and flags";
    "-log", String set_log_file, "<file> Set log file";
    "-no-log", Unit (fun () -> Log.log_file := lazy None), " No log file";
    "-clean", Set must_clean, " Remove build directory and other files, then exit"; 
 
    "-I", String (add_to' my_include_dirs), "<path> Add to include directories";
-   "-Is", String (add_to my_include_dirs), "<path,...> (same as above, but accepts a comma-separated list)";
+   "-Is", String (add_to my_include_dirs), "<path,...> (same as above, but accepts a (comma or blank)-separated list)";
    "-X", String (add_to' my_exclude_dirs), "<path> Directory to ignore";
    "-Xs", String (add_to my_exclude_dirs), "<path,...> (idem)";
 
@@ -120,6 +150,7 @@ let spec =
    "-pp", String (add_to ocaml_ppflags_internal), "<flag,...> (idem)";
    "-tag", String (add_to' tags_internal), "<tag> Add to default tags";
    "-tags", String (add_to tags_internal), "<tag,...> (idem)";
+   "-show-tags", String (add_to' show_tags_internal), "<path> Show tags that applies on that pathname";
 
    "-ignore", String (add_to ignore_list_internal), "<module,...> Don't try to build these modules";
    "-no-links", Clear make_links, " Don't make links of produced final targets";
@@ -127,10 +158,11 @@ let spec =
    "-no-hygiene", Clear hygiene, " Don't apply sanity-check rules";
    "-no-plugin", Clear plugin, " Don't build myocamlbuild.ml";
    "-no-stdlib", Set nostdlib, " Don't ignore stdlib modules";
+   "-dont-catch-errors", Clear catch_errors, " Don't catch and display exceptions (useful to display the call stack)";
    "-just-plugin", Set just_plugin, " Just build myocamlbuild.ml";
    "-byte-plugin", Clear native_plugin, " Don't use a native plugin but bytecode";
-   "-sterilization-script", Set_string sterilization_script, " Change the file name for the generated sterilization script";
-   "-no-sterilize", Clear sterilize, " Do not generate sterilization script";
+   "-sanitization-script", Set_string sanitization_script, " Change the file name for the generated sanitization script";
+   "-no-sanitize", Clear sanitize, " Do not generate sanitization script";
    "-nothing-should-be-rebuilt", Set nothing_should_be_rebuilt, " Fail if something needs to be rebuilt";
    "-classic-display", Set Log.classic_display, " Display executed commands the old-fashioned way";
    "-use-menhir", Unit(fun () -> use_menhir := true; ocamlyacc := A"menhir"),
@@ -139,8 +171,9 @@ let spec =
    "-j", Set_int Command.jobs, "<N> Allow N jobs at once (0 for unlimited)";
 
    "-build-dir", Set_string build_dir, "<path> Set build directory";
-   "-install-dir", Set_string Ocamlbuild_where.where, "<path> Set the install directory";
-   "-where", Unit (fun () -> print_endline !Ocamlbuild_where.where; raise Exit_OK), " Display the install directory";
+   "-install-lib-dir", Set_string Ocamlbuild_where.libdir, "<path> Set the install library directory";
+   "-install-bin-dir", Set_string Ocamlbuild_where.bindir, "<path> Set the install binary directory";
+   "-where", Unit (fun () -> print_endline !Ocamlbuild_where.libdir; raise Exit_OK), " Display the install library directory";
 
    "-ocamlc", set_cmd ocamlc, "<command> Set the OCaml bytecode compiler";
    "-ocamlopt", set_cmd ocamlopt, "<command> Set the OCaml native compiler";
@@ -167,6 +200,7 @@ let ocaml_lexflags = ref []
 let program_args = ref []
 let ignore_list = ref []
 let tags = ref []
+let show_tags = ref []
 
 let init () =
   let anon_fun = add_to' targets_internal in
@@ -185,6 +219,7 @@ let init () =
   reorder program_args program_args_internal;
   reorder tags tags_internal;
   reorder ignore_list ignore_list_internal;
+  reorder show_tags show_tags_internal;
 
   let dir_reorder my dir =
     let d = !dir in

@@ -144,12 +144,9 @@ let native_compile_ocaml_implem ?tag ?(cmx_ext="cmx") ml env build =
 
 let libs_of_use_lib tags =
   Tags.fold begin fun tag acc ->
-    if String.is_prefix "use_" tag then
-      let lib = String.after tag 4 in
-      try let libpath, extern = Hashtbl.find info_libraries lib in
-          if extern then acc else libpath :: acc
-      with Not_found -> acc
-    else acc
+    try let libpath, extern = Hashtbl.find info_libraries tag in
+        if extern then acc else libpath :: acc
+    with Not_found -> acc
   end tags []
 
 let prepare_libs cma_ext a_ext out build =
@@ -178,7 +175,7 @@ let caml_transitive_closure = Ocaml_dependencies.caml_transitive_closure
 let link_gen cmX_ext cma_ext a_ext extensions linker tagger cmX out env build =
   let cmX = env cmX and out = env out in
   let tags = tagger (tags_of_pathname out) in
-  let dyndeps = Rule.build_deps_of_tags build tags in
+  let dyndeps = Rule.build_deps_of_tags build (tags++"link_with") in
   let cmi = Pathname.update_extensions "cmi" cmX in
   prepare_link cmX cmi extensions build;
   let libs = prepare_libs cma_ext a_ext out build in
@@ -188,9 +185,15 @@ let link_gen cmX_ext cma_ext a_ext extensions linker tagger cmX out env build =
       ~caml_obj_ext:cmX_ext ~caml_lib_ext:cma_ext
       ~used_libraries:libs ~hidden_packages (cmX :: dyndeps) in
   let deps = (List.filter (fun l -> not (List.mem l deps)) libs) @ deps in
+
+  (* Hack to avoid linking twice with the standard library. *)
+  let stdlib = "stdlib/stdlib"-.-cma_ext in
+  let is_not_stdlib x = x <> stdlib in
+  let deps = List.filter is_not_stdlib deps in
+
   if deps = [] then failwith "Link list cannot be empty";
   let () = dprintf 6 "link: %a -o %a" print_string_list deps Pathname.print out in
-  linker tags deps out
+  linker (tags++"dont_link_with") deps out
 
 let byte_link_gen = link_gen "cmo" "cma" "cma" ["cmo"; "cmi"]
 
@@ -261,6 +264,12 @@ let link_units table extensions cmX_ext cma_ext a_ext linker tagger contents_lis
   let full_contents = libs @ module_paths in
   let deps = List.filter (fun x -> List.mem x full_contents) deps in
   let deps = (List.filter (fun l -> not (List.mem l deps)) libs) @ deps in
+
+  (* Hack to avoid linking twice with the standard library. *)
+  let stdlib = "stdlib/stdlib"-.-cma_ext in
+  let is_not_stdlib x = x <> stdlib in
+  let deps = List.filter is_not_stdlib deps in
+
   linker tags deps cmX
 
 let link_modules = link_units library_index

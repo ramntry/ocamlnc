@@ -73,18 +73,13 @@ projects need features not available in that module -- you may then use
 functions or values directly from the core \ocb modules.  We ask you to report
 such usage to the authors so that we may make the necessary changes to the API;
 you may also want to isolate calls to the non-API parts of the \ocb library
-from the rest of your plugin to to be able to keep the later when incompatible
+from the rest of your plugin to be able to keep the later when incompatible
 changes arise.
 
-The way that \ocb handles the command-line options, the \texttt{\_tags} file,
+The way that \ocb handles the command-line options, the \tags file,
 the target names, names of the tags, and so on, are not expected to change in
 incompatible ways.  We intend to keep a project that compiles without a plugin
 compilable without modifications in the future.
-
-\begin{itemize}
-\item Plugin API not stable
-\item No built-in rules for creating toplevels or libraries
-\end{itemize}
 %***)
 %(*** Using ocamlbuild
 \section{Using \ocb}
@@ -123,7 +118,7 @@ directory are due to previous builds using other systems.  \ocb has so-called
 or \texttt{.o} files, for instance) must not appear outside of the build
 directory.  These rules are enforced at startup; any violations will be reported
 and \ocb will exit.  You must then remove these files by hand or run, with caution,
-the script \texttt{sterilize.sh}, which is generated in your source directory.
+the script \texttt{sanitize.sh}, which is generated in your source directory.
 This script will contain commands to remove them for you.
 
 To disable these checks, you can use the \texttt{-no-hygiene} flag.  If you have
@@ -179,9 +174,9 @@ total 208
 You can execute your code the old-fashioned way (\texttt{./hello.native}).
 You may also type
 \begin{verbatim}
-ocamlbuild main.native -- Caesar
+ocamlbuild hello.native -- Caesar
 \end{verbatim}
-and it will compile and then run \texttt{main.native} with the arguments following \texttt{-{}-},
+and it will compile and then run \texttt{hello.native} with the arguments following \texttt{-{}-},
 which should display:
 \begin{verbatim}
 % ocamlbuild hello.native -- Caesar   
@@ -262,14 +257,14 @@ let _ =
   Printf.printf "My name is %s\n" Sys.argv.(0)
 ;;
 \end{verbatim}
-Then the module \texttt{Main} depends on the module \texttt{Greet} and \ocb can
+Then the module \texttt{Hello} depends on the module \texttt{Greet} and \ocb can
 figure this out for himself -- we still only have to invoke \texttt{\ocb
-main.native}.  Needless to say, this works for any number of modules.
+hello.native}.  Needless to say, this works for any number of modules.
 %***)
 %(*** Native and byte code
 \subsection{Native and byte-code}
 If we want to compile byte-code instead of native, we just a target name of
-\texttt{main.byte} instead of \texttt{main.native}, i.e., we type
+\texttt{hello.byte} instead of \texttt{hello.native}, i.e., we type
 \texttt{\ocb hello.byte}.
 %***)
 %(*** Compile flags
@@ -528,7 +523,7 @@ either type:
 \begin{verbatim}
 % ocamlbuild -Is foo,bar,baz foo/main.native
 \end{verbatim}
-or add the following line in the \texttt{\_tags} file
+or add the following line in the \tags file
 \begin{verbatim}
 <foo> or <bar> or <baz>: include
 \end{verbatim}
@@ -541,7 +536,8 @@ There are then two cases.  If no other modules named \texttt{Bar} or
 \texttt{Baz} exist elsewhere in the project, then you are done.  Just use
 \texttt{Foo}, \texttt{Foo.Bar} and \texttt{Foo.Baz} in your code.
 Otherwise, you will need to use the plugin mechanism and define the mutual
-visibility of the subdirectories using the XXX function.
+visibility of the subdirectories using the \texttt{Pathname.define\_context}
+function.
 %***)
 %(*** Grouping targets
 \subsection{Grouping targets with \texttt{.itarget}}
@@ -597,6 +593,55 @@ Another way is to use the tags file.
     \hline
   \end{tabular}
 \end{center}
+
+%%%%% \subsubsection{An example, dealing with some configuration variables} 
+%%%%% 
+%%%%% It's quite common to have in your sources some files that you want to access
+%%%%% when your program is running. One often uses some variables that are setup by
+%%%%% the end user. Now suppose that there is only two files that use these variables
+%%%%% (mylib.ml and parseopt.ml).
+%%%%% 
+%%%%% In the \tags file:
+%%%%% \begin{verbatim}
+%%%%% "mylib.ml" or "parseopt.ml": pp(sed -e "s,LIBDIR,/usr/local/lib/FOO,g")
+%%%%% \end{verbatim}
+%%%%% 
+%%%%% In fact that solution is not really acceptable, since the variable is hardcoded
+%%%%% in the \tags file. Trying to workaround this issue by using some shell variable
+%%%%% does not work either since the -pp argument will be escaped in simple quotes.
+%%%%% Note also that using some script shell that will do that sed and use \verb'$LIBDIR'
+%%%%% as a shell variable is not a good idea since \ocb don't know this dependency on that
+%%%%% shell script.
+%%%%% 
+%%%%% There is in fact at least two good solutions. The first is to tell that dependency
+%%%%% using the \texttt{dep} function in your plugin. The second is simpler it just consist
+%%%%% on generating some OCaml file at configure time. By naming this configuration file
+%%%%% \texttt{myocamlbuild_config.ml} \ocb will make it also available to your plugin.
+%%%%% 
+%%%%% In your \texttt{myocamlbuild_config.mli} interface:
+%%%%% \begin{verbotim}
+%%%%% val prefix : string
+%%%%% val libdir : string
+%%%%% \end{verbotim}
+%%%%% 
+%%%%% And in your \texttt{configure} script 
+%%%%% \begin{verbatim}
+%%%%% #!/bin/sh
+%%%%% 
+%%%%% # Setting defaults values
+%%%%% PREFIX=/usr/local
+%%%%% LIBDIR=$PREFIX/lib/FOO
+%%%%% CONF=myocamlbuild_config.ml
+%%%%% 
+%%%%% # ... some shell to parse option and check configuration ...
+%%%%% 
+%%%%% # Dumping the configuration as an OCaml file.
+%%%%% rm -f $CONF
+%%%%% echo "let prefix = \"$PREFIX\";;" >> $CONF
+%%%%% echo "let libdir = \"$LIBDIR\";;" >> $CONF
+%%%%% chmod -w $CONF
+%%%%% \end{verbatim}
+
 %***)
 %(*** Debugging and profiling
 \subsection{Debugging byte code and profiling native code}
@@ -611,7 +656,7 @@ on the command line, or add a
 \begin{verbatim}
 true: debug
 \end{verbatim}
-line to your \texttt{\_tags} file.
+line to your \tags file.
 Please note that the byte-code profiler works in a wholly different way
 and is not supported by \ocb.
 %***)
@@ -701,7 +746,7 @@ launch \ocb with the \texttt{-use-menhir} option or add a
 \begin{verbatim}
 true: use_menhir
 \end{verbatim}
-line to your \texttt{\_tags} file.  Note that there is currently no way
+line to your \tags file.  Note that there is currently no way
 of using \texttt{menhir} and \texttt{ocamlyacc} in the same execution
 of \ocb.
 %***)
@@ -719,6 +764,7 @@ for different reasons (such as cross-compiling or using a wrapper such as
   \item \texttt{-ocamlyacc <command>}
   \item \texttt{-menhir <command>}
   \item \texttt{-ocamllex <command>}
+  \item \texttt{-ocamlmktop <command>}
   \item \texttt{-ocamlrun <command>}
 \end{itemize}
 
@@ -887,7 +933,10 @@ be a good way of telling the computer that \texttt{foo.mli} is generated by
 \texttt{ocamlyacc} using \texttt{foo.mly} and can thus be removed.
 %***)
 %(*** Default rules
-\section{Default rules}
+\section{Summary of default rules}
+The contents of this table give a summary of the most important default rules.
+To get the most accurate and up-to-date information, launch \ocb with the
+\texttt{-documentation} option.
 \begin{center}
 \small
 \begin{tabular}{|l|l|p{5cm}|}

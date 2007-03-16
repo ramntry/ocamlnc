@@ -64,6 +64,7 @@ val dep : string list -> string list -> unit
 module Common_commands : sig
   val mv : Pathname.t -> Pathname.t -> Command.t
   val cp : Pathname.t -> Pathname.t -> Command.t
+  val cp_p : Pathname.t -> Pathname.t -> Command.t
   val ln_f : Pathname.t -> Pathname.t -> Command.t
   val ln_s : Pathname.t -> Pathname.t -> Command.t
   val rm_f : Pathname.t -> Command.t
@@ -71,6 +72,9 @@ module Common_commands : sig
   val chmod : Command.spec -> Pathname.t -> Command.t
   val cmp : Pathname.t -> Pathname.t -> Command.t
 end
+
+val print : Format.formatter -> t -> unit
+val pretty_print : Format.formatter -> t -> unit
 
 (** For system use only *)
 
@@ -81,7 +85,6 @@ val compare : t -> t -> int
 
 val print_rule_name : Format.formatter -> t -> unit
 val print_rule_contents : Format.formatter -> t -> unit
-val print : Format.formatter -> t -> unit
 
 val get_rules : unit -> t list
 

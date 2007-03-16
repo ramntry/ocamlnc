@@ -38,6 +38,26 @@ let clean () =
   raise Exit_silently
 ;;
 
+let show_tags () =
+  List.iter begin fun path ->
+    Log.eprintf "@[<2>Tags for %S:@ {. %a .}@]" path Tags.print (tags_of_pathname path)
+  end !Options.show_tags
+;;
+
+let show_documentation () =
+  let rules = Rule.get_rules () in
+  let flags = Flags.get_flags () in
+  let pp fmt = Log.raw_dprintf (-1) fmt in
+  List.iter begin fun rule ->
+    pp "%a@\n@\n" Rule.pretty_print rule
+  end rules;
+  List.iter begin fun (tags, flag) ->
+    let sflag = Command.string_of_command_spec flag in
+    pp "@[<2>flag@ {. %a .}@ %S@]@\n@\n" Tags.print tags sflag
+  end flags;
+  pp "@."
+;;
+
 let proceed () =
   Hooks.call_hook Hooks.Before_options;
   Options.init ();
@@ -46,9 +66,25 @@ let proceed () =
   Tools.default_tags := Tags.of_list !Options.tags;
   Plugin.execute_plugin_if_needed ();
 
-  if !Options.targets = [] then raise Exit_silently;
+  if !Options.targets = []
+    && !Options.show_tags = []
+    && not !Options.show_documentation
+    then raise Exit_silently;
 
   let target_dirs = List.union [] (List.map Pathname.dirname !Options.targets) in
+
+  Configuration.parse_string
+    "true: traverse
+     <**/*.ml> or <**/*.mli> or <**/*.mlpack> or <**/*.ml.depends>: ocaml
+     <**/*.byte>: ocaml, byte, program
+     <**/*.odoc>: ocaml, doc
+     <**/*.native>: ocaml, native, program
+     <**/*.cma>: ocaml, byte, library
+     <**/*.cmxa>: ocaml, native, library
+     <**/*.cmo>: ocaml, byte
+     <**/*.cmi>: ocaml, byte, native
+     <**/*.cmx>: ocaml, native
+    ";
 
   let newpwd = Sys.getcwd () in
   Sys.chdir Pathname.pwd;
@@ -82,12 +118,12 @@ let proceed () =
       end
       (Slurp.slurp Filename.current_dir_name)
   in
+  Hooks.call_hook Hooks.Before_hygiene;
   let hygiene_entry =
     Slurp.map begin fun path name () ->
       let tags = tags_of_pathname (path/name) in
       not (Tags.mem "not_hygienic" tags) && not (Tags.mem "precious" tags)
     end entry in
-  Hooks.call_hook Hooks.Before_hygiene;
   if !Options.hygiene then
     Fda.inspect hygiene_entry
   else
@@ -105,22 +141,15 @@ let proceed () =
   Sys.chdir newpwd;
   (*let () = dprintf 0 "source_dir_path_set:@ %a" StringSet.print source_dir_path_set*)
 
-  dprintf 8 "Rules are:@ %a" (List.print Rule.print) (Rule.get_rules ());
+  if !Options.show_documentation then begin
+    show_documentation ();
+    raise Exit_silently
+  end;
   Resource.Cache.init ();
 
-  Configuration.parse_string
-    "<**/*.ml> or <**/*.mli> or <**/*.mlpack> or <**/*.ml.depends>: ocaml
-     <**/*.byte>: ocaml, byte, program
-     <**/*.odoc>: ocaml, doc
-     <**/*.native>: ocaml, native, program
-     <**/*.cma>: ocaml, byte, library
-     <**/*.cmxa>: ocaml, native, library
-     <**/*.cmo>: ocaml, byte
-     <**/*.cmi>: ocaml, byte, native
-     <**/*.cmx>: ocaml, native
-    ";
-
   Sys.catch_break true;
+
+  show_tags ();
 
   let targets =
     List.map begin fun starget ->
@@ -206,63 +235,66 @@ let main () =
   in
   try
     proceed ()
-  with
-  | Exit_OK -> exit rc_ok
-  | Fda.Exit_hygiene_failed ->
-      Log.eprintf "Exiting due to hygiene violations.";
-      exit rc_hygiene
-  | Exit_usage u ->
-      Log.eprintf "Usage:@ %s." u;
-      exit rc_usage
-  | Exit_system_error msg ->
-      Log.eprintf "System error:@ %s." msg;
-      exit rc_system_error
-  | Exit_with_code rc ->
-      exit rc
-  | Exit_silently ->
-      Log.finish ~how:`Quiet ();
-      Pervasives.exit rc_ok
-  | Exit_silently_with_code rc ->
-      Log.finish ~how:`Quiet ();
-      Pervasives.exit rc
-  | Solver.Failed backtrace ->
-      Log.raw_dprintf (-1) "@[<v0>@[<2>Solver failed:@ %a@]@\n@[<v2>Backtrace:%a@]@]@."
-        Report.print_backtrace_analyze backtrace Report.print_backtrace backtrace;
-      exit rc_solver_failed
-  | Failure s ->
-      Log.eprintf "Failure:@ %s." s;
-      exit rc_failure
-  | Solver.Circular(r, rs) ->
-      Log.eprintf "Circular build detected@ (%a already seen in %a)"
-      Resource.print r (List.print Resource.print) rs;
-      exit rc_circularity
-  | Invalid_argument s ->
-      Log.eprintf
-        "INTERNAL ERROR: Invalid argument %s\n\
-         This is likely to be a bug, please report this to the ocamlbuild\n\
-         developers." s;
-      exit rc_invalid_argument
-  | Ocamldep.Error msg ->
-      Log.eprintf "Ocamldep error: %s" msg;
-      exit rc_ocamldep_error
-  | Lexers.Error msg ->
-      Log.eprintf "Lexical analysis error: %s" msg;
-      exit rc_lexing_error
-  | Arg.Bad msg ->
-      Log.eprintf "%s" msg;
-      exit rc_usage
-  | Exit_build_error msg ->
-      Log.eprintf "%s" msg;
-      exit rc_build_error
-  | Arg.Help msg ->
-      Log.eprintf "%s" msg;
-      exit rc_ok
-  | e ->
-      try
-        Log.eprintf "%a" My_unix.report_error e;
-        exit 100 
-      with
+  with e ->
+    if !Options.catch_errors then
+      try raise e with
+      | Exit_OK -> exit rc_ok
+      | Fda.Exit_hygiene_failed ->
+          Log.eprintf "Exiting due to hygiene violations.";
+          exit rc_hygiene
+      | Exit_usage u ->
+          Log.eprintf "Usage:@ %s." u;
+          exit rc_usage
+      | Exit_system_error msg ->
+          Log.eprintf "System error:@ %s." msg;
+          exit rc_system_error
+      | Exit_with_code rc ->
+          exit rc
+      | Exit_silently ->
+          Log.finish ~how:`Quiet ();
+          Pervasives.exit rc_ok
+      | Exit_silently_with_code rc ->
+          Log.finish ~how:`Quiet ();
+          Pervasives.exit rc
+      | Solver.Failed backtrace ->
+          Log.raw_dprintf (-1) "@[<v0>@[<2>Solver failed:@ %a@]@\n@[<v2>Backtrace:%a@]@]@."
+            Report.print_backtrace_analyze backtrace Report.print_backtrace backtrace;
+          exit rc_solver_failed
+      | Failure s ->
+          Log.eprintf "Failure:@ %s." s;
+          exit rc_failure
+      | Solver.Circular(r, rs) ->
+          Log.eprintf "Circular build detected@ (%a already seen in %a)"
+          Resource.print r (List.print Resource.print) rs;
+          exit rc_circularity
+      | Invalid_argument s ->
+          Log.eprintf
+            "INTERNAL ERROR: Invalid argument %s\n\
+            This is likely to be a bug, please report this to the ocamlbuild\n\
+            developers." s;
+          exit rc_invalid_argument
+      | Ocamldep.Error msg ->
+          Log.eprintf "Ocamldep error: %s" msg;
+          exit rc_ocamldep_error
+      | Lexers.Error msg ->
+          Log.eprintf "Lexical analysis error: %s" msg;
+          exit rc_lexing_error
+      | Arg.Bad msg ->
+          Log.eprintf "%s" msg;
+          exit rc_usage
+      | Exit_build_error msg ->
+          Log.eprintf "%s" msg;
+          exit rc_build_error
+      | Arg.Help msg ->
+          Log.eprintf "%s" msg;
+          exit rc_ok
       | e ->
-        Log.eprintf "Exception@ %s." (Printexc.to_string e);
-        exit 100
+          try
+            Log.eprintf "%a" My_unix.report_error e;
+            exit 100 
+          with
+          | e ->
+            Log.eprintf "Exception@ %s." (Printexc.to_string e);
+            exit 100
+    else raise e
 ;;

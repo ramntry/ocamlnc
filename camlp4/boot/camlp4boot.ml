@@ -23,7 +23,7 @@ module R =
       struct
         let name = "Camlp4RevisedParserParser"
         let version =
-          "$Id: OCamlr.ml,v 1.12 2006/07/17 14:18:26 pouillar Exp $"
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     module Make (Syntax : Sig.Camlp4Syntax) =
       struct
@@ -596,7 +596,42 @@ Old (no more supported) syntax:
           and _ = (a_INT64 : 'a_INT64 Gram.Entry.t)
           and _ = (a_INT32 : 'a_INT32 Gram.Entry.t)
           and _ = (a_INT : 'a_INT Gram.Entry.t)
-          and _ = (a_FLOAT : 'a_FLOAT Gram.Entry.t)
+          and _ = (a_FLOAT : 'a_FLOAT Gram.Entry.t) in
+          let grammar_entry_create = Gram.Entry.mk in
+          let (* sem_expr:
+      [ [ e1 = SELF; ";"; e2 = SELF -> <:expr< $e1$; $e2$ >>
+        | e = expr -> e ] ]
+    ;                                                           *)
+            (* | i = opt_label; "("; p = patt_tcon; ")" -> *)
+            (* <:patt< ? $i$ : ($p$) >> *)
+            (* <:class_type< $virtual:mv$ $lid:i$ [ $t$ ] >> *)
+            (* | mv = opt_virtual; i = a_LIDENT -> *)
+            (* Ast.CeCon (_loc, mv, Ast.IdLid (_loc, i), Ast.ONone) *)
+            (* <:class_type< $lid:i$ >> *)
+            (* [ [ "virtual"; i = a_LIDENT; "["; t = comma_type_parameter; "]" ->
+            <:class_type< virtual $lid:i$ [ $t$ ] >>
+        | "virtual"; i = a_LIDENT ->
+            <:class_type< virtual $lid:i$ >>
+        | i = a_LIDENT; "["; t = comma_type_parameter; "]" ->
+            <:class_type< $lid:i$ [ $t$ ] >>
+        | i = a_LIDENT -> <:class_type< $lid:i$ >>
+      ] ]
+    ;                                                                       *)
+            (* "virtual"; i = a_LIDENT; "["; t = comma_type_parameter; "]" -> *)
+            (* <:class_expr< virtual $lid:i$ [ $t$ ] >> *)
+            (* | "virtual"; i = a_LIDENT -> *)
+            (* <:class_expr< virtual $lid:i$ >> *) (* | *)
+            (* <:class_expr< $virtual:mv$ $lid:i$ [ $t$ ] >> *)
+            (* <:class_expr< $lid:i$ [ $t$ ] >> *)
+            (* | mv = opt_virtual; i = a_LIDENT -> *)
+            (* Ast.CeCon (_loc, mv, Ast.IdLid (_loc, i), Ast.ONone) *)
+            (* <:class_expr< $lid:i$ >> *)
+            (* | i = opt_label; "("; p = ipatt_tcon; ")" ->
+            <:patt< ? $i$ : ($p$) >>
+        | i = opt_label; "("; p = ipatt_tcon; "="; e = expr; ")" ->
+            <:patt< ? $i$ : ($p$ = $e$) >>                             *)
+            string_list : 'string_list Gram.Entry.t =
+            grammar_entry_create "string_list"
           in
             (Gram.extend (module_expr : 'module_expr Gram.Entry.t)
                ((fun () ->
@@ -789,11 +824,11 @@ Old (no more supported) syntax:
                             Gram.Skeyword "=";
                             Gram.Snterm
                               (Gram.Entry.obj
-                                 (a_STRING : 'a_STRING Gram.Entry.t)) ],
+                                 (string_list : 'string_list Gram.Entry.t)) ],
                           (Gram.Action.mk
-                             (fun (s : 'a_STRING) _ (t : 'ctyp) _
+                             (fun (sl : 'string_list) _ (t : 'ctyp) _
                                 (i : 'a_LIDENT) _ (_loc : Loc.t) ->
-                                (Ast.StExt (_loc, i, t, s) : 'str_item))));
+                                (Ast.StExt (_loc, i, t, sl) : 'str_item))));
                          ([ Gram.Skeyword "exception";
                             Gram.Snterm
                               (Gram.Entry.obj
@@ -1013,8 +1048,7 @@ Old (no more supported) syntax:
                ((fun () ->
                    (None,
                     [ ((Some "top"), None,
-                       [ ([ (* | "external"; i = a_LIDENT; ":"; t = ctyp; "="; pd = LIST1 [ x = STRING -> x ] -> *)
-                            Gram.Skeyword "class"; Gram.Skeyword "type";
+                       [ ([ Gram.Skeyword "class"; Gram.Skeyword "type";
                             Gram.Snterm
                               (Gram.Entry.obj
                                  (class_type_declaration :
@@ -1111,11 +1145,11 @@ Old (no more supported) syntax:
                             Gram.Skeyword "=";
                             Gram.Snterm
                               (Gram.Entry.obj
-                                 (a_STRING : 'a_STRING Gram.Entry.t)) ],
+                                 (string_list : 'string_list Gram.Entry.t)) ],
                           (Gram.Action.mk
-                             (fun (s : 'a_STRING) _ (t : 'ctyp) _
+                             (fun (sl : 'string_list) _ (t : 'ctyp) _
                                 (i : 'a_LIDENT) _ (_loc : Loc.t) ->
-                                (Ast.SgExt (_loc, i, t, s) : 'sig_item))));
+                                (Ast.SgExt (_loc, i, t, sl) : 'sig_item))));
                          ([ Gram.Skeyword "exception";
                             Gram.Snterm
                               (Gram.Entry.obj
@@ -2119,10 +2153,6 @@ Old (no more supported) syntax:
                                 | _ -> assert false))) ]) ]))
                   ());
              Gram.extend
-               (* sem_expr:
-      [ [ e1 = SELF; ";"; e2 = SELF -> <:expr< $e1$; $e2$ >>
-        | e = expr -> e ] ]
-    ;                                                           *)
                (sem_expr_for_list : 'sem_expr_for_list Gram.Entry.t)
                ((fun () ->
                    (None,
@@ -2574,9 +2604,7 @@ Old (no more supported) syntax:
                              (fun (p2 : 'patt) (p1 : 'patt) (_loc : Loc.t) ->
                                 (Ast.PaApp (_loc, p1, p2) : 'patt)))) ]);
                       ((Some "simple"), None,
-                       [ ([ (* | i = opt_label; "("; p = patt_tcon; ")" -> *)
-                            (* <:patt< ? $i$ : ($p$) >> *) Gram.Skeyword "?";
-                            Gram.Skeyword "(";
+                       [ ([ Gram.Skeyword "?"; Gram.Skeyword "(";
                             Gram.Snterm
                               (Gram.Entry.obj
                                  (patt_tcon : 'patt_tcon Gram.Entry.t));
@@ -4234,29 +4262,13 @@ Old (no more supported) syntax:
                                    ot) :
                                   'class_info_for_class_type)))) ]) ]))
                   ());
-             Gram.extend (* <:class_type< $virtual:mv$ $lid:i$ [ $t$ ] >> *)
-               (* | mv = opt_virtual; i = a_LIDENT -> *)
-               (* Ast.CeCon (_loc, mv, Ast.IdLid (_loc, i), Ast.ONone) *)
-               (* <:class_type< $lid:i$ >> *)
-               (* [ [ "virtual"; i = a_LIDENT; "["; t = comma_type_parameter; "]" ->
-            <:class_type< virtual $lid:i$ [ $t$ ] >>
-        | "virtual"; i = a_LIDENT ->
-            <:class_type< virtual $lid:i$ >>
-        | i = a_LIDENT; "["; t = comma_type_parameter; "]" ->
-            <:class_type< $lid:i$ [ $t$ ] >>
-        | i = a_LIDENT -> <:class_type< $lid:i$ >>
-      ] ]
-    ;                                                                       *)
+             Gram.extend
                (class_info_for_class_expr :
                  'class_info_for_class_expr Gram.Entry.t)
                ((fun () ->
                    (None,
                     [ (None, None,
-                       [ ([ (* "virtual"; i = a_LIDENT; "["; t = comma_type_parameter; "]" -> *)
-                            (* <:class_expr< virtual $lid:i$ [ $t$ ] >> *)
-                            (* | "virtual"; i = a_LIDENT -> *)
-                            (* <:class_expr< virtual $lid:i$ >> *) (* | *)
-                            Gram.Snterm
+                       [ ([ Gram.Snterm
                               (Gram.Entry.obj
                                  (opt_virtual : 'opt_virtual Gram.Entry.t));
                             Gram.Snterm
@@ -4270,11 +4282,7 @@ Old (no more supported) syntax:
                                    ot) :
                                   'class_info_for_class_expr)))) ]) ]))
                   ());
-             Gram.extend (* <:class_expr< $virtual:mv$ $lid:i$ [ $t$ ] >> *)
-               (* <:class_expr< $lid:i$ [ $t$ ] >> *)
-               (* | mv = opt_virtual; i = a_LIDENT -> *)
-               (* Ast.CeCon (_loc, mv, Ast.IdLid (_loc, i), Ast.ONone) *)
-               (* <:class_expr< $lid:i$ >> *)
+             Gram.extend
                (class_name_and_param : 'class_name_and_param Gram.Entry.t)
                ((fun () ->
                    (None,
@@ -4391,14 +4399,16 @@ Old (no more supported) syntax:
                                 (Ast.CeLet (_loc, rf, bi, ce) : 'class_expr))));
                          ([ Gram.Skeyword "fun";
                             Gram.Snterm
-                              (Gram.Entry.obj (ipatt : 'ipatt Gram.Entry.t));
+                              (Gram.Entry.obj
+                                 (labeled_ipatt :
+                                   'labeled_ipatt Gram.Entry.t));
                             Gram.Snterm
                               (Gram.Entry.obj
                                  (class_fun_def :
                                    'class_fun_def Gram.Entry.t)) ],
                           (Gram.Action.mk
-                             (fun (ce : 'class_fun_def) (p : 'ipatt) _
-                                (_loc : Loc.t) ->
+                             (fun (ce : 'class_fun_def) (p : 'labeled_ipatt)
+                                _ (_loc : Loc.t) ->
                                 (Ast.CeFun (_loc, p, ce) : 'class_expr)))) ]);
                       ((Some "apply"), (Some Camlp4.Sig.Grammar.NonA),
                        [ ([ Gram.Sself;
@@ -5427,11 +5437,7 @@ Old (no more supported) syntax:
                ((fun () ->
                    (None,
                     [ (None, None,
-                       [ ([ (* | i = opt_label; "("; p = ipatt_tcon; ")" ->
-            <:patt< ? $i$ : ($p$) >>
-        | i = opt_label; "("; p = ipatt_tcon; "="; e = expr; ")" ->
-            <:patt< ? $i$ : ($p$ = $e$) >>                             *)
-                            Gram.Skeyword "?"; Gram.Skeyword "(";
+                       [ ([ Gram.Skeyword "?"; Gram.Skeyword "(";
                             Gram.Snterm
                               (Gram.Entry.obj
                                  (ipatt_tcon : 'ipatt_tcon Gram.Entry.t));
@@ -6296,6 +6302,49 @@ Old (no more supported) syntax:
                                     -> (mk_anti n s : 'a_STRING)
                                 | _ -> assert false))) ]) ]))
                   ());
+             Gram.extend (string_list : 'string_list Gram.Entry.t)
+               ((fun () ->
+                   (None,
+                    [ (None, None,
+                       [ ([ Gram.Stoken
+                              (((function
+                                 | STRING (_, _) -> true
+                                 | _ -> false),
+                                "STRING (_, _)")) ],
+                          (Gram.Action.mk
+                             (fun (__camlp4_0 : Gram.Token.t) (_loc : Loc.t)
+                                ->
+                                match __camlp4_0 with
+                                | STRING (_, x) ->
+                                    (Ast.LCons (x, Ast.LNil) : 'string_list)
+                                | _ -> assert false)));
+                         ([ Gram.Stoken
+                              (((function
+                                 | STRING (_, _) -> true
+                                 | _ -> false),
+                                "STRING (_, _)"));
+                            Gram.Sself ],
+                          (Gram.Action.mk
+                             (fun (xs : 'string_list)
+                                (__camlp4_0 : Gram.Token.t) (_loc : Loc.t) ->
+                                match __camlp4_0 with
+                                | STRING (_, x) ->
+                                    (Ast.LCons (x, xs) : 'string_list)
+                                | _ -> assert false)));
+                         ([ Gram.Stoken
+                              (((function
+                                 | ANTIQUOT (("" | "str_list"), _) -> true
+                                 | _ -> false),
+                                "ANTIQUOT ((\"\" | \"str_list\"), _)")) ],
+                          (Gram.Action.mk
+                             (fun (__camlp4_0 : Gram.Token.t) (_loc : Loc.t)
+                                ->
+                                match __camlp4_0 with
+                                | ANTIQUOT (("" | "str_list"), s) ->
+                                    (Ast.LAnt (mk_anti "str_list" s) :
+                                      'string_list)
+                                | _ -> assert false))) ]) ]))
+                  ());
              Gram.extend (value_let : 'value_let Gram.Entry.t)
                ((fun () ->
                    (None,
@@ -7120,7 +7169,7 @@ module Camlp4QuotationCommon =
       struct
         let name = "Camlp4QuotationCommon"
         let version =
-          "$Id: OCamlQuotationBase.ml,v 1.7 2006/10/04 16:22:54 ertai Exp $"
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     module Make
       (Syntax : Sig.Camlp4Syntax)
@@ -7692,7 +7741,7 @@ module Q =
       struct
         let name = "Camlp4QuotationExpander"
         let version =
-          "$Id: OCamlQuotation.ml,v 1.3 2006/07/08 17:21:32 pouillar Exp $"
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     module Make (Syntax : Sig.Camlp4Syntax) =
       struct
@@ -7726,7 +7775,7 @@ module Rp =
       struct
         let name = "Camlp4OCamlRevisedParserParser"
         let version =
-          "$Id: OCamlRevisedParser.ml,v 1.5 2006/07/08 18:10:10 pouillar Exp $"
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     module Make (Syntax : Sig.Camlp4Syntax) =
       struct
@@ -8622,7 +8671,8 @@ module G =
     module Id =
       struct
         let name = "Camlp4GrammarParser"
-        let version = "$Id: Grammar.ml,v 1.8 2006/10/04 16:22:54 ertai Exp $"
+        let version =
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     module Make (Syntax : Sig.Camlp4Syntax) =
       struct
@@ -11029,7 +11079,7 @@ module M =
       struct
         let name = "Camlp4MacroParser"
         let version =
-          "$Id: Macro.ml,v 1.2 2006/07/08 17:21:32 pouillar Exp $"
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     (*
 Added statements:
@@ -11645,7 +11695,7 @@ module D =
       struct
         let name = "Camlp4DebugParser"
         let version =
-          "$Id: Debug.ml,v 1.2 2006/07/08 17:21:32 pouillar Exp $"
+          "$Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $"
       end
     module Make (Syntax : Sig.Camlp4Syntax) =
       struct
@@ -11841,7 +11891,7 @@ module B =
  * - Daniel de Rauglaudre: initial version
  * - Nicolas Pouillard: refactoring
  *)
-    (* $Id: Camlp4Bin.ml,v 1.12 2006/10/02 12:58:59 ertai Exp $ *)
+    (* $Id: camlp4boot.ml,v 1.2.2.3 2007/03/13 13:23:02 pouillar Exp $ *)
     open Camlp4
     open PreCast.Syntax
     open PreCast
@@ -11859,8 +11909,9 @@ module B =
     let pa_q = "Camlp4QuotationExpander"
     let pa_rq = "Camlp4OCamlRevisedQuotationExpander"
     let pa_oq = "Camlp4OCamlOriginalQuotationExpander"
+    let pa_l = "Camlp4ListComprehension"
     let dyn_loader =
-      ref (fun _ -> raise (Match_failure ("./camlp4/Camlp4Bin.ml", 42, 24)))
+      ref (fun _ -> raise (Match_failure ("./camlp4/Camlp4Bin.ml", 43, 24)))
     let rcall_callback = ref (fun () -> ())
     let loaded_modules = ref SSet.empty
     let add_to_loaded_modules name =
@@ -11912,9 +11963,12 @@ module B =
              ("oq" | "camlp4ocamloriginalquotationexpander.cmo")) ->
               load [ pa_r; pa_o; pa_qb; pa_oq ]
           | (("Parsers" | ""), "rf") ->
-              load [ pa_r; pa_rp; pa_qb; pa_q; pa_g; pa_m ]
+              load [ pa_r; pa_rp; pa_qb; pa_q; pa_g; pa_l; pa_m ]
           | (("Parsers" | ""), "of") ->
-              load [ pa_r; pa_o; pa_rp; pa_op; pa_qb; pa_rq; pa_g; pa_m ]
+              load
+                [ pa_r; pa_o; pa_rp; pa_op; pa_qb; pa_rq; pa_g; pa_l; pa_m ]
+          | (("Parsers" | ""), ("comp" | "camlp4listcomprehension.cmo")) ->
+              load [ pa_l ]
           | (("Filters" | ""), ("lift" | "camlp4astlifter.cmo")) ->
               load [ "Camlp4AstLifter" ]
           | (("Filters" | ""), ("exn" | "camlp4exceptiontracer.cmo")) ->

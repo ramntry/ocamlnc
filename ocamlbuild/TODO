@@ -1,4 +1,5 @@
 To do:
+* Executor: exceptional conditions and Not_found
 * Fix report
 * Design a nice, friendly, future-proof plugin (myocamlbuild) API
 * Ocamlbuild should keep track of files removed from the source directory, e.g.,
@@ -30,3 +31,4 @@ Done:
   instance)
 * Display: should display nothing (even when finish is called) when no real
   event as occured.
+* Have some option to draw tags/rules that applies on a target (it's -show-tags).

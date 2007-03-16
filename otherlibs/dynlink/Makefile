@@ -71,7 +71,7 @@ installopt:
 	cd $(LIBDIR); $(RANLIB) dynlink.a
 
 partialclean:
-	rm -f extract_crc *.cm[ioa]
+	rm -f extract_crc *.cm[ioax] *.cmxa
 
 clean: partialclean
 	rm -f *.a *.o *.so dynlink.mlopt

@@ -40,8 +40,7 @@ OTHERS=array.cmo list.cmo char.cmo string.cmo sys.cmo \
 
 all: stdlib.cma std_exit.cmo camlheader camlheader_ur
 
-#allopt: stdlib.cmxa std_exit.cmx allopt-$(PROFILING)
-allopt: stdlib.cmxa std_exit.cmx
+allopt: stdlib.cmxa std_exit.cmx allopt-$(PROFILING)
 
 allopt-noprof:
 
@@ -52,8 +51,7 @@ install:
 	cp stdlib.cma std_exit.cmo *.cmi *.mli *.ml camlheader camlheader_ur \
            $(LIBDIR)
 
-#installopt: installopt-default installopt-$(PROFILING)
-installopt: installopt-default installopt-noprof
+installopt: installopt-default installopt-$(PROFILING)
 
 installopt-default:
 	cp stdlib.cmxa stdlib.a std_exit.o *.cmx $(LIBDIR)

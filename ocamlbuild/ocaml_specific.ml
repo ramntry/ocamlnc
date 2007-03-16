@@ -45,18 +45,6 @@ open Flags
 open Command
 open Rule
 
-let nop _env _build = ()
-
-let ocaml_lib ?(extern=false) ?(byte=true) ?(native=true) ?dir libpath =
-  let add_dir x =
-    match dir with
-    | Some dir -> S[A"-I"; P dir; x]
-    | None -> x
-  and lib = Pathname.basename libpath in
-  Hashtbl.replace info_libraries lib (libpath, extern);
-  if byte then flag ["ocaml"; "use_"^lib; "link"; "byte"] (add_dir (A (libpath^".cma")));
-  if native then flag ["ocaml"; "use_"^lib; "link"; "native"] (add_dir (A (libpath^".cmxa")));;
-
 let init () = let module M = struct
 
 let ext_lib = !Options.ext_lib;;
@@ -345,12 +333,25 @@ ocaml_lib ~extern:true "bigarray";;
 ocaml_lib ~extern:true "nums";;
 ocaml_lib ~extern:true "dbm";;
 ocaml_lib ~extern:true "graphics";;
-ocaml_lib ~extern:true "labltk";;
-ocaml_lib ~extern:true ~dir:"+camlp4" "camlp4";;
+ocaml_lib ~extern:true ~tag_name:"use_toplevel" "toplevellib";;
+ocaml_lib ~extern:true ~dir:"+labltk" "labltk";;
+ocaml_lib ~extern:true ~dir:"+ocamldoc" "ocamldoc";;
+ocaml_lib ~extern:true ~dir:"+ocamlbuild" "ocamlbuild";;
+
+ocaml_lib ~extern:true ~dir:"+camlp4" ~tag_name:"use_camlp4" "camlp4lib";;
+ocaml_lib ~extern:true ~dir:"+camlp4" ~tag_name:"use_old_camlp4" "camlp4";;
+ocaml_lib ~extern:true ~dir:"+camlp4" ~tag_name:"use_camlp4_full" "camlp4fulllib";;
+flag ["ocaml"; "compile"; "use_camlp4_full"]
+     (S[A"-I"; A"+camlp4/Camlp4Parsers";
+        A"-I"; A"+camlp4/Camlp4Printers";
+        A"-I"; A"+camlp4/Camlp4Filters"]);;
 
 flag ["ocaml"; "debug"; "compile"; "byte"] (A "-g");;
-flag ["ocaml"; "debug"; "link"; "byte"] (A "-g");;
+flag ["ocaml"; "debug"; "link"; "byte"; "program"] (A "-g");;
 flag ["ocaml"; "debug"; "pack"; "byte"] (A "-g");;
+flag ["ocaml"; "debug"; "compile"; "native"] (A "-g");;
+flag ["ocaml"; "debug"; "link"; "native"; "program"] (A "-g");;
+flag ["ocaml"; "debug"; "pack"; "native"] (A "-g");;
 flag ["ocaml"; "dtypes"; "compile"] (A "-dtypes");;
 flag ["ocaml"; "rectypes"; "compile"] (A "-rectypes");;
 flag ["ocaml"; "linkall"; "link"] (A "-linkall");;
@@ -358,6 +359,7 @@ flag ["ocaml"; "link"; "profile"; "native"] (A "-p");;
 flag ["ocaml"; "link"; "program"; "custom"; "byte"] (A "-custom");;
 flag ["ocaml"; "compile"; "profile"; "native"] (A "-p");;
 flag ["ocaml"; "compile"; "thread"] (A "-thread");;
+flag ["ocaml"; "doc"; "thread"] (S[A"-I"; A"+threads"]);;
 flag ["ocaml"; "link"; "thread"; "native"] (S[A "threads.cmxa"; A "-thread"]);;
 flag ["ocaml"; "link"; "thread"; "byte"] (S[A "threads.cma"; A "-thread"]);;
 flag ["ocaml"; "compile"; "nopervasives"] (A"-nopervasives");;
@@ -387,11 +389,13 @@ flag ["ocaml"; "doc"; "docfile"; "extension:texi"] (A"-texi");;
 
 (** Ocamlbuild plugin for it's own building *)
 let install_lib = lazy (try Sys.getenv "INSTALL_LIB" with Not_found -> !*stdlib_dir/"ocamlbuild" (* not My_std.getenv since it's lazy*)) in
+let install_bin = lazy (My_std.getenv ~default:"/usr/local/bin" "INSTALL_BIN") in
 file_rule "ocamlbuild_where.ml"
   ~prod:"%ocamlbuild_where.ml"
-  ~cache:(fun _ -> !*install_lib)
+  ~cache:(fun _ -> Printf.sprintf "lib:%S, bin:%S" !*install_lib !*install_bin)
   begin fun _ oc ->
-    Printf.fprintf oc "let where = ref %S;;\n" !*install_lib
+    Printf.fprintf oc "let bindir = ref %S;;\n" !*install_bin;
+    Printf.fprintf oc "let libdir = ref %S;;\n" !*install_lib
   end;;
 ocaml_lib "ocamlbuildlib";;
 ocaml_lib "ocamlbuildlightlib";;

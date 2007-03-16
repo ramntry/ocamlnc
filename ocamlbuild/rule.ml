@@ -42,6 +42,10 @@ let print_rule_contents f r =
   fprintf f "@[<v2>{@ @[<2>name  =@ %S@];@ @[<2>tags  =@ %a@];@ @[<2>deps  =@ %a@];@ @[<2>prods = %a@];@ @[<2>code  = <fun>@]@]@ }"
     r.name Tags.print r.tags print_resource_list r.deps print_resource_list r.prods
 
+let pretty_print f r =
+  fprintf f "@[<hv2>rule@ %S@ ~deps:%a@ ~prods:%a@ <fun>@]"
+    r.name print_resource_list r.deps print_resource_list r.prods
+
 let print = print_rule_name
 
 let subst env rule =
@@ -281,6 +285,7 @@ module Common_commands = struct
   open Command
   let mv src dest = Cmd (S [A"mv"; P src; Px dest])
   let cp src dest = Cmd (S [A"cp"; P src; Px dest])
+  let cp_p src dest = Cmd (S [A"cp"; A"-p"; P src; Px dest])
   let ln_f pointed pointer = Cmd (S [A"ln"; A"-f"; P pointed; Px pointer])
   let ln_s pointed pointer = Cmd (S[A"ln"; A"-s"; P pointed; Px pointer])
   let rm_f x = Cmd (S [A"rm"; A"-f"; Px x])
@@ -292,5 +297,5 @@ open Common_commands
 
 let copy_rule name ?insert src dest =
   rule name ?insert ~prod:dest ~dep:src
-       (fun env _ -> cp (env src) (env dest))
+       (fun env _ -> cp_p (env src) (env dest))
 

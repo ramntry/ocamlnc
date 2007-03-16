@@ -427,15 +427,11 @@ let rec closed_type ty =
 
 let closed_parameterized_type params ty =
   List.iter mark_type params;
-  try
-    closed_type ty;
-    List.iter unmark_type params;
-    unmark_type ty;
-    true
-  with Non_closed _ ->
-    List.iter unmark_type params;
-    unmark_type ty;
-    false
+  let ok =
+    try closed_type ty; true with Non_closed _ -> false in
+  List.iter unmark_type params;
+  unmark_type ty;
+  ok
 
 let closed_type_decl decl =
   try
@@ -1761,8 +1757,8 @@ and unify_row env row1 row2 =
   in
   let md1 = rm1.desc and md2 = rm2.desc in
   begin try
-    set_more row1 r2;
     set_more row2 r1;
+    set_more row1 r2;
     List.iter
       (fun (l,f1,f2) ->
         try unify_row_field env row1.row_fixed row2.row_fixed l f1 f2
@@ -2264,7 +2260,7 @@ let rec eqtype rename type_pairs subst env t1 t2 =
               enter_poly env univar_pairs t1 tl1 t2 tl2
                 (eqtype rename type_pairs subst env)
           | (Tunivar, Tunivar) ->
-              unify_univar t1 t2 !univar_pairs
+              unify_univar t1' t2' !univar_pairs
           | (_, _) ->
               raise (Unify [])
         end
