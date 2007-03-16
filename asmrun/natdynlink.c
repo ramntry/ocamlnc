@@ -42,7 +42,7 @@ static void allow_write(char *begin, char *end) {
     pagesize = si.dwPageSize;
   }
 
-  begin -= (int) begin % pagesize;
+  begin -= (uintnat) begin % pagesize;
   res = VirtualProtect(begin, end - begin, PAGE_EXECUTE_WRITECOPY, &old);
   if (0 == res) {
     fprintf(stderr, "natdynlink: VirtualProtect failed  %s\n", winerror());
@@ -102,7 +102,7 @@ static void allow_write(void *begin, void *end) {
     }
   }
 
-  begin -= (int) begin % pagesize;
+  begin -= (uintnat) begin % pagesize;
   int res = mprotect(begin, end - begin, PROT_WRITE | PROT_EXEC | PROT_READ);
   if (0 != res) { 
     fprintf(stderr, "natdynlink: mprotect failed %s\n", strerror(errno)); 
