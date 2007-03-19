@@ -148,7 +148,6 @@ LIBFILES=stdlib.cma std_exit.cmo *.cmi camlheader
 coldstart:
 	cd byterun ; $(MAKEREC) all
 	cp byterun/ocamlrun.exe boot/ocamlrun.exe
-	cp byterun/ocamlrun.dll boot/ocamlrun.dll
 	cd yacc ; $(MAKEREC) all
 	cp yacc/ocamlyacc.exe boot/ocamlyacc.exe
 	cd stdlib ; $(MAKEREC) COMPILER=../boot/ocamlc all

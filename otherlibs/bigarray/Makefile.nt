@@ -28,7 +28,7 @@ CAML_OBJS=bigarray.cmo
 
 all: libbigarray.$(A) bigarray.cma
 
-allopt: libbigarray.$(A) bigarray.cmxa
+allopt: libbigarray.$(A) bigarray.cmxa bigarray.cmxs
 
 libbigarray.$(A): $(C_OBJS)
 	OCAMLLIB=../../byterun $(MKLIB) -o bigarray $(C_OBJS)
@@ -38,7 +38,9 @@ bigarray.cma: $(CAML_OBJS)
 
 bigarray.cmxa: $(CAML_OBJS:.cmo=.cmx)
 	$(MKLIB) -o bigarray -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAML_OBJS:.cmo=.cmx)
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared bigarray.cmxa
+
+bigarray.cmxs: bigarray.cmxa
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o bigarray.cmxs bigarray.cmxa
 
 install:
 	cp dllbigarray.dll $(STUBLIBDIR)
@@ -47,13 +49,13 @@ install:
 	cp bigarray.h $(LIBDIR)/caml/bigarray.h
 
 installopt:
-	cp bigarray.$(A) $(CAML_OBJS:.cmo=.cmx) bigarray.cmxa bigarray.so $(LIBDIR)
+	cp bigarray.$(A) $(CAML_OBJS:.cmo=.cmx) bigarray.cmxa bigarray.cmxs $(LIBDIR)
 
 partialclean:
 	rm -f *.cm*
 
 clean: partialclean
-	rm -f *.dll *.$(A) *.$(O) *.so
+	rm -f *.dll *.$(A) *.$(O) *.cmxs
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx .$(O)
 

@@ -42,7 +42,7 @@ plugin_ext.cmx: api.cmx plugin_ext.ml
 	$(CAMLOPT) -c $(COMPFLAGS) plugin_ext.ml
 
 plugin_ext.so: factorial.$(O) plugin_ext.cmx
-	$(CAMLOPT) -shared -o plugin_ext.so factorial.$(O) plugin_ext.cmx
+	$(CAMLOPT) $(COMPFLAGS) -shared -o plugin_ext.so factorial.$(O) plugin_ext.cmx
 
 packed1_client.cmx: packed1.cmx
 

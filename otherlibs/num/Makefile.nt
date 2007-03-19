@@ -55,7 +55,7 @@ install:
 	cp nums.cma $(CMIFILES) $(LIBDIR)
 
 installopt:
-	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) nums.so nums.cmxs $(LIBDIR)
+	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) nums.cmxs $(LIBDIR)
 
 partialclean:
 	rm -f *.cm*
