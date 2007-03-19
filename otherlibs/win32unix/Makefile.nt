@@ -13,16 +13,6 @@
 
 # $Id$
 
-include ../../config/Makefile
-
-# Compilation options
-CC=$(BYTECC)
-CFLAGS=-I../../byterun -I../unix
-CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -closed
-MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
-COMPFLAGS=-warn-error A -g
-
 # Files in this directory
 WIN_FILES = accept.c bind.c channels.c close.c \
   close_on.c connect.c createprocess.c dup.c dup2.c errmsg.c \
@@ -40,67 +30,33 @@ UNIX_FILES = access.c addrofstr.c chdir.c chmod.c cst2constr.c \
   getserv.c gmtime.c putenv.c rmdir.c \
   socketaddr.c strofaddr.c time.c unlink.c utimes.c
 
-ALL_FILES=$(WIN_FILES) $(UNIX_FILES)
-
-OBJS=$(ALL_FILES:.c=.$(O))
-
-LIBS=$(call SYSLIB,wsock32)
-
-MLOBJS=unix.cmo unixLabels.cmo
-
 UNIX_CAML_FILES = unix.mli unixLabels.mli unixLabels.ml
 
-all: libunix.$(A) unix.cma
+ALL_FILES=$(WIN_FILES) $(UNIX_FILES)
+WSOCKLIB=$(call SYSLIB,wsock32)
 
-allopt: libunix.$(A) unix.cmxa unix.cmxs
+LIBNAME=unix
+COBJS=$(ALL_FILES:.c=.$(O))
+CAMLOBJS=unix.cmo unixLabels.cmo
+CMIFILES=$(CAMLOBJS:.cmo=.mli)
+LINKOPTS=-cclib $(WSOCKLIB)
+LDOPTS=-ldopt $(WSOCKLIB)
+EXTRACAMLFLAGS=-nolabels
+EXTRACFLAGS=-I../unix
 
-libunix.$(A): $(OBJS)
-	OCAMLLIB=../../byterun $(MKLIB) -o unix $(OBJS) -ldopt $(LIBS)
+include ../Makefile.nt
 
-unix.cma: $(MLOBJS)
-	$(MKLIB) -o unix -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(MLOBJS) -cclib $(LIBS)
-
-unix.cmxa: $(MLOBJS:.cmo=.cmx)
-	$(MKLIB) -o unix -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(MLOBJS:.cmo=.cmx) -cclib $(LIBS)
-
-unix.cmxs: unix.cmxa
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o unix.cmxs -I . unix.cmxa
-
-partialclean:
-	rm -f *.cm*
-
-clean: partialclean
-	rm -f *.$(A) *.dll *.$(O) *.cmxs
+clean::
 	rm -f $(UNIX_FILES) $(UNIX_CAML_FILES)
 
-install:
-	cp dllunix.dll $(STUBLIBDIR)/dllunix.dll
-	cp libunix.$(A) $(LIBDIR)/libunix.$(A)
-	cp unix.cma $(MLOBJS:.cmo=.cmi) $(MLOBJS:.cmo=.mli) $(LIBDIR)
+install::
 	cp unixsupport.h $(LIBDIR)/caml
-
-installopt:
-	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.$(A) unix.cmxs $(LIBDIR)
 
 $(UNIX_FILES) $(UNIX_CAML_FILES): %: ../unix/%
 	cp ../unix/$* $*
 
-.SUFFIXES: .ml .mli .cmo .cmi .cmx .$(O) .c
-
-.mli.cmi:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmo:
-	$(CAMLC) -c $(COMPFLAGS) -nolabels $<
-
-.ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) -nolabels $<
-
-.c.$(O):
-	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
-
 depend:
 
-$(OBJS): unixsupport.h
+$(COBJS): unixsupport.h
 
 include .depend

@@ -15,68 +15,17 @@
 
 # Makefile for the "num" (exact rational arithmetic) library
 
-include ../../config/Makefile
-
-# Compilation options
-CC=$(BYTECC)
-CFLAGS=-I../../byterun \
-          -DBNG_ARCH_$(BNG_ARCH) -DBNG_ASM_LEVEL=$(BNG_ASM_LEVEL)
-CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../boot -w s
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s -closed
-COMPFLAGS=-warn-error A -g
-MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
-
+LIBNAME=nums
+EXTRACFLAGS=-DBNG_ARCH_$(BNG_ARCH) -DBNG_ASM_LEVEL=$(BNG_ASM_LEVEL)
 CAMLOBJS=int_misc.cmo nat.cmo big_int.cmo arith_flags.cmo \
   ratio.cmo num.cmo arith_status.cmo
-
 CMIFILES=big_int.cmi nat.cmi num.cmi ratio.cmi arith_status.cmi
-
 COBJS=bng.$(O) nat_stubs.$(O)
 
-all: libnums.$(A) nums.cma $(CMIFILES)
+include ../Makefile.nt
 
-allopt: libnums.$(A) nums.cmxa nums.cmxs $(CMIFILES)
-
-nums.cma: $(CAMLOBJS)
-	$(MKLIB) -o nums -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAMLOBJS)
-
-nums.cmxa: $(CAMLOBJS:.cmo=.cmx)
-	$(MKLIB) -o nums -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAMLOBJS:.cmo=.cmx)
-
-nums.cmxs: nums.cmxa
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o nums.cmxs -I . nums.cmxa
-
-libnums.$(A): $(COBJS)
-	OCAMLLIB=../../byterun $(MKLIB) -o nums $(COBJS)
-
-install:
-	cp dllnums.dll $(STUBLIBDIR)/dllnums.dll
-	cp libnums.$(A) $(LIBDIR)/libnums.$(A)
-	cp nums.cma $(CMIFILES) $(LIBDIR)
-
-installopt:
-	cp $(CAMLOBJS:.cmo=.cmx) nums.cmxa nums.$(A) nums.cmxs $(LIBDIR)
-
-partialclean:
-	rm -f *.cm*
-
-clean: partialclean
-	rm -f *.dll *.$(A) *.$(O)
+clean::
 	cd test ; $(MAKEREC) clean
-
-.SUFFIXES: .ml .mli .cmi .cmo .cmx .$(O)
-
-.mli.cmi:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmo:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) $<
-
-.c.$(O):
-	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
 
 bng.$(O): bng.h bng_digit.c \
        bng_alpha.c bng_amd64.c bng_ia32.c bng_mips.c bng_ppc.c bng_sparc.c

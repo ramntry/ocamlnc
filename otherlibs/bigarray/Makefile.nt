@@ -13,63 +13,18 @@
 
 # $Id$
 
-include ../../config/Makefile
-
-CC=$(BYTECC)
-CFLAGS=-I../../byterun -I../win32unix -DIN_OCAML_BIGARRAY
-CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -I ../win32unix
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -I ../win32unix -closed
-MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
+LIBNAME=bigarray
+EXTRACFLAGS=-I../win32unix -DIN_OCAML_BIGARRAY
+EXTRACAMLFLAGS=-I ../win32unix
 COMPFLAGS=-warn-error A -g
+COBJS=bigarray_stubs.$(O) mmap_win32.$(O)
+CAMLOBJS=bigarray.cmo
+CMIFILES=$(CAMLOBJS:.cmo=.mli)
 
-C_OBJS=bigarray_stubs.$(O) mmap_win32.$(O)
+include ../Makefile.nt
 
-CAML_OBJS=bigarray.cmo
-
-all: libbigarray.$(A) bigarray.cma
-
-allopt: libbigarray.$(A) bigarray.cmxa bigarray.cmxs
-
-libbigarray.$(A): $(C_OBJS)
-	OCAMLLIB=../../byterun $(MKLIB) -o bigarray $(C_OBJS)
-
-bigarray.cma: $(CAML_OBJS)
-	$(MKLIB) -o bigarray -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAML_OBJS)
-
-bigarray.cmxa: $(CAML_OBJS:.cmo=.cmx)
-	$(MKLIB) -o bigarray -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAML_OBJS:.cmo=.cmx)
-
-bigarray.cmxs: bigarray.cmxa
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o bigarray.cmxs bigarray.cmxa
-
-install:
-	cp dllbigarray.dll $(STUBLIBDIR)
-	cp libbigarray.$(A) $(LIBDIR)
-	cp bigarray.cmi bigarray.mli bigarray.cma $(LIBDIR)
+install::
 	cp bigarray.h $(LIBDIR)/caml/bigarray.h
-
-installopt:
-	cp bigarray.$(A) $(CAML_OBJS:.cmo=.cmx) bigarray.cmxa bigarray.cmxs $(LIBDIR)
-
-partialclean:
-	rm -f *.cm*
-
-clean: partialclean
-	rm -f *.dll *.$(A) *.$(O) *.cmxs
-
-.SUFFIXES: .ml .mli .cmo .cmi .cmx .$(O)
-
-.mli.cmi:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmo:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) $<
-
-.c.$(O):
-	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
 
 depend:
 	gcc -MM $(CFLAGS) *.c > .depend

@@ -1,0 +1,81 @@
+#########################################################################
+#                                                                       #
+#                            Objective Caml                             #
+#                                                                       #
+#            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
+#                                                                       #
+#   Copyright 1999 Institut National de Recherche en Informatique et    #
+#   en Automatique.  All rights reserved.  This file is distributed     #
+#   under the terms of the GNU Library General Public License, with     #
+#   the special exception on linking described in file ../../LICENSE.   #
+#                                                                       #
+#########################################################################
+
+# $Id$
+
+# Common Makefile for otherlibs on the Win32/MinGW ports
+
+include ../../config/Makefile
+
+# Compilation options
+CC=$(BYTECC)
+CFLAGS=-I../../byterun $(EXTRACFLAGS)
+CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -w s
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s -closed
+COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
+MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
+
+# Variables to be defined by individual libraries:
+#LIBNAME=
+#CMIFILES=
+#CAMLOBJS=
+#COBJS=
+#EXTRACFLAGS=
+#EXTRACAMLFLAGS=
+#LINKOPTS=
+#LDOPTS=
+
+
+all: lib$(LIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
+
+allopt: lib$(LIBNAME).$(A) $(LIBNAME).cmxa $(LIBNAME).cmxs $(CMIFILES)
+
+$(LIBNAME).cma: $(CAMLOBJS)
+	$(MKLIB) -o $(LIBNAME) -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAMLOBJS) $(LINKOPTS)
+
+$(LIBNAME).cmxa: $(CAMLOBJS:.cmo=.cmx)
+	$(MKLIB) -o $(LIBNAME) -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAMLOBJS:.cmo=.cmx) $(LINKOPTS)
+
+$(LIBNAME).cmxs: $(LIBNAME).cmxa
+	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
+
+lib$(LIBNAME).$(A): $(COBJS)
+	OCAMLLIB=../../byterun $(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
+
+install::
+	cp dll$(LIBNAME).dll $(STUBLIBDIR)/
+	cp lib$(LIBNAME).$(A) $(LIBDIR)/
+	cp $(LIBNAME).cma $(CMIFILES) $(LIBDIR)
+
+installopt:
+	cp $(CAMLOBJS:.cmo=.cmx) $(LIBNAME).cmxa $(LIBNAME).$(A) $(LIBNAME).cmxs $(LIBDIR)/
+
+partialclean:
+	rm -f *.cm*
+
+clean:: partialclean
+	rm -f *.dll *.$(A) *.$(O)
+
+.SUFFIXES: .ml .mli .cmi .cmo .cmx .$(O)
+
+.mli.cmi:
+	$(CAMLC) -c $(COMPFLAGS) $<
+
+.ml.cmo:
+	$(CAMLC) -c $(COMPFLAGS) $<
+
+.ml.cmx:
+	$(CAMLOPT) -c $(COMPFLAGS) $<
+
+.c.$(O):
+	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
