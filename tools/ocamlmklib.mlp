@@ -224,6 +224,11 @@ let build_libs () =
                     (String.concat " " !ld_opts)
                     (make_rpath mksharedlibrpath)
                     (String.concat " " !c_libs)) "") in
+      if !implib = "" then
+	(match system with
+	   | "win32" | "mingw" -> safe_remove "tmp_implib.lib"; safe_remove "tmp_implib.exp"
+	   | _ -> ()
+	);
       if retcode <> 0 then if !failsafe then dynlink := false else exit 2
     end;
     safe_remove (prepostfix "lib" !output_c ext_lib);
