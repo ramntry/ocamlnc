@@ -92,7 +92,8 @@ let has_prefix s prefix =
     String.sub s 0 (String.length prefix) = prefix
 
 let is_local_symbol s =
-  (not !Clflags.closed) || has_prefix s (Compilenv.make_symbol None)
+  let unit = Compilenv.make_symbol None in
+  (not !Clflags.closed) || s = unit || has_prefix s (unit ^ "__")
   || ((has_prefix s "caml_curry") 
       && Compilenv.current_unit_name () = "_shared_startup")
 
