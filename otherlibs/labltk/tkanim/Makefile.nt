@@ -27,7 +27,7 @@ libtkanim.$(A): $(SCOBJS)
 dlltkanim.dll: $(DCOBJS)
 	$(call MKDLL,dlltkanim.dll,tmp.$(A), \
 	  $(DCOBJS) ../support/dll$(LIBNAME).$(A) \
-	  ../../../byterun/ocamlrun.$(A) \
+	  ../../../byterun/ocamlrun.$(O) \
 	  $(TK_LINK) $(call SYSLIB,wsock32))
 	rm tmp.*
 

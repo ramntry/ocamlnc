@@ -20,7 +20,7 @@ THFLAGS=-I $(OTHERS)/systhreads -I $(OTHERS)/threads
 
 dll$(LIBNAME).dll : $(DCOBJS)
 	$(call MKDLL,dll$(LIBNAME).dll,dll$(LIBNAME).$(A),\
-	  $(DCOBJS) ../../../byterun/ocamlrun.$(A) \
+	  $(DCOBJS) ../../../byterun/ocamlrun.$(O) \
           $(TK_LINK) $(call SYSLIB,wsock32))
 
 lib$(LIBNAME).$(A) : $(SCOBJS)

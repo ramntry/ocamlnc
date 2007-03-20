@@ -290,3 +290,21 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
 
   CAMLreturn (Val_unit);
 }
+
+
+#if (defined(_WIN32) || defined(__CYGWIN__)) && defined(NATIVE_CODE)
+
+/* Dummy definition for symbols meaningful only in bytecode,
+   so at to allow linking in exports.c */
+
+value * caml_stack_low;
+value * caml_stack_high;
+value * caml_stack_threshold;
+value * caml_extern_sp;
+value * caml_trapsp;
+int caml_callback_depth;
+int volatile caml_something_to_do;
+void (* volatile caml_async_action_hook)(void);
+struct longjmp_buffer * caml_external_raise;
+
+#endif

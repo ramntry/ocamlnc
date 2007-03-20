@@ -18,7 +18,7 @@ COBJS=open.$(O) draw.$(O) events.$(O) dib.$(O)
 CAMLOBJS=graphics.cmo
 CMIFILES=graphics.cmi
 WIN32LIBS=$(call SYSLIB,kernel32) $(call SYSLIB,gdi32) $(call SYSLIB,user32)
-LINKOPTS=-cclib "$(WIN32LIBS)"
+LINKOPTS=-cclib "\"$(WIN32LIBS)\""
 LDOPTS=-ldopt "$(WIN32LIBS)"
 
 include ../Makefile.nt

@@ -29,7 +29,7 @@ all: dllthreads.dll libthreads.$(A) threads.cma
 allopt: libthreadsnat.$(A) threads.cmxa
 
 dllthreads.dll: win32_b.$(DO)
-	$(call MKDLL,dllthreads.dll,tmp.$(A),win32_b.$(DO) ../../byterun/ocamlrun.$(A))
+	$(call MKDLL,dllthreads.dll,tmp.$(A),win32_b.$(DO) ../../byterun/ocamlrun.$(O))
 	rm tmp.*
 
 libthreads.$(A): win32_b.$(SO)

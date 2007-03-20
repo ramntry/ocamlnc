@@ -173,14 +173,4 @@ value caml_ensure_stack_capacity(value required_space)
   return Val_unit; /* not reached */
 }
 
-value * caml_stack_low;
-value * caml_stack_high;
-value * caml_stack_threshold;
-value * caml_extern_sp;
-value * caml_trapsp;
-int caml_callback_depth;
-int volatile caml_something_to_do;
-void (* volatile caml_async_action_hook)(void);
-struct longjmp_buffer * caml_external_raise;
-
 #endif

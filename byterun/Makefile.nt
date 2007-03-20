@@ -66,11 +66,10 @@ primitives : $(PRIMS)
 	sed -n -e "s/CAMLprim value \([a-z0-9_][a-z0-9_]*\).*/\1/p" \
 	    $(PRIMS) > primitives
 
-exports: $(EXPORTS) primitives
+exports: $(EXPORTS) 
 	$(CPP) -DCOMPUTE_EXPORTS $(EXPORTS) \
-	| sed -n -e "s/CAMLexport [^,]*\(caml[a-zA-Z0-9_]*\).*/\1/p" > exports.0
-	cat exports.0 | sort | uniq > exports
-	rm -f exports.0
+	| sed -n -e "s/CAMLexport [^,]*\(caml[a-zA-Z0-9_]*\).*/\1/p" \
+	| sort | uniq > exports
 
 prims.c : primitives
 	(echo '#include "mlvalues.h"'; \
