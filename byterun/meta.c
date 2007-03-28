@@ -155,22 +155,14 @@ value caml_invoke_traced_function(value codeptr, value env, value arg)
   return Val_unit; /* not reached */
 }
 
-value caml_reify_bytecode(value prog, value len)
-{
-  caml_invalid_argument("Meta.reify_bytecode");
-  return Val_unit; /* not reached */
-}
-
-value caml_get_current_environment(value unit)
-{
-  caml_invalid_argument("Meta.current_environment");
-  return Val_unit; /* not reached */
-}
-
-value caml_ensure_stack_capacity(value required_space)
-{
-  caml_invalid_argument("ensure_stack_capacity");
-  return Val_unit; /* not reached */
-}
+value * caml_stack_low;
+value * caml_stack_high;
+value * caml_stack_threshold;
+value * caml_extern_sp;
+value * caml_trapsp;
+int caml_callback_depth;
+int volatile caml_something_to_do;
+void (* volatile caml_async_action_hook)(void);
+struct longjmp_buffer * caml_external_raise;
 
 #endif

@@ -34,6 +34,8 @@
 #include "exports.h"
 #include "sys.h"
 
+#include "flexdll.h"
+
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
 #endif
@@ -123,57 +125,25 @@ char * caml_search_dll_in_path(struct ext_table * path, char * name)
   return res;
 }
 
-static void patch_import_symbols(void *handle)
-{
-  int i;
-  void *sym;
-  caml_gc_message(0x100, "Patching symbols%s\n",(uintnat)"");
-  for (i = 0; caml_names_of_export_symbols[i] != NULL; i++) {
-    sym = caml_dlsym(handle, caml_names_of_export_symbols[i]);
-    if (NULL == sym)
-      caml_fatal_error_arg("Fatal error: cannot patch symbol %s\n", 
-			    caml_names_of_export_symbols[i]);
-    *((void **) sym) = caml_export_symbols[i];
-  }
-}
-
 void * caml_dlopen(char * libname, int for_execution)
 {
-  HMODULE m;
-  m = LoadLibraryEx(libname, NULL,
-                    for_execution ? 0 : DONT_RESOLVE_DLL_REFERENCES);
-  /* Under Win 95/98/ME, LoadLibraryEx can fail in cases where LoadLibrary
-     would succeed.  Just try again with LoadLibrary for good measure. */
-  if (m == NULL) m = LoadLibrary(libname);
-  if (for_execution && NULL != m) patch_import_symbols(m);
-  return (void *) m;
+  return (flexdll_dlopen(libname, FLEXDLL_RTLD_GLOBAL));
+  /* TODO: implement DONT_RESOLVE_DLL_REFERENCES in FlexDLL */
 }
 
 void caml_dlclose(void * handle)
 {
-  FreeLibrary((HMODULE) handle);
+  flexdll_dlclose(handle);
 }
 
 void * caml_dlsym(void * handle, char * name)
 {
-  return (void *) GetProcAddress((HMODULE) handle, name);
+  return flexdll_dlsym(handle, name);
 }
 
 char * caml_dlerror(void)
 {
-  static char dlerror_buffer[256];
-  DWORD msglen =
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                  NULL,         /* message source */
-                  GetLastError(), /* error number */
-                  0,            /* default language */
-                  dlerror_buffer, /* destination */
-                  sizeof(dlerror_buffer), /* size of destination */
-                  NULL);         /* no inserts */
-  if (msglen == 0)
-    return "unknown error";
-  else
-    return dlerror_buffer;
+  return flexdll_dlerror();
 }
 
 /* Proper emulation of signal(), including ctrl-C and ctrl-break */

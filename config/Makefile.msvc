@@ -17,7 +17,9 @@
 
 ######### General configuration
 
-PREFIX=C:/ocamlms
+#PREFIX=C:/ocamlms
+PREFIX=C:/cygwin/home/frisch/natdynlink_ins_win32
+
 
 ### Where to install the binaries.
 BINDIR=$(PREFIX)/bin
@@ -97,12 +99,12 @@ MERGEMANIFEST=test ! -f $(1).manifest || mt -nologo -outputresource:$(1) -manife
 #ml let mergemanifest out = Printf.sprintf "test ! -f %s.manifest || mt -nologo -outputresource:%s -manifest %s.manifest && rm -f %s.manifest" out out out out;;
 
 ### How to build an EXE
-MKEXE=$(BYTECC) /Fe$(1) $(2) && ($(MERGEMANIFEST))
-#ml let mkexe out files opts = Printf.sprintf "%s /Fe%s %s %s && (%s)" bytecc out opts files (mergemanifest out);;
+MKEXE=flexlink -exe -o $(1) $(2) -- $(3) && ($(MERGEMANIFEST))
+#ml let mkexe out files opts = Printf.sprintf "flexlink -exe -o %s %s -- %s && (%s)" out files opts (mergemanifest out);;
 
 ### How to build a DLL
-MKDLL=link /nologo /dll /out:$(1) /implib:$(2) $(3) && ($(MERGEMANIFEST))
-#ml let mkdll out implib files opts = Printf.sprintf "link /nologo /dll /out:%s /implib:%s %s %s && (%s)" out implib opts files (mergemanifest out);;
+MKDLL=flexlink -o $(1) $(3) && ($(MERGEMANIFEST))
+#ml let mkdll out implib files opts = Printf.sprintf "flexlink -o %s %s -- %s && (%s)" out files opts (mergemanifest out);;
 
 ### How to build a static library
 MKLIB=link /lib /nologo /out:$(1) $(2)
@@ -143,7 +145,8 @@ PACKLD=link /lib /nologo /out:# there must be no space after this '/out:'
 
 ############# Configuration for the contributed libraries
 
-OTHERLIBRARIES=win32unix systhreads str num win32graph dynlink bigarray labltk
+OTHERLIBRARIES=win32unix systhreads str num win32graph dynlink bigarray 
+#labltk
 
 ### Name of the target architecture for the "num" library
 BNG_ARCH=generic
@@ -157,7 +160,8 @@ TK_DEFS=-I$(TK_ROOT)/include
 # produced by OCaml, and is therefore required for binary distribution
 # of these libraries.  However, $(TK_ROOT) must be added to the LIB
 # environment variable, as described in README.win32.
-TK_LINK=tk84.lib tcl84.lib
+#TK_LINK=tk84.lib tcl84.lib
+TK_LINK=tk83.lib tcl83.lib
 # An alternative definition that avoids mucking with the LIB variable,
 # but hard-wires the Tcl/Tk location in the binaries
 # TK_LINK=$(TK_ROOT)/tk83.lib $(TK_ROOT)/tcl83.lib

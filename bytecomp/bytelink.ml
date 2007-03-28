@@ -448,7 +448,7 @@ let build_custom_runtime prim_name exec_name =
       let retcode =
       Ccomp.command
        (Printf.sprintf
-          "%s /Fe%s %s %s %s %s %s %s"
+          "%s -exe -o %s %s %s %s %s %s %s"
           !Clflags.c_linker
           (Filename.quote exec_name)
           (Clflags.std_include_flag "-I")
