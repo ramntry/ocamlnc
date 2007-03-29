@@ -127,8 +127,9 @@ char * caml_search_dll_in_path(struct ext_table * path, char * name)
 
 void * caml_dlopen(char * libname, int for_execution)
 {
-  return (flexdll_dlopen(libname, FLEXDLL_RTLD_GLOBAL));
-  /* TODO: implement DONT_RESOLVE_DLL_REFERENCES in FlexDLL */
+  int flags = FLEXDLL_RTLD_GLOBAL;
+  if (!for_execution) flags |= FLEXDLL_RTLD_NOEXEC;
+  return (flexdll_dlopen(libname, flags));
 }
 
 void caml_dlclose(void * handle)

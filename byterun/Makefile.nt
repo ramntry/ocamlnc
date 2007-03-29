@@ -43,7 +43,7 @@ ocamlrun.exe: libcamlrun.$(A) prims.$(O) main.$(O)
 	$(call MKEXE,ocamlrun.exe,main.$(O) prims.$(O) libcamlrun.$(A) ../../flexdll/flexdll_msvc.obj)
 
 libcamlrun.$(A): $(OBJS)
-	$(call MKLIB,libcamlrun.$(A),$(OBJS))
+	$(call MKLIB,libcamlrun.$(A),$(OBJS) ../../flexdll/flexdll_msvc.obj)
 
 ocamlrund.exe: opnames.h $(DBGOBJS)
 	$(call MKEXE,ocamlrund.exe,$(BYTECCDBGCOMPOPTS) $(DBGOBJS))

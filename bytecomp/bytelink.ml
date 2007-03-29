@@ -451,7 +451,7 @@ let build_custom_runtime prim_name exec_name =
           "%s -merge-manifest -exe -o %s %s %s %s %s %s %s"
           !Clflags.c_linker
           (Filename.quote exec_name)
-          (Clflags.std_include_flag "-I")
+          (Clflags.std_include_flag "-I ")
           prim_name
           (Ccomp.quote_files
             (List.rev_map Ccomp.expand_libname !Clflags.ccobjs))

@@ -458,7 +458,7 @@ let call_linker file_list startup_file output_name =
 	    "%s -merge-manifest -exe -o %s %s %s %s %s %s %s -- %s"
             !Clflags.c_linker
             (Filename.quote output_name)
-            (Clflags.std_include_flag "-I")
+            (Clflags.std_include_flag "-I ")
             (Filename.quote startup_file)
             (Ccomp.quote_files (List.rev file_list))
             (Ccomp.quote_files 
