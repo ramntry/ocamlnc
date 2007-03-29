@@ -448,7 +448,7 @@ let build_custom_runtime prim_name exec_name =
       let retcode =
       Ccomp.command
        (Printf.sprintf
-          "%s -exe -o %s %s %s %s %s %s %s"
+          "%s -merge-manifest -exe -o %s %s %s %s %s %s %s"
           !Clflags.c_linker
           (Filename.quote exec_name)
           (Clflags.std_include_flag "-I")
@@ -462,11 +462,7 @@ let build_custom_runtime prim_name exec_name =
          file is created in the current working directory. *)
       remove_file
         (Filename.chop_suffix (Filename.basename prim_name) ".c" ^ ".obj");
-      remove_file (Filename.chop_suffix exec_name ".exe" ^ ".lib");
-      remove_file (Filename.chop_suffix exec_name ".exe" ^ ".exp");
-      if retcode <> 0
-      then retcode
-      else Ccomp.merge_manifest exec_name
+      retcode
   | _ -> assert false
 
 let append_bytecode_and_cleanup bytecode_name exec_name prim_name =
