@@ -1978,28 +1978,6 @@ let frame_table namelist =
         List.map mksym namelist
         @ [cint_zero])
 
-(* Generate the master table of symbol tables *)
-
-let sym_table namelist =
-  let mksym name =
-    Csymbol_address (Compilenv.make_symbol ~unitname:name (Some "symtable"))
-  in
-  Cdata(Cglobal_symbol "caml_symtable" ::
-        Cdefine_symbol "caml_symtable" ::
-        List.map mksym namelist @ 
-	[cint_zero])
-
-(* Generate the master table of relocation tables *)
-
-let reloc_table namelist =
-  let mksym name =
-    let suf s = Csymbol_address (Compilenv.make_symbol ~unitname:name (Some s))
-    in [ suf "reloctable" ; suf "code_begin" ; suf "code_end" ] in
-  Cdata(Cglobal_symbol "caml_dynunits" ::
-        Cdefine_symbol "caml_dynunits" ::
-        List.flatten (List.map mksym namelist) @ 
-	[cint_zero])
-
 (* Generate the table of module data and code segments *)
 
 let segment_table namelist symbol begname endname =
@@ -2055,7 +2033,7 @@ let plugin_header units =
       crc = crc;
       imports_cmi = ui.Compilenv.ui_imports_cmi;
       imports_cmx = ui.Compilenv.ui_imports_cmx;
-      defines = List.map snd ui.Compilenv.ui_defines 
+      defines = ui.Compilenv.ui_defines 
     } in
   global_data "caml_plugin_header"
     { magic = dyn_magic_number; units = List.map mk units }

@@ -90,4 +90,4 @@ let std_include_dir () =
 ;;
 
 let shared = ref false (* -shared *)
-let closed = ref false (* -closed *)
+

@@ -21,7 +21,7 @@ include ../../config/Makefile
 CC=$(BYTECC)
 CFLAGS=-I../../byterun $(EXTRACFLAGS)
 CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -w s
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s -closed
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s
 COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
 

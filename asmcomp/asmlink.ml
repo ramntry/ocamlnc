@@ -254,18 +254,14 @@ let all_primitives units main =
   StringSet.elements prims
 
 let make_startup_file ppf filename units_list =
-  Clflags.closed := false;
   let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_startup"; (* set the name of the "current" compunit *)
   Emit.begin_assembly();
-  let subunits =
+  let name_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
-  let closed_name_list = 
-    List.map snd (List.filter (fun (c,_) -> c) subunits) in
-  let name_list = List.map snd subunits in
   compile_phrase (Cmmgen.entry_point name_list);
   let units = List.map (fun (info,_,_) -> info) units_list in
   let _,genfuns = generic_functions ppf false units in
@@ -280,15 +276,13 @@ let make_startup_file ppf filename units_list =
           (fun (unit,_,crc) ->
              try (unit.ui_name, List.assoc unit.ui_name unit.ui_imports_cmi, 
 		  crc,
-		  List.map snd unit.ui_defines)
+		  unit.ui_defines)
              with Not_found -> assert false)
           units_list));
   compile_phrase(Cmmgen.data_segment_table ("_startup" :: name_list));
   compile_phrase(Cmmgen.code_segment_table ("_startup" :: name_list));
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
-  compile_phrase (Cmmgen.sym_table ("_startup" :: name_list));
-  compile_phrase (Cmmgen.reloc_table closed_name_list);
 
   Compilenv.extra_exports := all_primitives units true;
   Emit.end_assembly();
@@ -314,33 +308,6 @@ let make_shared_startup_file ppf units filename genfuns prims =
   close_out oc
 
 
-let create_def_file output_name units startup =
-  let def_name = Filename.chop_extension output_name ^ ".def" in
-  let def = open_out def_name in
-  output_string def "EXPORTS\n";
-  output_string def "caml_plugin_header\n";
-  List.iter
-    (fun (_,ui) -> 
-       List.iter
-	 (fun suffix -> Printf.fprintf def "caml%s%s\n" ui
-	    suffix)
-	 ["";"__frametable";"__symtable";
-	  "__code_begin";"__code_end";
-	  "__data_begin";"__data_end";
-	  "__reloctable";
-	  "__entry"]
-    )
-    (List.flatten (List.map (fun ui -> ui.ui_defines) units));
-  if startup then (
-    output_string def "caml_shared_startup__frametable\n";
-    output_string def "caml_shared_startup__symtable\n";
-    output_string def "caml_shared_startup__reloctable\n";
-    output_string def "caml_shared_startup__code_begin\n";
-    output_string def "caml_shared_startup__code_end\n";
-  );
-  close_out def;
-  def_name
-
 let call_linker_shared startup units file_list output_name =
   let stdpath = Ccomp.quote_files
     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
@@ -357,22 +324,9 @@ let call_linker_shared startup units file_list output_name =
 	  (Filename.quote output_name)
 	  files,
 	(fun () -> ())
-    | "mingw" ->
-	let files = Ccomp.quote_files (List.rev file_list) in
-	let def_name = create_def_file output_name units startup in
-	Printf.sprintf 
-	  "gcc %s -L. -mno-cygwin -shared -o %s -Wl,-whole-archive %s -Wl,-no-whole-archive %s"
-	  ccopts
-	  (Filename.quote output_name)
-	  files
-	  def_name,
-	(fun () -> if not !Clflags.keep_startup_file then remove_file def_name)
-
-    | "win32" ->
+    | "mingw" | "win32" ->
 	(* TODO: ccopts *)
-	let files = 
-	  Ccomp.quote_files 
-	    (List.map Ccomp.expand_libname (List.rev file_list)) in
+	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf
 	  "flexlink -o %s %s %s"
 	  (Filename.quote output_name)

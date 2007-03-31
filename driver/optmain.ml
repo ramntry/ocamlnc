@@ -104,8 +104,6 @@ let main () =
              "<opt>  Pass option <opt> to the C compiler and linker";
        "-compact", Arg.Clear optimize_for_speed,
              " Optimize code size rather than speed";
-       "-closed", Arg.Set closed,
-	     " Build a closed object (no reference to external symbols)";
        "-config", Arg.Unit show_config,
              " print configuration values and exit";
        "-dtypes", Arg.Set save_types,
