@@ -1,7 +1,8 @@
 include ../../config/Makefile
 
-CAMLOPT=../../ocamlopt
-COMPFLAGS= -closed
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt
+SUBCAMLOPT=../../../boot/ocamlrun ../../../ocamlopt
+COMPFLAGS=
 #SHARED=-shared -closed -S -dstartup
 #SHARED=-shared
 
@@ -20,19 +21,19 @@ main_ext: api.cmx main.cmx factorial.$(O)
 	$(CAMLOPT) -o main_ext dynlink.cmxa api.cmx main.cmx factorial.$(O)
 
 sub/plugin3.cmx: sub/api.cmi sub/api.cmx sub/plugin3.ml
-	(cd sub; mv api.cmx api.cmx.bak; ../$(CAMLOPT) -c $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
+	(cd sub; mv api.cmx api.cmx.bak; $(SUBCAMLOPT) -c $(COMPFLAGS) plugin3.ml; mv api.cmx.bak api.cmx)
 
 plugin2.cmx: api.cmx plugin.cmi plugin.cmx
 	(mv plugin.cmx plugin.cmx.bak; $(CAMLOPT) -c $(COMPFLAGS) plugin2.ml; mv plugin.cmx.bak plugin.cmx)
 
 sub/api.so: sub/api.cmi sub/api.ml
-	(cd sub; ../$(CAMLOPT) -c $(COMPFLAGS) $(SHARED) api.ml)
+	(cd sub; $(SUBCAMLOPT) -c $(COMPFLAGS) $(SHARED) api.ml)
 
 sub/api.cmi: sub/api.mli
-	(cd sub; ../$(CAMLOPT) -c $(COMPFLAGS) api.mli)
+	(cd sub; $(SUBCAMLOPT) -c $(COMPFLAGS) api.mli)
 
 sub/api.cmx: sub/api.cmi sub/api.ml
-	(cd sub; ../$(CAMLOPT) -c $(COMPFLAGS) api.ml)
+	(cd sub; $(SUBCAMLOPT) -c $(COMPFLAGS) api.ml)
 
 plugin.cmx: api.cmx plugin.cmi
 sub/plugin.cmx: api.cmx

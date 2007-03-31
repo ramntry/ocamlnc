@@ -135,7 +135,6 @@ void caml_main(char **argv)
 #endif
   value res;
 
-  caml_init_dynunits();
   caml_init_ieee_floats();
   caml_init_custom_operations();
 #ifdef DEBUG

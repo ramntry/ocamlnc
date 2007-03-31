@@ -10,6 +10,21 @@
 #include <stdio.h>
 #include <string.h>
 
+static void *getsym(void *handle, char *module, char *name, int opt){  	 
+  char *fullname = malloc(strlen(module) + strlen(name) + 5); 	 
+  void *sym; 	 
+  sprintf(fullname, "caml%s%s", module, name); 	 
+  sym = caml_dlsym (handle, fullname); 	 
+  /*  printf("%s => %lx\n", fullname, (uintnat) sym); */
+  free(fullname); 	 
+  if (NULL == sym && !opt) { 	 
+    printf("natdynlink: cannot find symbol %s\n", fullname); 	 
+    exit(2); 	 
+  } 	 
+  return sym; 	 
+} 	 
+ 
+
 /* Data segments are used by the Is_atom predicate (mlvalues.h)
    to detect static Caml blocks.
 
@@ -51,14 +66,6 @@ CAMLprim value caml_natdynlink_globals_inited(value unit)
   return Val_int(caml_globals_inited);
 }
 
-void caml_init_dynunits() {
-  int i;
-  for (i = 0; NULL != caml_dynunits[i].reloctable; i++) {
-    allow_write(caml_dynunits[i].code_begin,caml_dynunits[i].code_end);
-    caml_relocate(caml_dynunits[i].reloctable);
-  }
-}
-
 CAMLprim value caml_natdynlink_open(value filename)
 {
   CAMLparam1 (filename);
@@ -92,7 +99,7 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
   void (*entrypoint)(void);
 
   unit = String_val(symbol);
-  
+
   sym = optsym("__frametable");
   if (NULL != sym) caml_register_frametable(sym);
   
@@ -106,10 +113,11 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
   
   sym = optsym("__code_begin");
   sym2 = optsym("__code_end");
-  if (NULL != sym && NULL != sym2 && sym != sym2) allow_write(sym,sym2);
+  /* TODO: register code segment */
   
   entrypoint = optsym("__entry");
   if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);
+ 
 #undef optsym
 
   CAMLreturn (Val_unit);

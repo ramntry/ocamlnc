@@ -303,6 +303,13 @@ let make_shared_startup_file ppf units filename genfuns prims =
   Emit.begin_assembly();
   genfuns();
   Asmgen.compile_phrase ppf (Cmmgen.plugin_header units);
+
+  Asmgen.compile_phrase ppf 
+    (Cmmgen.global_table 
+       (List.map (fun (ui,_) -> ui.Compilenv.ui_symbol) units));
+  (* this is to force a reference to all units, otherwise the linker
+     might drop some of them (in case of libraries) *)
+
   Emit.end_assembly();
   close_out oc
 
@@ -338,12 +345,6 @@ let call_linker_shared startup units file_list output_name =
   let stdpath = Ccomp.quote_files
     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
        !load_path) in
-  let extra_files = match Config.system with
-    | "win32" | "mingw" -> 
-	[ Filename.concat Config.standard_library 
-	     ("ocamlrun" ^ Config.ext_obj) ]
-    | _ -> [] in
-  let file_list = extra_files @ file_list in
 
   let ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
 
@@ -372,21 +373,13 @@ let call_linker_shared startup units file_list output_name =
 	let files = 
 	  Ccomp.quote_files 
 	    (List.map Ccomp.expand_libname (List.rev file_list)) in
-	let imp_name = Filename.temp_file "camlimp" "" in
-	let def_name = create_def_file output_name units startup in
 	Printf.sprintf
-	  "link /nologo /dll /out:%s /implib:%s /def:%s %s kernel32.lib %s"
+	  "flexlink -o %s %s %s"
 	  (Filename.quote output_name)
-	  (Filename.quote imp_name)
-	  (Filename.quote def_name)
 	  files
-	  (if !Clflags.verbose then "" else ">NUL")
+	  (if !Clflags.verbose then "-v" else ">NUL")
 	  ,
-	(fun () ->
-	   if not !Clflags.keep_startup_file then remove_file def_name;
-	   remove_file imp_name;
-	   remove_file (imp_name ^ ".exp")
-	)
+	(fun () -> ())
     | _ ->
 	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf 
