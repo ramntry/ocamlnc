@@ -84,7 +84,7 @@ install:
 installopt:
 	cp libthreadsnat.$(A) $(LIBDIR)/libthreadsnat.$(A)
 	cp $(THREAD_OBJS:.cmo=.cmx) threads.cmxa threads.$(A) $(LIBDIR)/threads
-	cp thread.cmxs $(LIBDIR)/threads
+	cp threads.cmxs $(LIBDIR)/threads
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 

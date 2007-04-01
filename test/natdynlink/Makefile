@@ -1,12 +1,12 @@
 include ../../config/Makefile
 
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt -thread
 SUBCAMLOPT=../../../boot/ocamlrun ../../../ocamlopt
 COMPFLAGS=
 #SHARED=-shared -closed -S -dstartup
 #SHARED=-shared
 
-PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so
+PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so plugin_thread.so
 
 all: $(PLUGINS) $(PLUGINS:.so=.cmx) main mylib.so
 
@@ -75,3 +75,5 @@ mylib.cmxa: plugin.cmx plugin2.cmx
 factorial.$(O): factorial.c
 	$(CAMLOPT) -c factorial.c
 
+demo: all
+	./main ../../otherlibs/win32unix/unix.cmxs ../../otherlibs/systhreads/threads.cmxs plugin_thread.so
