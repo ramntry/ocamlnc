@@ -40,7 +40,7 @@ COBJS=$(ALL_FILES:.c=.$(O))
 CAMLOBJS=unix.cmo unixLabels.cmo
 CMIFILES=$(CAMLOBJS:.cmo=.mli)
 LINKOPTS=-cclib $(WSOCKLIB)
-LDOPTS=-ldopt $(WSOCKLIB)
+LDOPTS=-ldopt "-defaultlib $(WSOCKLIB)"
 EXTRACAMLFLAGS=-nolabels
 EXTRACFLAGS=-I../unix
 
