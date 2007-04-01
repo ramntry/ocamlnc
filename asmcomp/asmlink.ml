@@ -328,7 +328,11 @@ let call_linker_shared startup units file_list output_name =
 	(* TODO: ccopts *)
 	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf
-	  "flexlink -o %s %s %s"
+	  "flexlink -chain %s -o %s %s %s"
+	  (match Config.system with 
+	     | "mingw" -> "mingw"
+	     | "win32" -> "msvc"
+	     | _ -> assert false)
 	  (Filename.quote output_name)
 	  files
 	  (if !Clflags.verbose then "-v" else ">NUL")
