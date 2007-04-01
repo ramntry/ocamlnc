@@ -46,7 +46,7 @@ $(LIBNAME).cma: $(CAMLOBJS)
 $(LIBNAME).cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(MKLIB) -o $(LIBNAME) -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAMLOBJS:.cmo=.cmx) $(LINKOPTS)
 
-$(LIBNAME).cmxs: $(LIBNAME).cmxa
+$(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(LIBNAME).$(A)
 	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
 
 lib$(LIBNAME).$(A): $(COBJS)
