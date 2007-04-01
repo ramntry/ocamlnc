@@ -377,8 +377,27 @@ let link_shared ppf objfiles output_name =
 let call_linker file_list startup_file output_name =
   let c_lib =
     if !Clflags.nopervasives then "" else Config.native_c_libraries in
-  match Config.ccomp_type with
-  | "cc" ->
+  match Config.system, Config.ccomp_type with
+  | (("win32"|"mingw"), _) when not !Clflags.output_c_object ->
+      let cmd =
+        Printf.sprintf 
+	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s"
+	  (match Config.system with
+	     | "win32" -> "msvc"
+	     | "mingw" -> "mingw"
+	     | _ -> assert false)
+          (Filename.quote output_name)
+          (Clflags.std_include_flag "-I ")
+          (Filename.quote startup_file)
+          (Ccomp.quote_files (List.rev file_list))
+          (Ccomp.quote_files (List.rev !Clflags.ccobjs))
+          (Filename.quote (runtime_lib ()))
+          c_lib
+          (Ccomp.make_link_options !Clflags.ccopts) 
+	in
+	let res = Ccomp.command cmd in
+	if res <> 0 then raise(Error Linking_error)
+  | _,"cc" ->
       let cmd =
         if not !Clflags.output_c_object then
           Printf.sprintf "%s %s -o %s %s %s %s %s %s %s %s %s"
@@ -402,33 +421,14 @@ let call_linker file_list startup_file output_name =
             (Filename.quote startup_file)
             (Ccomp.quote_files (List.rev file_list))
       in if Ccomp.command cmd <> 0 then raise(Error Linking_error)
-  | "msvc" ->
-      if not !Clflags.output_c_object then begin
-        let cmd =
-          Printf.sprintf 
-	    "%s -merge-manifest -exe -o %s %s %s %s %s %s %s -- %s"
-            !Clflags.c_linker
-            (Filename.quote output_name)
-            (Clflags.std_include_flag "-I ")
-            (Filename.quote startup_file)
-            (Ccomp.quote_files (List.rev file_list))
-            (Ccomp.quote_files 
-              (List.rev_map Ccomp.expand_libname !Clflags.ccobjs))
-            (Filename.quote (runtime_lib ()))
-            c_lib
-            (Ccomp.make_link_options !Clflags.ccopts) 
-	in
-	let res = Ccomp.command cmd in
-	if res <> 0 then raise(Error Linking_error)
-      end else begin
-        let cmd =
-          Printf.sprintf "%s /out:%s %s %s"
-            Config.native_partial_linker
-            (Filename.quote output_name)
-            (Filename.quote startup_file)
-            (Ccomp.quote_files (List.rev file_list))
-        in if Ccomp.command cmd <> 0 then raise(Error Linking_error)
-      end
+  | ("msvc",_) ->
+      let cmd =
+        Printf.sprintf "%s /out:%s %s %s"
+          Config.native_partial_linker
+          (Filename.quote output_name)
+          (Filename.quote startup_file)
+          (Ccomp.quote_files (List.rev file_list))
+      in if Ccomp.command cmd <> 0 then raise(Error Linking_error)
   | _ -> assert false
 
 (* Main entry point *)
