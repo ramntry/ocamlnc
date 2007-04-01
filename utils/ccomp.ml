@@ -89,7 +89,10 @@ let expand_libname name =
 let make_link_options optlist =
   let rec split linkopts otheropts = function
   | [] -> String.concat " " otheropts
-	  ^ " -- /subsystem:console "
+	  ^ " -- " ^ 
+	(match Config.system with
+	   | "win32" -> "/subsystem:console "
+	   | _ -> "")
           ^ String.concat " " linkopts
   | opt :: rem ->
       if String.length opt >= 5 && String.sub opt 0 5 = "/link"

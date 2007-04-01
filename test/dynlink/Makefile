@@ -1,31 +1,36 @@
 #INSPATH=C:/cygwin/home/frisch/ocaml3093
-INSPATH=C:/cygwin/home/frisch/natdynlink_ins_win32
+INSPATH=C:/cygwin/home/frisch/natdynlink_ins_mingw
 OCAMLRUN=$(INSPATH)/bin/ocamlrun.exe
 OCAMLC=$(OCAMLRUN) $(INSPATH)/bin/ocamlc
 OCAMLMKLIB=$(OCAMLRUN) $(INSPATH)/bin/ocamlmklib
 
-stub1.obj: stub1.c
+#O=obj
+#A=lib
+O=o
+A=a
+
+stub1.$(O): stub1.c
 	$(OCAMLC) -c stub1.c
 
-libplug1.a: stub1.obj
-	$(OCAMLMKLIB) -o plug1 stub1.obj
+libplug1.$(A): stub1.$(O)
+	$(OCAMLMKLIB) -o plug1 stub1.$(O)
 
 plug1.cmo: plug1.ml
 	$(OCAMLC) -c plug1.ml
 
-plug1.cma: plug1.cmo libplug1.a
+plug1.cma: plug1.cmo libplug1.$(A)
 	$(OCAMLMKLIB) -o plug1 plug1.cmo
 
-stub2.obj: stub2.c
+stub2.$(O): stub2.c
 	$(OCAMLC) -c stub2.c
 
-libplug2.a: stub2.obj
-	$(OCAMLMKLIB) -o plug2 stub2.obj
+libplug2.$(A): stub2.$(O)
+	$(OCAMLMKLIB) -o plug2 stub2.$(O)
 
 plug2.cmo: plug2.ml
 	$(OCAMLC) -c plug2.ml
 
-plug2.cma: plug2.cmo libplug2.a
+plug2.cma: plug2.cmo libplug2.$(A)
 	$(OCAMLMKLIB) -a -o plug2 plug2.cmo
 
 main.cmo: main.ml
@@ -49,4 +54,4 @@ demo: main.exe plug1.cma plug2.cma static.exe custom.exe
 	./custom.exe
 
 clean:
-	rm -f *.lib *.obj *.dll *.manifest *.exe *.cmo *.cmi *~ *.exp *.cma
+	rm -f *.lib *.obj *.o *.a *.dll *.manifest *.exe *.cmo *.cmi *~ *.exp *.cma
