@@ -15,15 +15,17 @@
 
 # Common Makefile for otherlibs on the Win32/MinGW ports
 
-include ../../config/Makefile
+ROOTDIR ?= $(shell cygpath -m ../..)
+include $(ROOTDIR)/config/Makefile
 
 # Compilation options
 CC=$(BYTECC)
-CFLAGS=-I../../byterun $(EXTRACFLAGS)
-CAMLC=../../boot/ocamlrun ../../ocamlc -I ../../stdlib -w s
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -I ../../stdlib -w s
+CFLAGS=-I$(ROOTDIR)/byterun $(EXTRACFLAGS)
+CAMLRUN=$(ROOTDIR)/boot/ocamlrun
+CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc -I $(ROOTDIR)/stdlib -w s
+CAMLOPT=$(CAMLRUN) $(ROOTDIR)/ocamlopt -I $(ROOTDIR)/stdlib -w s
 COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
-MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
+MKLIB=$(CAMLRUN) $(ROOTDIR)/tools/ocamlmklib
 
 # Variables to be defined by individual libraries:
 #LIBNAME=
@@ -35,36 +37,39 @@ MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
 #LINKOPTS=
 #LDOPTS=
 
+CMIFILES ?= $(CAMLOBJS:.cmo=.mli)
+CAMLOBJS_NAT ?= $(CAMLOBJS:.cmo=.cmx)
 
 all: lib$(LIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
 
 allopt: lib$(LIBNAME).$(A) $(LIBNAME).cmxa $(LIBNAME).cmxs $(CMIFILES)
 
 $(LIBNAME).cma: $(CAMLOBJS)
-	$(MKLIB) -o $(LIBNAME) -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAMLOBJS) $(LINKOPTS)
+	$(MKLIB) -o $(LIBNAME) -ocamlc '$(CAMLC)' -linkall $(CAMLOBJS) $(LINKOPTS)
 
-$(LIBNAME).cmxa: $(CAMLOBJS:.cmo=.cmx)
-	$(MKLIB) -o $(LIBNAME) -ocamlopt "..\\..\\boot\\ocamlrun ..\\..\\ocamlopt" -linkall $(CAMLOBJS:.cmo=.cmx) $(LINKOPTS)
+$(LIBNAME).cmxa: $(CAMLOBJS_NAT)
+	$(MKLIB) -o $(LIBNAME) -ocamlopt '$(CAMLOPT)' -linkall $(CAMLOBJS_NAT) $(LINKOPTS)
 
 $(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(LIBNAME).$(A)
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
+	$(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
 
 lib$(LIBNAME).$(A): $(COBJS)
-	OCAMLLIB=../../byterun $(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
+	$(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
 
 install::
-	cp dll$(LIBNAME).dll $(STUBLIBDIR)/
+	cp dll$(LIBNAME)$(EXTDLL) $(STUBLIBDIR)/
 	cp lib$(LIBNAME).$(A) $(LIBDIR)/
-	cp $(LIBNAME).cma $(CMIFILES) $(LIBDIR)
+	cp $(LIBNAME).cma $(CMIFILES) $(LIBDIR)/
 
 installopt:
-	cp $(CAMLOBJS:.cmo=.cmx) $(LIBNAME).cmxa $(LIBNAME).$(A) $(LIBNAME).cmxs $(LIBDIR)/
+	cp $(CAMLOBJS_NAT) $(LIBNAME).cmxa $(LIBNAME).$(A) $(LIBDIR)/
+	cp $(LIBNAME).cmxs $(LIBDIR)/
 
 partialclean:
 	rm -f *.cm*
 
 clean:: partialclean
-	rm -f *.dll *.$(A) *.$(O)
+	rm -f *.dll *.so *.a *.lib *.o *.obj
 
 .SUFFIXES: .ml .mli .cmi .cmo .cmx .$(O)
 

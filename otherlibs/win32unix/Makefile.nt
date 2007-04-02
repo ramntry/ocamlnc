@@ -38,7 +38,6 @@ WSOCKLIB=$(call SYSLIB,wsock32)
 LIBNAME=unix
 COBJS=$(ALL_FILES:.c=.$(O))
 CAMLOBJS=unix.cmo unixLabels.cmo
-CMIFILES=$(CAMLOBJS:.cmo=.mli)
 LINKOPTS=-cclib $(WSOCKLIB)
 LDOPTS=-ldopt "-defaultlib $(WSOCKLIB)"
 EXTRACAMLFLAGS=-nolabels

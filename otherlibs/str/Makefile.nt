@@ -17,7 +17,6 @@
 
 LIBNAME=str
 COBJS=strstubs.$(O)
-CMIFILES=str.cmi
 CAMLOBJS=str.cmo
 
 include ../Makefile.nt

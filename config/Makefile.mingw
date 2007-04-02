@@ -101,7 +101,6 @@ MKEXE=flexlink -merge-manifest  -chain mingw -exe -o $(1) $(2) -- $(3)
 ### How to build a DLL
 MKDLL=flexlink -merge-manifest -chain mingw -o $(1) $(3) -- $(4)
 #ml let mkdll out implib files opts = Printf.sprintf "flexlink -merge-manifest -chain mingw -o %s %s -- %s" out files opts;;
-MKDLL=$(BYTECC) -shared -o $(1) -Wl,--out-implib,$(2) $(3)
 
 ### How to build a static library
 MKLIB=rm -f $(1); ar rcs $(1) $(2)
