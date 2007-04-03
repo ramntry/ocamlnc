@@ -132,6 +132,10 @@ void * caml_dlopen(char * libname, int for_execution)
   int c;
   if (!for_execution) flags |= FLEXDLL_RTLD_NOEXEC;
   handle = flexdll_dlopen(libname, flags);
+  /* if (handle) {
+    printf("libname = %s\n", libname);
+    flexdll_dump_exports(handle);
+    } */
   return handle;
 }
 
