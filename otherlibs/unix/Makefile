@@ -74,11 +74,11 @@ install:
 	cd $(LIBDIR); $(RANLIB) libunix.a
 	cp unix.cma $(MLOBJS:.cmo=.cmi) $(MLOBJS:.cmo=.mli) $(LIBDIR)
 	cp unixsupport.h $(LIBDIR)/caml
-	cp unix.cmxs $(LIBDIR)/
 
 installopt:
 	cp $(MLOBJS:.cmo=.cmx) unix.cmxa unix.a $(LIBDIR)
 	cd $(LIBDIR); $(RANLIB) unix.a
+	cp unix.cmxs $(LIBDIR)/
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
