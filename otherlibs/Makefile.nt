@@ -57,7 +57,7 @@ lib$(LIBNAME).$(A): $(COBJS)
 	$(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
 
 install::
-	cp dll$(LIBNAME)$(EXTDLL) $(STUBLIBDIR)/
+	cp dll$(LIBNAME)$(EXT_DLL) $(STUBLIBDIR)/
 	cp lib$(LIBNAME).$(A) $(LIBDIR)/
 	cp $(LIBNAME).cma $(CMIFILES) $(LIBDIR)/
 

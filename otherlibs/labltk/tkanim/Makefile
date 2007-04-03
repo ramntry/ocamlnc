@@ -11,16 +11,16 @@ opt: tkanim.cmxa libtkanim.$(A)
 example: gifanimtest$(EXE)
 
 OBJS=tkanim.cmo
-COBJS= cltkaniminit.o tkAnimGIF.o
+COBJS= cltkaniminit.$(O) tkAnimGIF.$(O)
 
 tkanim.cma: $(OBJS)
-	$(MKLIB) -ocamlc '$(CAMLC)' -o tkanim $(OBJS) $(TK_LINK)
+	$(MKLIB) -ocamlc '$(CAMLC)' -o tkanim $(OBJS)
 
 tkanim.cmxa: $(OBJS:.cmo=.cmx)
-	$(MKLIB) -ocamlopt '$(CAMLOPT)' -o tkanim $(OBJS:.cmo=.cmx) $(TK_LINK)
+	$(MKLIB) -ocamlopt '$(CAMLOPT)' -o tkanim $(OBJS:.cmo=.cmx)
 
-libtkanim.a: $(COBJS)
-	$(MKLIB) -o tkanim $(COBJS) $(TK_LINK)
+libtkanim.$(A): $(COBJS)
+	$(MKLIB) -o tkanim $(COBJS)
 
 gifanimtest-static$(EXE): all gifanimtest.cmo
 	$(CAMLC) -custom -o $@ -I ../lib -I ../support -I ../../win32unix -I ../../unix -dllpath ../support -dllpath . unix.cma -ccopt -L. $(LIBNAME).cma tkanim.cma gifanimtest.cmo
@@ -52,7 +52,7 @@ clean:
 .ml.cmx:
 	$(CAMLOPT) -c $(COMPFLAGS) $<
 
-.c.o:
+.c.$(O):
 	$(BYTECC) $(BYTECCCOMPOPTS) $(CCFLAGS) -c $<
 
 
