@@ -15,7 +15,7 @@
 
 # Common Makefile for otherlibs on the Win32/MinGW ports
 
-ROOTDIR ?= $(shell cygpath -m ../..)
+ROOTDIR=../..
 include $(ROOTDIR)/config/Makefile
 
 # Compilation options

@@ -34,7 +34,7 @@ $(LIBNAME).cma: $(SUPPORT) ../Widgets.src
 	cd ../camltk; $(MAKE)
 	$(MKLIB) -ocamlc '$(CAMLC)' -o $(LIBNAME) \
           -I ../labltk -I ../camltk $(TKOBJS) \
-          -ccopt "$(TK_LINK)"
+          -ccopt "\"$(TK_LINK)\""
 
 $(LIBNAME).cmxa: $(SUPPORT:.cmo=.cmx) ../Widgets.src
 	$(MAKE) superclean
@@ -42,7 +42,7 @@ $(LIBNAME).cmxa: $(SUPPORT:.cmo=.cmx) ../Widgets.src
 	cd ../camltk; $(MAKE) opt
 	$(MKLIB) -ocamlopt '$(CAMLOPT)' -o $(LIBNAME) -oc $(LIBNAME) \
           -I ../labltk -I ../camltk $(TKOBJS:.cmo=.cmx) \
-          -ccopt "$(TK_LINK)"
+          -ccopt "\"$(TK_LINK)\""
 
 $(LIBNAME)top$(EXE) : $(TOPDEPS) $(LIBNAME).cma ../support/lib$(LIBNAME).$(A)
 	$(CAMLC) -verbose -linkall -o $(LIBNAME)top$(EXE) -I ../support \
