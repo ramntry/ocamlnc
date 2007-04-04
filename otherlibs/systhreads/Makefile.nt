@@ -39,7 +39,7 @@ $(LIBNAME).cma: $(CAMLOBJS)
 	$(MKLIB) -o $(LIBNAME) -ocamlc "..\\..\\boot\\ocamlrun ..\\..\\ocamlc" -linkall $(CAMLOBJS) $(LINKOPTS)
 
 lib$(LIBNAME).$(A): $(COBJS)
-	OCAMLLIB=../../byterun $(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
+	$(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
 
 win32_b.$(O): win32.c
 	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c win32.c
@@ -53,10 +53,10 @@ $(LIBNAME).cmxa: $(CAMLOBJS:.cmo=.cmx)
 	mv $(LIBNAME)nat.$(A) $(LIBNAME).$(A)
 
 $(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(LIBNAME)nat.$(A)
-	OCAMLLIB=../../byterun $(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
+	$(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
 
 lib$(LIBNAME)nat.$(A): $(COBJS_NAT)
-	OCAMLLIB=../../byterun $(MKLIB) -o $(LIBNAME)nat $(COBJS_NAT) $(LDOPTS)
+	$(MKLIB) -o $(LIBNAME)nat $(COBJS_NAT) $(LDOPTS)
 
 win32_n.$(O): win32.c
 	$(NATIVECC) -DNATIVE_CODE -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) -c win32.c

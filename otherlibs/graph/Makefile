@@ -32,7 +32,7 @@ CAMLOBJS=graphics.cmo graphicsX11.cmo
 
 all: libgraphics.a graphics.cmi graphics.cma
 
-allopt: libgraphics.a graphics.cmi graphics.cmxa
+allopt: libgraphics.a graphics.cmi graphics.cmxa graphics.$(CMXS)
 
 libgraphics.a: $(OBJS)
 	$(MKLIB) -o graphics $(OBJS) $(X11_LINK)
@@ -42,6 +42,9 @@ graphics.cma: $(CAMLOBJS)
 
 graphics.cmxa: $(CAMLOBJS:.cmo=.cmx)
 	$(MKLIB) -ocamlopt '$(CAMLOPT)' -o graphics $(CAMLOBJS:.cmo=.cmx) $(X11_LINK)
+
+graphics.cmxs: graphics.cmxa
+	$(CAMLOPT) -shared -o graphics.cmxs graphics.cmxa
 
 partialclean:
 	rm -f *.cm*
@@ -58,6 +61,7 @@ install:
 installopt:
 	cp graphics.cmx graphics.cmxa graphics.a $(LIBDIR)
 	cd $(LIBDIR); $(RANLIB) graphics.a
+	if test -f unix.cmxs; then cp graphics.cmxs $(LIBDIR)/; fi
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 

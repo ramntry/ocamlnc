@@ -64,17 +64,18 @@ extract_crc: dynlink.cma extract_crc.cmo
 	$(CAMLC) $(COMPFLAGS) -o extract_crc dynlink.cma extract_crc.cmo
 
 install:
-	cp dynlink.cmi dynlink.cma dynlink.mli extract_crc $(LIBDIR)
+	cp dynlink.cmi dynlink.cma dynlink.mli $(LIBDIR)
+	cp extract_crc $(LIBDIR)/extract_crc$(EXE)
 
 installopt:
-	cp $(NATOBJS) dynlink.cmxa dynlink.a $(LIBDIR)
-	cd $(LIBDIR); $(RANLIB) dynlink.a
+	cp $(NATOBJS) dynlink.cmxa dynlink.$(A) $(LIBDIR)
+	cd $(LIBDIR); $(RANLIB) dynlink.$(A)
 
 partialclean:
 	rm -f extract_crc *.cm[ioax] *.cmxa
 
 clean: partialclean
-	rm -f *.a *.o *.so dynlink.mlopt
+	rm -f *.$(A) *.$(O) *.so *.dll dynlink.mlopt
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 

@@ -15,72 +15,9 @@
 
 # Common Makefile for otherlibs on the Win32/MinGW ports
 
-ROOTDIR=../..
-include $(ROOTDIR)/config/Makefile
-
-# Compilation options
-CC=$(BYTECC)
-CFLAGS=-I$(ROOTDIR)/byterun $(EXTRACFLAGS)
-CAMLRUN=$(ROOTDIR)/boot/ocamlrun
 CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc -I $(ROOTDIR)/stdlib -w s
 CAMLOPT=$(CAMLRUN) $(ROOTDIR)/ocamlopt -I $(ROOTDIR)/stdlib -w s
-COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
-MKLIB=$(CAMLRUN) $(ROOTDIR)/tools/ocamlmklib
 
-# Variables to be defined by individual libraries:
-#LIBNAME=
-#CMIFILES=
-#CAMLOBJS=
-#COBJS=
-#EXTRACFLAGS=
-#EXTRACAMLFLAGS=
-#LINKOPTS=
-#LDOPTS=
-
-CMIFILES ?= $(CAMLOBJS:.cmo=.mli)
-CAMLOBJS_NAT ?= $(CAMLOBJS:.cmo=.cmx)
-
-all: lib$(LIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
-
-allopt: lib$(LIBNAME).$(A) $(LIBNAME).cmxa $(LIBNAME).cmxs $(CMIFILES)
-
-$(LIBNAME).cma: $(CAMLOBJS)
-	$(MKLIB) -o $(LIBNAME) -ocamlc '$(CAMLC)' -linkall $(CAMLOBJS) $(LINKOPTS)
-
-$(LIBNAME).cmxa: $(CAMLOBJS_NAT)
-	$(MKLIB) -o $(LIBNAME) -ocamlopt '$(CAMLOPT)' -linkall $(CAMLOBJS_NAT) $(LINKOPTS)
-
-$(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(LIBNAME).$(A)
-	$(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
-
-lib$(LIBNAME).$(A): $(COBJS)
-	$(MKLIB) -o $(LIBNAME) $(COBJS) $(LDOPTS)
-
-install::
-	cp dll$(LIBNAME)$(EXT_DLL) $(STUBLIBDIR)/
-	cp lib$(LIBNAME).$(A) $(LIBDIR)/
-	cp $(LIBNAME).cma $(CMIFILES) $(LIBDIR)/
-
-installopt:
-	cp $(CAMLOBJS_NAT) $(LIBNAME).cmxa $(LIBNAME).$(A) $(LIBDIR)/
-	cp $(LIBNAME).cmxs $(LIBDIR)/
-
-partialclean:
-	rm -f *.cm*
-
-clean:: partialclean
-	rm -f *.dll *.so *.a *.lib *.o *.obj
-
-.SUFFIXES: .ml .mli .cmi .cmo .cmx .$(O)
-
-.mli.cmi:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmo:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) $<
-
-.c.$(O):
-	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
+include ../Makefile
+# Note .. is the current directory (this makefile is included from
+# a subdirectory)

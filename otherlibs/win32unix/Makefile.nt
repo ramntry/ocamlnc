@@ -42,14 +42,13 @@ LINKOPTS=-cclib $(WSOCKLIB)
 LDOPTS=-ldopt $(WSOCKLIB)
 EXTRACAMLFLAGS=-nolabels
 EXTRACFLAGS=-I../unix
+HEADERS=unixsupport.h
+
 
 include ../Makefile.nt
 
 clean::
 	rm -f $(UNIX_FILES) $(UNIX_CAML_FILES)
-
-install::
-	cp unixsupport.h $(LIBDIR)/caml
 
 $(UNIX_FILES) $(UNIX_CAML_FILES): %: ../unix/%
 	cp ../unix/$* $*
