@@ -72,6 +72,7 @@ DEBUGGER=
 CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 EXTRALIBS=
+CMXS=cmxs
 
 ########## Configuration for the bytecode compiler
 

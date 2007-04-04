@@ -45,13 +45,15 @@ let lib_ccopts = ref []
 let lib_dllibs = ref []
 
 let add_ccobjs l =
-  if not !Clflags.no_auto_link
-      && String.length !Clflags.use_runtime = 0
+  if not !Clflags.no_auto_link then begin
+    if
+      String.length !Clflags.use_runtime = 0
       && String.length !Clflags.use_prims = 0
-  then begin
-    if l.lib_custom then Clflags.custom_runtime := true;
-    lib_ccobjs := l.lib_ccobjs @ !lib_ccobjs;
-    lib_ccopts := l.lib_ccopts @ !lib_ccopts;
+    then begin
+      if l.lib_custom then Clflags.custom_runtime := true;
+      lib_ccobjs := l.lib_ccobjs @ !lib_ccobjs;
+      lib_ccopts := l.lib_ccopts @ !lib_ccopts;
+    end;
     lib_dllibs := l.lib_dllibs @ !lib_dllibs
   end
 
@@ -430,13 +432,15 @@ void caml_startup(char ** argv)
 
 let build_custom_runtime prim_name exec_name =
   match Config.system, Config.ccomp_type with
-  | ("win32"|"mingw"),_ ->
+  | ("win32"|"mingw"|"cygwin"),_ ->
+      (* TODO: load path? *)
       Ccomp.command
        (Printf.sprintf
           "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s"
 	  (match Config.system with
 	     | "win32" -> "msvc"
 	     | "mingw" -> "mingw"
+	     | "cygwin" -> "cygwin"
 	     | _ -> assert false)
           (Filename.quote exec_name)
           (Clflags.std_include_flag "-I ")

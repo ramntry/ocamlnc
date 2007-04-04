@@ -25,6 +25,8 @@
 #ifdef SUPPORT_DYNAMIC_LINKING
 #ifdef HAS_NSLINKMODULE
 #include <mach-o/dyld.h>
+#elif defined(__CYGWIN32__)
+#include "flexdll.h"
 #else
 #include <dlfcn.h>
 #endif
@@ -271,6 +273,31 @@ char * caml_dlerror(void)
   if (dlerror_string != NULL) return dlerror_string;
   NSLinkEditError(&c,&errnum,&fileName,&errorString);
   return (char *) errorString;
+}
+
+#elif defined(__CYGWIN32__)
+/* Use flexdll */
+
+void * caml_dlopen(char * libname, int for_execution)
+{
+  int flags = FLEXDLL_RTLD_GLOBAL;
+  if (!for_execution) flags |= FLEXDLL_RTLD_NOEXEC;
+  return flexdll_dlopen(libname, flags);
+}
+
+void caml_dlclose(void * handle)
+{
+  flexdll_dlclose(handle);
+}
+
+void * caml_dlsym(void * handle, char * name)
+{
+  return flexdll_dlsym(handle, name);
+}
+
+char * caml_dlerror(void)
+{
+  return flexdll_dlerror();
 }
 
 #else

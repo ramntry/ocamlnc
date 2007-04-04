@@ -315,40 +315,34 @@ let call_linker_shared startup units file_list output_name =
 
   let ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
 
-  let cmd,cleanup = match Config.system with
+  let files = Ccomp.quote_files (List.rev file_list) in
+  let cmd = match Config.system with
     | "macosx" ->
-	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf 
 	  "gcc %s -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
 	  ccopts
 	  (Filename.quote output_name)
-	  files,
-	(fun () -> ())
-    | "mingw" | "win32" ->
+	  files
+    | "mingw" | "win32" | "cygwin" ->
 	(* TODO: ccopts *)
-	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf
 	  "flexlink -chain %s -o %s %s %s"
 	  (match Config.system with 
 	     | "mingw" -> "mingw"
 	     | "win32" -> "msvc"
+	     | "cygwin" -> "cygwin"
 	     | _ -> assert false)
 	  (Filename.quote output_name)
 	  files
 	  (if !Clflags.verbose then "-v" else ">NUL")
-	  ,
-	(fun () -> ())
     | _ ->
-	let files = Ccomp.quote_files (List.rev file_list) in
 	Printf.sprintf 
-	  "gcc -shared -o %s %s -Wl,-whole-archive %s -Wl,-no-whole-archive"
+	  "gcc -shared -o %s %s %s"
 	  (Filename.quote output_name)
 	  ccopts
-	  files,
-	(fun () -> ())
+	  files
   in
-  if Ccomp.command cmd <> 0 then (cleanup(); raise(Error Linking_error))
-  else cleanup()
+  if Ccomp.command cmd <> 0 then raise(Error Linking_error)
 
 let link_shared ppf objfiles output_name =
   let units_tolink = List.fold_right scan_file objfiles [] in
@@ -378,13 +372,14 @@ let call_linker file_list startup_file output_name =
   let c_lib =
     if !Clflags.nopervasives then "" else Config.native_c_libraries in
   match Config.system, Config.ccomp_type with
-  | (("win32"|"mingw"), _) when not !Clflags.output_c_object ->
+  | (("win32"|"mingw"|"cygwin"), _) when not !Clflags.output_c_object ->
       let cmd =
         Printf.sprintf 
 	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s"
 	  (match Config.system with
 	     | "win32" -> "msvc"
 	     | "mingw" -> "mingw"
+	     | "cygwin" -> "cygwin"
 	     | _ -> assert false)
           (Filename.quote output_name)
           (Clflags.std_include_flag "-I ")

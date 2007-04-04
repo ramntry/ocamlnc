@@ -127,16 +127,9 @@ char * caml_search_dll_in_path(struct ext_table * path, char * name)
 
 void * caml_dlopen(char * libname, int for_execution)
 {
-  void *handle;
   int flags = FLEXDLL_RTLD_GLOBAL;
-  int c;
   if (!for_execution) flags |= FLEXDLL_RTLD_NOEXEC;
-  handle = flexdll_dlopen(libname, flags);
-  /* if (handle) {
-    printf("libname = %s\n", libname);
-    flexdll_dump_exports(handle);
-    } */
-  return handle;
+  return flexdll_dlopen(libname, flags);
 }
 
 void caml_dlclose(void * handle)

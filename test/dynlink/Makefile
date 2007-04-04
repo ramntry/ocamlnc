@@ -1,5 +1,5 @@
 #INSPATH=C:/cygwin/home/frisch/ocaml3093
-INSPATH=C:/cygwin/home/frisch/natdynlink_ins_mingw
+INSPATH=C:/cygwin/home/frisch/natdynlink_install_cygwin
 OCAMLRUN=$(INSPATH)/bin/ocamlrun.exe
 OCAMLC=$(OCAMLRUN) $(INSPATH)/bin/ocamlc
 OCAMLMKLIB=$(OCAMLRUN) $(INSPATH)/bin/ocamlmklib
@@ -8,6 +8,8 @@ OCAMLMKLIB=$(OCAMLRUN) $(INSPATH)/bin/ocamlmklib
 #A=lib
 O=o
 A=a
+
+all: demo
 
 stub1.$(O): stub1.c
 	$(OCAMLC) -c stub1.c
@@ -31,7 +33,7 @@ plug2.cmo: plug2.ml
 	$(OCAMLC) -c plug2.ml
 
 plug2.cma: plug2.cmo libplug2.$(A)
-	$(OCAMLMKLIB) -a -o plug2 plug2.cmo
+	$(OCAMLMKLIB) -o plug2 plug2.cmo
 
 main.cmo: main.ml
 	$(OCAMLC) -c main.ml
@@ -40,18 +42,18 @@ main.exe: main.cmo
 	$(OCAMLC) -o main.exe dynlink.cma main.cmo
 
 static.exe: plug1.cma plug2.cma
-	$(OCAMLC) -o static.exe -linkall plug1.cma plug2.cma
+	$(OCAMLC) -o static.exe -linkall plug1.cma plug2.cma -use-runtime $(OCAMLRUN)
 
 custom.exe: plug2.cma plug1.cma
 	$(OCAMLC) -o custom.exe -custom -linkall plug2.cma plug1.cma
 
 demo: main.exe plug1.cma plug2.cma static.exe custom.exe
 	@echo "********** Dynamic"
-	$(OCAMLRUN) ./main.exe plug1.cma plug2.cma
+	-$(OCAMLRUN) ./main.exe plug1.cma plug2.cma
 	@echo "********** Static"
-	$(OCAMLRUN) ./static.exe
+	-$(OCAMLRUN) ./static.exe
 	@echo "********** Custom"
-	./custom.exe
+	-./custom.exe
 
 clean:
-	rm -f *.lib *.obj *.o *.a *.dll *.manifest *.exe *.cmo *.cmi *~ *.exp *.cma
+	rm -f *.lib *.obj *.o *.a *.dll *.manifest *.exe *.cmo *.cmi *~ *.exp *.cma *.so

@@ -16,7 +16,7 @@
 include ../config/Makefile
 
 CC=$(BYTECC)
-CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS)
+CFLAGS=-DCAML_NAME_SPACE -O $(BYTECCCOMPOPTS) $(FLEXLINK)
 DFLAGS=-DCAML_NAME_SPACE -g -DDEBUG $(BYTECCCOMPOPTS)
 
 OBJS=interp.o misc.o stacks.o fix_code.o startup.o main.o \
@@ -40,8 +40,8 @@ PUBLIC_INCLUDES=alloc.h callback.h config.h custom.h fail.h intext.h \
 all: ocamlrun$(EXE) ld.conf
 
 ocamlrun$(EXE): libcamlrun.a prims.o
-	$(BYTECC) $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrun$(EXE) \
-	          prims.o libcamlrun.a $(BYTECCLIBS)
+	$(call MKEXE,ocamlrun$(EXE),prims.o libcamlrun.a $(BYTECCLIBS), \
+	$(BYTECCCOMPOPTS) $(BYTECCLINKOPTS))
 
 ocamlrund$(EXE): libcamlrund.a prims.o
 	$(BYTECC) -g $(BYTECCCOMPOPTS) $(BYTECCLINKOPTS) -o ocamlrund$(EXE) \

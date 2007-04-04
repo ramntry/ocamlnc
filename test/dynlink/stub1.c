@@ -4,6 +4,8 @@
 #include <stdio.h>
 
 value stub1() {
+  CAMLlocal1(x);
   printf("This is stub1!\n");
-  return Val_unit;
+  x = caml_copy_string("ABCDEF");
+  return x;
 }

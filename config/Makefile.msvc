@@ -72,6 +72,7 @@ DEBUGGER=
 CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 EXTRALIBS=
+CMXS=cmxs
 
 ########## Configuration for the bytecode compiler
 
@@ -112,7 +113,7 @@ SYSLIB=$(1).lib
 #ml let syslib x = x ^ ".lib";;
 
 ### The ranlib command
-RANLIB=
+RANLIB=echo
 RANLIBCMD=
 
 ############# Configuration for the native-code compiler

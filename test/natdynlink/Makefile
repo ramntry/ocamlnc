@@ -12,6 +12,7 @@ all: $(PLUGINS) $(PLUGINS:.so=.cmx) main mylib.so
 
 clean:
 	rm -f *.so *.o *.cm* main main_ext *.exe *.s *.asm *.obj
+	rm -f *.a *.lib
 	rm -f sub/*.so sub/*.o sub/*.cm* sub/*.s sub/*.asm sub/*.obj
 
 main: api.cmx main.cmx
