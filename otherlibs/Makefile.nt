@@ -17,6 +17,7 @@
 
 CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc -I $(ROOTDIR)/stdlib -w s
 CAMLOPT=$(CAMLRUN) $(ROOTDIR)/ocamlopt -I $(ROOTDIR)/stdlib -w s
+CFLAGS=-I$(ROOTDIR)/byterun $(EXTRACFLAGS)
 
 include ../Makefile
 # Note .. is the current directory (this makefile is included from

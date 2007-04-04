@@ -20,10 +20,10 @@ include $(ROOTDIR)/config/Makefile
 
 # Compilation options
 CC=$(BYTECC)
-CFLAGS=-I$(ROOTDIR)/byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
+CFLAGS?=-I$(ROOTDIR)/byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
 CAMLRUN=$(ROOTDIR)/boot/ocamlrun
-CAMLC=$(ROOTDIR)/ocamlcomp.sh
-CAMLOPT=$(ROOTDIR)/ocamlcompopt.sh
+CAMLC ?= $(ROOTDIR)/ocamlcomp.sh
+CAMLOPT ?= $(ROOTDIR)/ocamlcompopt.sh
 COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
 MKLIB=$(CAMLRUN) $(ROOTDIR)/tools/ocamlmklib
 
