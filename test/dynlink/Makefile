@@ -1,13 +1,8 @@
-#INSPATH=C:/cygwin/home/frisch/ocaml3093
-INSPATH=C:/cygwin/home/frisch/natdynlink_install_cygwin
-OCAMLRUN=$(INSPATH)/bin/ocamlrun.exe
-OCAMLC=$(OCAMLRUN) $(INSPATH)/bin/ocamlc
-OCAMLMKLIB=$(OCAMLRUN) $(INSPATH)/bin/ocamlmklib
+include ../../config/Makefile
 
-#O=obj
-#A=lib
-O=o
-A=a
+OCAMLRUN=$(BINDIR)/ocamlrun.exe
+OCAMLC=$(OCAMLRUN) $(BINDIR)/ocamlc
+OCAMLMKLIB=$(OCAMLRUN) $(BINDIR)/ocamlmklib
 
 all: demo
 
