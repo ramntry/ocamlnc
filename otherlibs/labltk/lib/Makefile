@@ -47,8 +47,8 @@ $(LIBNAME).cmxa: $(SUPPORT:.cmo=.cmx) ../Widgets.src
 $(LIBNAME)top$(EXE) : $(TOPDEPS) $(LIBNAME).cma ../support/lib$(LIBNAME).$(A)
 	$(CAMLC) -verbose -linkall -o $(LIBNAME)top$(EXE) -I ../support \
 	       -I $(TOPDIR)/toplevel toplevellib.cma \
-	       -I ../labltk -I ../camltk $(LIBNAME).cma \
 	       -I $(OTHERS)/unix -I $(OTHERS)/win32unix unix.cma \
+	       -I ../labltk -I ../camltk $(LIBNAME).cma \
 	       -I $(OTHERS)/str str.cma \
 	       topstart.cmo
 

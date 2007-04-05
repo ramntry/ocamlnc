@@ -61,6 +61,9 @@ camlheader camlheader_ur: headernt.c ../config/Makefile
 	mv tmpheader.exe camlheader
 	cp camlheader camlheader_ur
 
+# TODO: do not call flexlink to build tmpheader.exe (we don't need
+# the export table)
+
 sys.ml: sys.mlp ../VERSION
 	sed -e "s|%%VERSION%%|`head -1 ../VERSION`|" sys.mlp >sys.ml
 
