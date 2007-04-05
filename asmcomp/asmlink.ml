@@ -315,6 +315,7 @@ let call_linker_shared startup units file_list output_name =
 
   (* TODO: what to do with ccopts? *)
   let _ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
+  Printf.printf "ccopts = %s\n" _ccopts;
 
   let files = Ccomp.quote_files (List.rev file_list) in
   let cmd = match Config.system with
@@ -325,15 +326,20 @@ let call_linker_shared startup units file_list output_name =
 	  files
     | "mingw" | "win32" | "cygwin" ->
 	Printf.sprintf
-	  "flexlink -chain %s -o %s %s %s"
+	  "flexlink -chain %s -o %s %s %s %s %s %s"
 	  (match Config.system with 
 	     | "mingw" -> "mingw"
 	     | "win32" -> "msvc"
 	     | "cygwin" -> "cygwin"
 	     | _ -> assert false)
 	  (Filename.quote output_name)
+	  (String.concat " "
+	     (List.map (fun s -> if s = "" then "" else
+			  "-I " ^ (Filename.quote s)) !load_path))
 	  files
-	  (if !Clflags.verbose then "-v" else ">NUL")
+	  (if !Clflags.verbose then "-v" else "")
+          (Ccomp.make_link_options !Clflags.ccopts) 
+	  (if !Clflags.verbose then "" else ">NUL")
     | _ ->
 	Printf.sprintf 
 	  "gcc -shared -o %s %s"
@@ -373,14 +379,13 @@ let call_linker file_list startup_file output_name =
   | (("win32"|"mingw"|"cygwin"), _) when not !Clflags.output_c_object ->
       let cmd =
         Printf.sprintf 
-	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s %s%s"
+	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s%s"
 	  (match Config.system with
 	     | "win32" -> "msvc"
 	     | "mingw" -> "mingw"
 	     | "cygwin" -> "cygwin"
 	     | _ -> assert false)
           (Filename.quote output_name)
-          (Clflags.std_include_flag "-I ")
 	  (String.concat " "
 	     (List.map (fun s -> if s = "" then "" else
 			  "-I " ^ (Filename.quote s)) !load_path))

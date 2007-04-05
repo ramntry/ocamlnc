@@ -228,15 +228,14 @@ installbyt:
 	cd tools ; $(MAKEREC) install
 	mkdir -p $(STUBLIBDIR)
 	for i in $(OTHERLIBRARIES); do $(MAKEREC) -C otherlibs/$$i install; done
-
-#	cd ocamldoc ; $(MAKEREC) install
-#	cd win32caml ; $(MAKE) install
-#	./build/partial-install.sh
-#	cp config/Makefile $(LIBDIR)/Makefile.config
-#	cp README $(DISTRIB)/Readme.general.txt
-#	cp README.win32 $(DISTRIB)/Readme.windows.txt
-#	cp LICENSE $(DISTRIB)/License.txt
-#	cp Changes $(DISTRIB)/Changes.txt
+	cd ocamldoc ; $(MAKEREC) install
+	cd win32caml ; $(MAKE) install
+	./build/partial-install.sh
+	cp config/Makefile $(LIBDIR)/Makefile.config
+	cp README $(DISTRIB)/Readme.general.txt
+	cp README.win32 $(DISTRIB)/Readme.windows.txt
+	cp LICENSE $(DISTRIB)/License.txt
+	cp Changes $(DISTRIB)/Changes.txt
 
 # Installation of the native-code compiler
 installopt:

@@ -6,7 +6,7 @@ COMPFLAGS=
 #SHARED=-shared -closed -S -dstartup
 #SHARED=-shared
 
-PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so plugin_thread.so
+PLUGINS=plugin.so plugin2.so sub/plugin.so sub/plugin3.so plugin4.so mypack.so packed1.so packed1_client.so pack_client.so plugin_ref.so plugin_high_arity.so plugin_ext.so plugin_simple.so bug.so plugin_thread.so plugin4_unix.so
 
 all: $(PLUGINS) $(PLUGINS:.so=.cmx) main mylib.so
 
@@ -45,6 +45,9 @@ plugin_ext.cmx: api.cmx plugin_ext.ml
 
 plugin_ext.so: factorial.$(O) plugin_ext.cmx
 	$(CAMLOPT) $(COMPFLAGS) -shared -o plugin_ext.so factorial.$(O) plugin_ext.cmx
+
+plugin4_unix.so: plugin4.cmx
+	$(CAMLOPT) -shared -o plugin4_unix.so plugin4.cmx unix.cmxa
 
 packed1_client.cmx: packed1.cmx
 
