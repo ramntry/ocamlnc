@@ -313,18 +313,17 @@ let call_linker_shared startup units file_list output_name =
     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
        !load_path) in
 
-  let ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
+  (* TODO: what to do with ccopts? *)
+  let _ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
 
   let files = Ccomp.quote_files (List.rev file_list) in
   let cmd = match Config.system with
     | "macosx" ->
 	Printf.sprintf 
-	  "gcc %s -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
-	  ccopts
+	  "gcc -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
 	  (Filename.quote output_name)
 	  files
     | "mingw" | "win32" | "cygwin" ->
-	(* TODO: ccopts *)
 	Printf.sprintf
 	  "flexlink -chain %s -o %s %s %s"
 	  (match Config.system with 
@@ -337,9 +336,8 @@ let call_linker_shared startup units file_list output_name =
 	  (if !Clflags.verbose then "-v" else ">NUL")
     | _ ->
 	Printf.sprintf 
-	  "gcc -shared -o %s %s %s"
+	  "gcc -shared -o %s %s"
 	  (Filename.quote output_name)
-	  ccopts
 	  files
   in
   if Ccomp.command cmd <> 0 then raise(Error Linking_error)
@@ -375,7 +373,7 @@ let call_linker file_list startup_file output_name =
   | (("win32"|"mingw"|"cygwin"), _) when not !Clflags.output_c_object ->
       let cmd =
         Printf.sprintf 
-	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s"
+	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s %s%s"
 	  (match Config.system with
 	     | "win32" -> "msvc"
 	     | "mingw" -> "mingw"
@@ -383,11 +381,15 @@ let call_linker file_list startup_file output_name =
 	     | _ -> assert false)
           (Filename.quote output_name)
           (Clflags.std_include_flag "-I ")
+	  (String.concat " "
+	     (List.map (fun s -> if s = "" then "" else
+			  "-I " ^ (Filename.quote s)) !load_path))
           (Filename.quote startup_file)
           (Ccomp.quote_files (List.rev file_list))
           (Ccomp.quote_files (List.rev !Clflags.ccobjs))
           (Filename.quote (runtime_lib ()))
           c_lib
+	  (if !Clflags.verbose then " -v" else "")
           (Ccomp.make_link_options !Clflags.ccopts) 
 	in
 	let res = Ccomp.command cmd in

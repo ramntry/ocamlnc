@@ -124,9 +124,7 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries 
-
-#ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
+  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
 
 # The compilation of ocaml will fail if the runtime has changed.
 # Never mind, just do make bootstrap to reach fixpoint again.

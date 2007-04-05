@@ -116,8 +116,8 @@ defaultentry:
 	@echo "Please refer to the installation instructions in file README.win32."
 
 # Recompile the system using the bootstrap compiler
-all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml otherlibraries
-# ocamldoc.byte ocamlbuild.byte camlp4out win32gui
+all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
+ otherlibraries ocamldoc.byte ocamlbuild.byte camlp4out win32gui
 
 # The compilation of ocaml will fail if the runtime has changed.
 # Never mind, just do make bootstrap to reach fixpoint again.
@@ -204,8 +204,7 @@ opt: runtimeopt ocamlopt libraryopt otherlibrariesopt
 
 # Native-code versions of the tools
 opt.opt: ocamlc.opt ocamlopt.opt ocamllex.opt ocamltoolsopt.opt \
-
-#	ocamlbuild.native camlp4opt ocamldoc.opt
+	ocamlbuild.native camlp4opt ocamldoc.opt
 
 # Installation
 install: installbyt installopt
