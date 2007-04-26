@@ -20,7 +20,7 @@ LIBNAME=str
 COBJS=strstubs.$(O)
 CAMLOBJS=str.cmo
 
-include ../Makefile.nt
+include ../Makefile
 
 depend:
 
