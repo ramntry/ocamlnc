@@ -65,7 +65,7 @@ threads.cmxa: $(THREAD_OBJS:.cmo=.cmx)
 
 # Build threads.cmxs, even if unsafe
 threads.cmxs: threads.cmxa
-	$(CAMLOPT) -shared -o threads.cmxs threads.cmxa -linkall
+	$(CAMLOPT) -shared -o threads.cmxs -I . threads.cmxa -linkall
 
 $(THREAD_OBJS:.cmo=.cmx): ../../ocamlopt
 

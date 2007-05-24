@@ -53,7 +53,7 @@ $(LIBNAME).cmxa: $(CAMLOBJS:.cmo=.cmx)
 	mv $(LIBNAME)nat.$(A) $(LIBNAME).$(A)
 
 $(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(LIBNAME)nat.$(A)
-	$(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
+	$(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa -linkall
 
 lib$(LIBNAME)nat.$(A): $(COBJS_NAT)
 	$(MKLIB) -o $(LIBNAME)nat $(COBJS_NAT) $(LDOPTS)
