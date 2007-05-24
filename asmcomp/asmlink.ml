@@ -309,17 +309,9 @@ let make_shared_startup_file ppf units filename genfuns prims =
 
 
 let call_linker_shared startup units file_list output_name =
-  let stdpath = Ccomp.quote_files
-    (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
-       !load_path) in
-
-  (* TODO: what to do with ccopts? *)
-  let _ccopts = String.concat " " (stdpath :: List.rev !Clflags.ccopts) in
-  Printf.printf "ccopts = %s\n" _ccopts;
-
   let files = Ccomp.quote_files (List.rev file_list) in
   let cmd = match Config.system with
-    | "macosx" ->
+    | "macosx" | "rhapsody" ->
 	Printf.sprintf 
 	  "gcc -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
 	  (Filename.quote output_name)
@@ -342,7 +334,12 @@ let call_linker_shared startup units file_list output_name =
 	  (if !Clflags.verbose then "" else ">NUL")
     | _ ->
 	Printf.sprintf 
-	  "gcc -shared -o %s %s"
+	  "gcc -shared %s %s %s -o %s %s"
+          (Clflags.std_include_flag "-I")
+	  (Ccomp.quote_files
+	     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
+		!load_path))
+          (String.concat " " (List.rev !Clflags.ccopts))
 	  (Filename.quote output_name)
 	  files
   in

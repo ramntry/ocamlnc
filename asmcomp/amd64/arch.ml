@@ -15,12 +15,15 @@
 (* Machine-specific command-line options *)
 
 let pic_code = ref true
+let realpic_code = ref true
 
 let command_line_options =
-  [ "-fPIC", Arg.Set pic_code,
+  [ "-fpic", Arg.Unit (fun () -> pic_code := true; realpic_code := false),
       " Generate position-independent machine code (default)";
-    "-fno-PIC", Arg.Clear pic_code,
-      " Generate position-dependent machine code" ]
+    "-fno-pic", Arg.Unit (fun () -> pic_code := false; realpic_code := false),
+      " Generate position-dependent machine code";
+    "-fPIC", Arg.Unit (fun () -> pic_code := true; realpic_code := true),
+      " Generate dynlinkable position-independent machine code" ]
 
 (* Specific operations for the AMD64 processor *)
 
