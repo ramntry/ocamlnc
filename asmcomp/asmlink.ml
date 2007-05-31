@@ -308,7 +308,7 @@ let make_shared_startup_file ppf units filename genfuns prims =
   close_out oc
 
 
-let call_linker_shared startup units file_list output_name =
+let call_linker_shared file_list output_name =
   let files = Ccomp.quote_files (List.rev file_list) in
   let cmd = match Config.system with
     | "macosx" | "rhapsody" ->
@@ -366,7 +366,7 @@ let link_shared ppf objfiles output_name =
   if Proc.assemble_file startup startup_obj <> 0
   then raise(Error(Assembler_error startup));
   if not !Clflags.keep_startup_file then remove_file startup;
-  call_linker_shared true units (startup_obj::objfiles) output_name;
+  call_linker_shared (startup_obj::objfiles) output_name;
   remove_file startup_obj
 
 let call_linker file_list startup_file output_name =

@@ -265,6 +265,11 @@ void * caml_dlsym(void * handle, char * name)
   else return NULL;
 }
 
+void * caml_globalsym(char * name)
+{
+  return NULL;
+}
+
 char * caml_dlerror(void)
 {
   NSLinkEditErrors c;
@@ -293,6 +298,11 @@ void caml_dlclose(void * handle)
 void * caml_dlsym(void * handle, char * name)
 {
   return flexdll_dlsym(handle, name);
+}
+
+void * caml_globalsym(char * name)
+{
+  return flexdll_dlsym(flexdll_dlopen(NULL,0), name);
 }
 
 char * caml_dlerror(void)
@@ -331,6 +341,11 @@ void * caml_dlsym(void * handle, char * name)
   return dlsym(handle, name);
 }
 
+void * caml_globalsym(char * name)
+{
+  return caml_dlsym(dlopen(NULL,RTLD_GLOBAL), name);
+}
+
 char * caml_dlerror(void)
 {
   return dlerror();
@@ -349,6 +364,11 @@ void caml_dlclose(void * handle)
 }
 
 void * caml_dlsym(void * handle, char * name)
+{
+  return NULL;
+}
+
+void * caml_globalsym(char * name)
 {
   return NULL;
 }

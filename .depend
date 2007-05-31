@@ -181,8 +181,6 @@ typing/subst.cmo: typing/types.cmi utils/tbl.cmi typing/path.cmi \
     utils/misc.cmi typing/ident.cmi typing/btype.cmi typing/subst.cmi 
 typing/subst.cmx: typing/types.cmx utils/tbl.cmx typing/path.cmx \
     utils/misc.cmx typing/ident.cmx typing/btype.cmx typing/subst.cmi 
-typing/type_format.cmo: typing/predef.cmi 
-typing/type_format.cmx: typing/predef.cmx 
 typing/typeclass.cmo: utils/warnings.cmi typing/typetexp.cmi typing/types.cmi \
     typing/typedtree.cmi typing/typedecl.cmi typing/typecore.cmi \
     typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi typing/predef.cmi \
@@ -446,7 +444,7 @@ asmcomp/clambda.cmi: bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/debuginfo.cmi parsing/asttypes.cmi 
 asmcomp/closure.cmi: bytecomp/lambda.cmi asmcomp/clambda.cmi 
 asmcomp/cmm.cmi: typing/ident.cmi asmcomp/debuginfo.cmi 
-asmcomp/cmmgen.cmi: asmcomp/cmm.cmi asmcomp/clambda.cmi 
+asmcomp/cmmgen.cmi: asmcomp/compilenv.cmi asmcomp/cmm.cmi asmcomp/clambda.cmi 
 asmcomp/codegen.cmi: asmcomp/cmm.cmi 
 asmcomp/comballoc.cmi: asmcomp/mach.cmi 
 asmcomp/compilenv.cmi: typing/ident.cmi asmcomp/clambda.cmi 
@@ -744,6 +742,9 @@ driver/pparse.cmx: utils/misc.cmx parsing/location.cmx utils/clflags.cmx \
     utils/ccomp.cmx driver/pparse.cmi 
 toplevel/genprintval.cmi: typing/types.cmi typing/path.cmi \
     typing/outcometree.cmi typing/env.cmi 
+toplevel/opttoploop.cmi: utils/warnings.cmi typing/types.cmi typing/path.cmi \
+    parsing/parsetree.cmi typing/outcometree.cmi parsing/longident.cmi \
+    parsing/location.cmi typing/env.cmi 
 toplevel/topdirs.cmi: parsing/longident.cmi 
 toplevel/toploop.cmi: utils/warnings.cmi typing/types.cmi typing/path.cmi \
     parsing/parsetree.cmi typing/outcometree.cmi parsing/longident.cmi \
@@ -762,6 +763,34 @@ toplevel/genprintval.cmx: typing/types.cmx typing/printtyp.cmx \
     typing/predef.cmx typing/path.cmx typing/outcometree.cmi utils/misc.cmx \
     parsing/longident.cmx typing/ident.cmx typing/env.cmx typing/datarepr.cmx \
     typing/ctype.cmx typing/btype.cmx toplevel/genprintval.cmi 
+toplevel/opttoploop.cmo: utils/warnings.cmi typing/unused_var.cmi \
+    typing/types.cmi typing/typemod.cmi typing/typedtree.cmi \
+    typing/typecore.cmi bytecomp/translmod.cmi bytecomp/simplif.cmi \
+    typing/printtyp.cmi bytecomp/printlambda.cmi parsing/printast.cmi \
+    typing/predef.cmi typing/path.cmi parsing/parsetree.cmi parsing/parse.cmi \
+    typing/outcometree.cmi driver/opterrors.cmi driver/optcompile.cmi \
+    typing/oprint.cmi utils/misc.cmi parsing/longident.cmi \
+    parsing/location.cmi parsing/lexer.cmi typing/ident.cmi \
+    toplevel/genprintval.cmi typing/env.cmi utils/config.cmi \
+    utils/clflags.cmi typing/btype.cmi toplevel/opttoploop.cmi 
+toplevel/opttoploop.cmx: utils/warnings.cmx typing/unused_var.cmx \
+    typing/types.cmx typing/typemod.cmx typing/typedtree.cmx \
+    typing/typecore.cmx bytecomp/translmod.cmx bytecomp/simplif.cmx \
+    typing/printtyp.cmx bytecomp/printlambda.cmx parsing/printast.cmx \
+    typing/predef.cmx typing/path.cmx parsing/parsetree.cmi parsing/parse.cmx \
+    typing/outcometree.cmi driver/opterrors.cmx driver/optcompile.cmx \
+    typing/oprint.cmx utils/misc.cmx parsing/longident.cmx \
+    parsing/location.cmx parsing/lexer.cmx typing/ident.cmx \
+    toplevel/genprintval.cmx typing/env.cmx utils/config.cmx \
+    utils/clflags.cmx typing/btype.cmx toplevel/opttoploop.cmi 
+toplevel/opttopmain.cmo: utils/warnings.cmi toplevel/opttoploop.cmi \
+    driver/opterrors.cmi utils/misc.cmi utils/config.cmi utils/clflags.cmi \
+    toplevel/opttopmain.cmi 
+toplevel/opttopmain.cmx: utils/warnings.cmx toplevel/opttoploop.cmx \
+    driver/opterrors.cmx utils/misc.cmx utils/config.cmx utils/clflags.cmx \
+    toplevel/opttopmain.cmi 
+toplevel/opttopstart.cmo: toplevel/opttopmain.cmi 
+toplevel/opttopstart.cmx: toplevel/opttopmain.cmx 
 toplevel/topdirs.cmo: utils/warnings.cmi typing/types.cmi toplevel/trace.cmi \
     toplevel/toploop.cmi bytecomp/symtable.cmi typing/printtyp.cmi \
     typing/path.cmi bytecomp/opcodes.cmo utils/misc.cmi bytecomp/meta.cmi \

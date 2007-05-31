@@ -102,6 +102,11 @@ TOPLIB=$(UTILS) $(PARSING) $(TYPING) $(COMP) $(BYTECOMP) $(TOPLEVEL)
 
 TOPOBJS=$(TOPLEVELLIB) $(TOPLEVELSTART)
 
+NATTOPOBJS=$(OPTUTILS) $(PARSING) $(TYPING) $(COMP) $(ASMCOMP) \
+  driver/pparse.cmo driver/opterrors.cmo driver/optcompile.cmo \
+  toplevel/genprintval.cmo toplevel/opttoploop.cmo \
+  toplevel/opttopmain.cmo toplevel/opttopstart.cmo
+
 OPTOBJS=$(OPTUTILS) $(PARSING) $(TYPING) $(COMP) $(ASMCOMP) $(OPTDRIVER)
 
 EXPUNGEOBJS=utils/misc.cmo utils/tbl.cmo \
@@ -124,7 +129,9 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
+  otherlibraries 
+
+#ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
 
 # The compilation of ocaml will fail if the runtime has changed.
 # Never mind, just do make bootstrap to reach fixpoint again.
@@ -315,6 +322,11 @@ toplevel/toplevellib.cma: $(TOPLIB)
 
 partialclean::
 	rm -f ocaml toplevel/toplevellib.cma
+
+# The native toplevel
+
+ocamlnat: $(NATTOPOBJS:.cmo=.cmx) 
+	$(CAMLOPT) $(LINKFLAGS) -ccopt "$(NATDYNLINKOPTS)" -o ocamlnat $(NATTOPOBJS:.cmo=.cmx)
 
 # The configuration file
 

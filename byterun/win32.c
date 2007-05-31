@@ -148,6 +148,11 @@ void * caml_dlsym(void * handle, char * name)
   return flexdll_dlsym(handle, name);
 }
 
+void * caml_globalsym(char * name)
+{
+  return flexdll_dlsym(flexdll_dlopen(NULL,0), name);
+}
+
 char * caml_dlerror(void)
 {
   return flexdll_dlerror();

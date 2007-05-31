@@ -6,6 +6,7 @@
 #include "alloc.h"
 #include "natdynlink.h"
 #include "osdeps.h"
+#include "fail.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -92,6 +93,7 @@ CAMLprim value caml_natdynlink_open(value filename)
 
 CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
   CAMLparam1 (symbol);
+  CAMLlocal1 (result);
   void *sym,*sym2;
 
 #define optsym(n) getsym(handle,unit,n,1)
@@ -116,9 +118,38 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
   /* TODO: register code segment */
   
   entrypoint = optsym("__entry");
-  if (NULL != entrypoint) caml_callback((value)(&entrypoint), 0);
- 
+  if (NULL != entrypoint) result = caml_callback((value)(&entrypoint), 0);
+  else result = Val_unit;
+
 #undef optsym
 
-  CAMLreturn (Val_unit);
+  CAMLreturn (result);
+}
+
+CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
+{
+  CAMLparam2 (filename, symbol);
+  CAMLlocal1 (res);
+  void *handle;
+
+  /* TODO: dlclose in case of error... */
+
+  handle = caml_dlopen(String_val(filename), 1);
+  
+  if (NULL == handle) {
+    res = caml_alloc(1,1);
+    Field(res, 0) = caml_copy_string(caml_dlerror());
+  } else {
+    res = caml_alloc(1,0);
+    Field(res, 0) = caml_natdynlink_run(handle, symbol);
+  }
+  CAMLreturn(res);
+}
+
+CAMLprim value caml_natdynlink_loadsym(value symbol)
+{
+  CAMLparam1 (symbol);
+  value sym = (value) caml_globalsym(String_val(symbol));
+  if (!sym) caml_failwith(String_val(symbol));
+  CAMLreturn(sym);
 }
