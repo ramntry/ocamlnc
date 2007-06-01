@@ -309,7 +309,7 @@ let make_shared_startup_file ppf units filename genfuns prims =
 
 
 let call_linker_shared file_list output_name =
-  let files = Ccomp.quote_files (List.rev file_list) in
+  let files = Ccomp.quote_files file_list in
   let cmd = match Config.system with
     | "macosx" | "rhapsody" ->
 	Printf.sprintf 
@@ -352,7 +352,8 @@ let link_shared ppf objfiles output_name =
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
   let units = List.map (fun (ui,_,_) -> ui) units_tolink in
-  let objfiles = List.map object_file_name objfiles @ !Clflags.ccobjs in
+  let objfiles = List.rev (List.map object_file_name objfiles) @ 
+    !Clflags.ccobjs in
   let need,genfuns = generic_functions ppf true units in
 
   let prims = all_primitives units false in
@@ -366,7 +367,7 @@ let link_shared ppf objfiles output_name =
   if Proc.assemble_file startup startup_obj <> 0
   then raise(Error(Assembler_error startup));
   if not !Clflags.keep_startup_file then remove_file startup;
-  call_linker_shared (startup_obj::objfiles) output_name;
+  call_linker_shared (startup_obj :: objfiles) output_name;
   remove_file startup_obj
 
 let call_linker file_list startup_file output_name =
