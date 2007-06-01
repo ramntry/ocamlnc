@@ -239,20 +239,6 @@ let generic_functions ppf shared units_list =
 
 module StringSet = Set.Make(String)
 
-let all_primitives units main =
-  let prims = 
-    List.fold_right 
-      (fun ui -> List.fold_right StringSet.add ui.ui_primitives)
-      units StringSet.empty in
-
-  let prims =
-    if main 
-    then prims
-    else
-      Array.fold_right StringSet.remove Runtimedef.builtin_primitives prims in
-
-  StringSet.elements prims
-
 let make_startup_file ppf filename units_list =
   let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
@@ -284,16 +270,14 @@ let make_startup_file ppf filename units_list =
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
 
-  Compilenv.extra_exports := all_primitives units true;
   Emit.end_assembly();
   close_out oc
 
-let make_shared_startup_file ppf units filename genfuns prims =
+let make_shared_startup_file ppf units filename genfuns =
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup";
   Compilenv.reset "_shared_startup"; 
-  Compilenv.extra_exports := prims;
   Emit.begin_assembly();
   genfuns();
   Asmgen.compile_phrase ppf (Cmmgen.plugin_header units);
@@ -356,13 +340,12 @@ let link_shared ppf objfiles output_name =
     !Clflags.ccobjs in
   let need,genfuns = generic_functions ppf true units in
 
-  let prims = all_primitives units false in
   let startup =
     if !Clflags.keep_startup_file
     then output_name ^ ".startup" ^ ext_asm
     else Filename.temp_file "camlstartup" ext_asm in
   make_shared_startup_file ppf 
-    (List.map (fun (ui,_,crc) -> (ui,crc)) units_tolink) startup genfuns prims;
+    (List.map (fun (ui,_,crc) -> (ui,crc)) units_tolink) startup genfuns;
   let startup_obj = output_name ^ ".startup" ^ ext_obj in
   if Proc.assemble_file startup startup_obj <> 0
   then raise(Error(Assembler_error startup));

@@ -36,7 +36,6 @@ type unit_infos =
     mutable ui_curry_fun: int list;             (* Currying functions needed *)
     mutable ui_apply_fun: int list;             (* Apply functions needed *)
     mutable ui_send_fun: int list;              (* Send functions needed *)
-    mutable ui_primitives: string list;         (* C primitives defined *)
     mutable ui_force_link: bool }               (* Always linked *)
 
 (* Each .a library has a matching .cmxa file that provides the following
@@ -108,6 +107,4 @@ exception Error of error
 
 val report_error: Format.formatter -> error -> unit
 
-(* References used to communicate with emit.ml under Windows *)
-val extra_exports: string list ref
 
