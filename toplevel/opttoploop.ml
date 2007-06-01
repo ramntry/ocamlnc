@@ -125,42 +125,23 @@ let load_lambda ppf (size, lam) =
   if !Clflags.dump_rawlambda then fprintf ppf "%a@." Printlambda.lambda lam;
   let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
-  Asmgen.compile_implementation !phrase_name ppf (size, lam);
-  let dll = !phrase_name ^ ext_dll in
-  Asmlink.call_linker_shared [!phrase_name ^ ext_obj] dll;
-  let dll = if Filename.is_implicit dll then Filename.concat (Sys.getcwd ()) dll else dll in
-  dll_run dll !phrase_name
 
-(*
-  let (init_code, fun_code) = Bytegen.compile_phrase slam in
-  if !Clflags.dump_instr then
-    fprintf ppf "%a%a@."
-    Printinstr.instrlist init_code
-    Printinstr.instrlist fun_code;
-  let (code, code_size, reloc) = Emitcode.to_memory init_code fun_code in
-  let can_free = (fun_code = []) in
-  let initial_symtable = Symtable.current_state() in
-  Symtable.patch_object code reloc;
-  Symtable.check_global_initialized reloc;
-  Symtable.update_global_table();
-  try
-    may_trace := true;
-    let retval = (Meta.reify_bytecode code code_size) () in
-    may_trace := false;
-    if can_free then begin
-      Meta.static_release_bytecode code code_size;
-      Meta.static_free code;
-    end;
-    Result retval
-  with x ->
-    may_trace := false;
-    if can_free then begin
-      Meta.static_release_bytecode code code_size;
-      Meta.static_free code;
-    end;
-    Symtable.restore_state initial_symtable;
-    Exception x
-*)
+  let fn = 
+    if !Clflags.keep_asm_file then !phrase_name
+    else Filename.temp_file ("caml" ^ !phrase_name) ""
+  in
+  Asmgen.compile_implementation fn ppf (size, lam);
+  let dll = fn ^ ext_dll in
+  Asmlink.call_linker_shared [fn ^ ext_obj] dll;
+  Sys.remove (fn ^ ext_obj);
+
+  let dll = 
+    if Filename.is_implicit dll 
+    then Filename.concat (Sys.getcwd ()) dll 
+    else dll in
+  let res = dll_run dll !phrase_name in
+  Sys.remove dll;
+  res
 
 (* Print the outcome of an evaluation *)
 
@@ -384,15 +365,8 @@ let refill_lexbuf buffer len =
 
 let _ =
   Sys.interactive := true;
-  (* TODO: equivalent in native code *)
-(*  let crc_intfs = Symtable.init_toplevel() in *)
+  Dynlink.init ();
   Optcompile.init_path();
-(*
-  List.iter
-    (fun (name, crc) ->
-      Consistbl.set Env.crc_units name crc Sys.executable_name)
-    crc_intfs
-*)
   ()
 
 let load_ocamlinit ppf =
@@ -414,7 +388,6 @@ let set_paths () =
   load_path := !load_path @ [Filename.concat Config.standard_library "camlp4"];
   load_path := "" :: (List.rev !Clflags.include_dirs @ !load_path);
   ()
-  (* Dll.add_path !load_path *)
 
 let initialize_toplevel_env () =
   toplevel_env := Optcompile.initial_env()

@@ -21,8 +21,8 @@ let preload_objects = ref []
 let prepare ppf =
   Opttoploop.set_paths ();
   try
-    let res = true
-(*      List.for_all (Topdirs.load_file ppf) (List.rev !preload_objects)  *)
+    let res =
+      List.for_all (Opttopdirs.load_file ppf) (List.rev !preload_objects)
     in
     !Opttoploop.toplevel_startup_hook ();
     res
@@ -35,6 +35,8 @@ let prepare ppf =
 let file_argument name =
   let ppf = Format.err_formatter in
   if Filename.check_suffix name ".cmxs"
+    || Filename.check_suffix name ".cmx"
+    || Filename.check_suffix name ".cmxa"
   then preload_objects := name :: !preload_objects
   else
     begin

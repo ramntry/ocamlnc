@@ -131,8 +131,7 @@ let check_implems filename ui implems =
        try
 	 let (old_crc,old_src,state) = StrMap.find name implems in
 	 if crc <> cmx_not_found_crc && old_crc <> crc 
-	 then 
-	   raise(Error(Inconsistent_import(name)))
+	 then raise(Error(Inconsistent_import(name)))
 	 else match state with
 	   | Check_inited i -> 
 	       if ndl_globals_inited() < i 
