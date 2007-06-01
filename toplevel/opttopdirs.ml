@@ -51,8 +51,13 @@ let _ = Hashtbl.add directive_table "cd" (Directive_string dir_cd)
 
 (* Load in-core a .cmxs file *)
 
-let load_file ppf name =
-  let name = find_in_path !Config.load_path name in
+let load_file ppf name0 =
+  let name = 
+    try Some (find_in_path !Config.load_path name0)
+    with Not_found -> None in
+  match name with
+    | None -> fprintf ppf "File not found: %s@." name0; false
+    | Some name ->
   let fn,tmp =
     if Filename.check_suffix name ".cmx" || Filename.check_suffix name ".cmxa"
     then
