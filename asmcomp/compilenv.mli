@@ -71,6 +71,9 @@ val global_approx: Ident.t -> Clambda.value_approximation
         (* Return the approximation for the given global identifier *)
 val set_global_approx: Clambda.value_approximation -> unit
         (* Record the approximation of the unit being compiled *)
+val record_global_approx_toplevel: unit -> unit
+        (* Record the current approximation for the current toplevel phrase *)
+
 
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit

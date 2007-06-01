@@ -228,6 +228,7 @@ let execute_phrase print_outcome ppf phr =
         let out_phr =
           match res with
           | Result v ->
+	      Compilenv.record_global_approx_toplevel ();
               if print_outcome then
                 match str with
                 | [Tstr_eval exp] ->

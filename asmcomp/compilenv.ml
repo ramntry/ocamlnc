@@ -174,10 +174,18 @@ let cache_unit_info ui =
 
 (* Return the approximation of a global identifier *)
 
+let toplevel_approx = Hashtbl.create 16
+
+let record_global_approx_toplevel id =
+  Hashtbl.add toplevel_approx current_unit.ui_name current_unit.ui_approx
+
 let global_approx id =
-  match get_global_info id with
-  | None -> Value_unknown
-  | Some ui -> ui.ui_approx
+  if Ident.is_predef_exn id then Value_unknown
+  else try Hashtbl.find toplevel_approx (Ident.name id)
+  with Not_found -> 
+    match get_global_info id with
+      | None -> Value_unknown
+      | Some ui -> ui.ui_approx
 
 (* Return the symbol used to refer to a global identifier *)
 
