@@ -43,7 +43,7 @@ type pack_member =
 
 let read_member_info pack_path file =
   let name =
-    String.capitalize(Filename.basename(chop_extension_if_any file)) in
+    String.capitalize(Filename.basename(chop_extensions file)) in
   let kind =
     if Filename.check_suffix file ".cmx" then begin
       let (info, crc) = Compilenv.read_unit_info file in
@@ -83,7 +83,11 @@ let make_package_object ppf members targetobj targetname coercion =
   let objtemp =
     if !Clflags.keep_asm_file
     then chop_extension_if_any targetobj ^ ".pack" ^ Config.ext_obj
-    else Filename.temp_file "camlpackage" Config.ext_obj in
+    else 
+      (* Put the full name of the module in the temporary file name
+	 to avoid collisions with MSVC's link /lib in case of successive 
+	 packs *)
+      Filename.temp_file (Compilenv.make_symbol (Some "")) Config.ext_obj in
   let components =
     List.map
       (fun m ->
@@ -172,9 +176,9 @@ let package_files ppf files targetcmx =
         try find_in_path !Config.load_path f
         with Not_found -> raise(Error(File_not_found f)))
       files in
-  let prefix = chop_extension_if_any targetcmx in
+  let prefix = chop_extensions targetcmx in
   let targetcmi = prefix ^ ".cmi" in
-  let targetobj = prefix ^ Config.ext_obj in
+  let targetobj = chop_extension_if_any targetcmx ^ Config.ext_obj in
   let targetname = String.capitalize(Filename.basename prefix) in
   (* Set the name of the current "input" *)
   Location.input_name := targetcmx;

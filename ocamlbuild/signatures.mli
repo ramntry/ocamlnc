@@ -372,6 +372,7 @@ module type OPTIONS = sig
   val program_args : string list ref
   val ignore_list : string list ref
   val tags : string list ref
+  val tag_lines : string list ref
   val show_tags : string list ref
 
   val ext_obj : string ref
@@ -452,7 +453,7 @@ module type PLUGIN = sig
     ?deps:string list ->
     ?dep:string ->
     ?insert:[`top | `before of string | `after of string | `bottom] ->
-    cache:(env -> string) ->
+    cache:(env -> builder -> string) ->
     (env -> out_channel -> unit) -> unit
 
   val custom_rule : string ->
@@ -462,7 +463,7 @@ module type PLUGIN = sig
     ?deps:string list ->
     ?dep:string ->
     ?insert:[`top | `before of string | `after of string | `bottom] ->
-    cache:(env -> string) ->
+    cache:(env -> builder -> string) ->
     (env -> cached:bool -> unit) -> unit
 
   (** [copy_rule name ?insert source destination] *)

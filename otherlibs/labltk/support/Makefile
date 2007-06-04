@@ -37,7 +37,7 @@ installopt: opt
 	cp $(PUBMLI:.mli=.cmx) $(INSTALLDIR)
 	if test -f tkthread.$(O); then \
 	  cp tkthread.cmx tkthread.$(O) $(INSTALLDIR); \
-	  chmod 644 $(INSTALLDIR)/tkthread.$(O); \
+	  chmod 644 $(INSTALLDIR)/tkthread.cmx $(INSTALLDIR)/tkthread.$(O); \
 	fi
 
 clean : 

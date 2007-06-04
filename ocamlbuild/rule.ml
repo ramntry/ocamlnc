@@ -97,9 +97,10 @@ let exists2 find p rs =
 let all_deps_of_tags = ref []
 
 let cons deps acc =
-  List.fold_left begin fun acc dep ->
-    if List.mem dep acc then acc else dep :: acc
-  end acc deps
+  List.rev&
+    List.fold_left begin fun acc dep ->
+      if List.mem dep acc then acc else dep :: acc
+    end acc deps
 
 let deps_of_tags tags =
   List.fold_left begin fun acc (xtags, xdeps) ->
@@ -270,15 +271,15 @@ let rule name ?(tags=[]) ?(prods=[]) ?(deps=[]) ?prod ?dep ?(insert = `bottom) c
     code  = code }
 
 let file_rule name ?tags ~prod ?deps ?dep ?insert ~cache action =
-  rule name ?tags ~prod ?dep ?deps ?insert begin fun env _ ->
-    raise (Code_digest (cache env, (fun cached ->
+  rule name ?tags ~prod ?dep ?deps ?insert begin fun env build ->
+    raise (Code_digest (cache env build, (fun cached ->
       if not cached then
         with_output_file (env prod) (action env))))
   end
 
 let custom_rule name ?tags ?prods ?prod ?deps ?dep ?insert ~cache action =
-  rule name ?tags ?prods ?prod ?dep ?deps ?insert begin fun env _ ->
-    raise (Code_digest (cache env, fun cached -> action env ~cached))
+  rule name ?tags ?prods ?prod ?dep ?deps ?insert begin fun env build ->
+    raise (Code_digest (cache env build, fun cached -> action env ~cached))
   end
 
 module Common_commands = struct

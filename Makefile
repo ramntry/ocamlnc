@@ -129,9 +129,7 @@ defaultentry:
 
 # Recompile the system using the bootstrap compiler
 all: runtime ocamlc ocamllex ocamlyacc ocamltools library ocaml \
-  otherlibraries 
-
-#ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
+  otherlibraries ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc
 
 # The compilation of ocaml will fail if the runtime has changed.
 # Never mind, just do make bootstrap to reach fixpoint again.
@@ -152,7 +150,7 @@ coreboot:
 	$(MAKE) promote-cross
 # Rebuild ocamlc and ocamllex (run on byterun/ocamlrun)
 	$(MAKE) partialclean
-	$(MAKE) ocamlc ocamllex
+	$(MAKE) ocamlc ocamllex ocamltools
 # Rebuild the library (using byterun/ocamlrun ./ocamlc)
 	$(MAKE) library-cross
 # Promote the new compiler and the new runtime
@@ -196,7 +194,7 @@ backup:
 	mkdir boot/Saved
 	mv boot/Saved.prev boot/Saved/Saved.prev
 	cp boot/ocamlrun$(EXE) boot/Saved
-	mv boot/ocamlc boot/ocamllex boot/ocamlyacc$(EXE) boot/Saved
+	mv boot/ocamlc boot/ocamllex boot/ocamlyacc$(EXE) boot/ocamldep boot/Saved
 	cd boot; cp $(LIBFILES) Saved
 
 # Promote the newly compiled system to the rank of cross compiler
@@ -205,6 +203,7 @@ promote-cross:
 	cp ocamlc boot/ocamlc
 	cp lex/ocamllex boot/ocamllex
 	cp yacc/ocamlyacc$(EXE) boot/ocamlyacc$(EXE)
+	cp tools/ocamldep boot/ocamldep
 	cd stdlib; cp $(LIBFILES) ../boot
 
 # Promote the newly compiled system to the rank of bootstrap compiler
@@ -220,7 +219,7 @@ restore:
 
 # Check if fixpoint reached
 compare:
-	@if cmp boot/ocamlc ocamlc && cmp boot/ocamllex lex/ocamllex; \
+	@if cmp boot/ocamlc ocamlc && cmp boot/ocamllex lex/ocamllex && cmp boot/ocamldep tools/ocamldep; \
 	then echo "Fixpoint reached, bootstrap succeeded."; \
         else echo "Fixpoint not reached, try one more bootstrapping cycle."; \
 	fi
@@ -235,10 +234,9 @@ opt: runtimeopt ocamlopt libraryopt otherlibrariesopt
 
 # Native-code versions of the tools
 opt.opt: checkstack runtime core ocaml opt-core ocamlc.opt otherlibraries \
-	ocamlopt.opt otherlibrariesopt ocamllex.opt ocamltoolsopt.opt 
-
-#	 ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc ocamlopt.opt otherlibrariesopt \
-#	 ocamllex.opt ocamltoolsopt.opt ocamlbuild.native camlp4opt ocamldoc.opt
+	 ocamlbuild.byte camlp4out $(DEBUGGER) ocamldoc ocamlopt.opt otherlibrariesopt \
+	 ocamllex.opt ocamltoolsopt.opt ocamlbuild.native camlp4opt \
+	 ocamldoc.opt ocamlnat
 
 # Installation
 install: FORCE
@@ -265,12 +263,12 @@ install: FORCE
 	for i in $(OTHERLIBRARIES); do \
           (cd otherlibs/$$i; $(MAKE) install) || exit $$?; \
         done
-	echo "cd ocamldoc; $(MAKE) install"
+	cd ocamldoc; $(MAKE) install
 	if test -f ocamlopt; then $(MAKE) installopt; else :; fi
 	if test -f debugger/ocamldebug; then (cd debugger; $(MAKE) install); \
 	   else :; fi
 	cp config/Makefile $(LIBDIR)/Makefile.config
-	echo "./build/partial-install.sh"
+	BINDIR=$(BINDIR) LIBDIR=$(LIBDIR) PREFIX=$(PREFIX) ./build/partial-install.sh
 
 # Installation of the native-code compiler
 installopt:

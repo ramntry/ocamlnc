@@ -153,6 +153,7 @@ BNG_ASM_LEVEL=1
 TK_ROOT=c:/tcl
 TK_DEFS=-I$(TK_ROOT)/include
 TK_LINK=$(TK_ROOT)/bin/tk83.dll $(TK_ROOT)/bin/tcl83.dll
+#TK_LINK=$(TK_ROOT)/lib/tk84.lib $(TK_ROOT)/lib/tcl84.lib
 
 ############# Aliases for common commands
 
