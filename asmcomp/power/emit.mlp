@@ -12,6 +12,8 @@
 
 (* $Id$ *)
 
+let allow_dynlink = ref true
+
 (* Emission of PowerPC assembly code *)
 
 module StringSet = Set.Make(struct type t = string let compare = compare end)
@@ -84,12 +86,14 @@ let data_space =
 let code_space =
   match Config.system with
   | "elf" | "bsd" -> "	.section \".text\"\n"
+  | "rhapsody" when !allow_dynlink -> "  .data\n"
   | "rhapsody"    -> "	.text\n"
   | _ -> assert false
 
 let rodata_space =
   match Config.system with
   | "elf" | "bsd" -> "	.section \".rodata\"\n"
+  | "rhapsody" when !allow_dynlink -> "  .data\n"
   | "rhapsody"    -> "	.const\n"
   | _ -> assert false
 

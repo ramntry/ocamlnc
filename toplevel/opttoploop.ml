@@ -371,6 +371,7 @@ let _ =
   Sys.interactive := true;
   Dynlink.init ();
   Optcompile.init_path();
+  Clflags.dlcode := true;
   ()
 
 let load_ocamlinit ppf =
