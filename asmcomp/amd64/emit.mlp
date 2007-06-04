@@ -57,17 +57,17 @@ let emit_symbol s =
   Emitaux.emit_symbol '$' s
 
 let emit_call s =
-  if !dlcode
+  if !Clflags.dlcode
   then `call	{emit_symbol s}@PLT`
   else `call	{emit_symbol s}`
 
 let emit_jump s =
-  if !dlcode
+  if !Clflags.dlcode
   then `jmp	{emit_symbol s}@PLT`
   else `jmp	{emit_symbol s}`
 
 let load_symbol_addr s =
-  if !dlcode
+  if !Clflags.dlcode
   then `movq	{emit_symbol s}@GOTPCREL(%rip)`
   else if !pic_code 
   then `leaq	{emit_symbol s}(%rip)`
@@ -129,7 +129,7 @@ let emit_reg32 r = emit_subreg reg_low_32_name r
 
 let emit_addressing addr r n =
   match addr with
-  | Ibased _ when !dlcode -> assert false
+  | Ibased _ when !Clflags.dlcode -> assert false
   | Ibased(s, d) ->
       `{emit_symbol s}`;
       if d <> 0 then ` + {emit_int d}`;
@@ -414,8 +414,8 @@ let emit_instr fallthrough i =
             `	movlpd	{emit_reg i.arg.(0)}, {emit_addressing addr i.arg 1}\n`
         end
     | Lop(Ialloc n) ->
-	(* TODO: allow fast mode in dlcode (use rax to load caml)young_limit *)
-        if !fastcode_flag && not !dlcode then begin
+	(* TODO: allow fast mode in Clflags.dlcode (use rax to load caml)young_limit *)
+        if !fastcode_flag && not !Clflags.dlcode then begin
           let lbl_redo = new_label() in
           `{emit_label lbl_redo}:	subq	${emit_int n}, %r15\n`;
           `	cmpq	{emit_symbol "caml_young_limit"}(%rip), %r15\n`;
@@ -504,7 +504,7 @@ let emit_instr fallthrough i =
     | Lop(Ispecific(Istore_int(n, addr))) ->
         `	movq	${emit_nativeint n}, {emit_addressing addr i.arg 0}\n`
     | Lop(Ispecific(Istore_symbol(s, addr))) ->
-        assert (not !pic_code && not !dlcode);
+        assert (not !pic_code && not !Clflags.dlcode);
         `	movq	${emit_symbol s}, {emit_addressing addr i.arg 0}\n`
     | Lop(Ispecific(Ioffset_loc(n, addr))) ->
         `	addq	${emit_int n}, {emit_addressing addr i.arg 0}\n`
@@ -565,7 +565,7 @@ let emit_instr fallthrough i =
             end
     | Lswitch jumptbl ->
         let lbl = new_label() in
-        if !pic_code || !dlcode then begin
+        if !pic_code || !Clflags.dlcode then begin
           `	leaq	{emit_label lbl}(%rip), %r11\n`;
           `	jmp	*(%r11, {emit_reg i.arg.(0)}, 8)\n`
         end else begin
@@ -696,7 +696,7 @@ let data l =
 (* Beginning / end of an assembly file *)
 
 let begin_assembly() =
-  if !dlcode then begin
+  if !Clflags.dlcode then begin
     (* from amd64.S; could emit these constants on demand *)
     `	.section        .rodata.cst8,\"a\",@progbits\n`;
     `	.align  16\n`;
