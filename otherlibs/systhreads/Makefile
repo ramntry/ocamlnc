@@ -65,7 +65,7 @@ threads.cmxa: $(THREAD_OBJS:.cmo=.cmx)
 
 # Build threads.cmxs, even if unsafe
 threads.cmxs: threads.cmxa
-	$(CAMLOPT) -shared -o threads.cmxs -I . threads.cmxa -linkall
+	$(CAMLOPT) -shared -dlcode -o threads.cmxs -I . threads.cmxa -linkall
 
 $(THREAD_OBJS:.cmo=.cmx): ../../ocamlopt
 
@@ -104,7 +104,7 @@ installopt:
 	$(CAMLC) -c $(COMPFLAGS) $<
 
 .ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) $<
+	$(CAMLOPT) -dlcode -c $(COMPFLAGS) $<
 
 depend: $(GENFILES)
 	-gcc -MM -I../../byterun *.c > .depend

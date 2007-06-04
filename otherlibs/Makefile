@@ -23,7 +23,7 @@ CC=$(BYTECC)
 CFLAGS?=-I$(ROOTDIR)/byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
 CAMLRUN=$(ROOTDIR)/boot/ocamlrun
 CAMLC ?= $(ROOTDIR)/ocamlcomp.sh
-CAMLOPT ?= $(ROOTDIR)/ocamlcompopt.sh
+CAMLOPT ?= $(ROOTDIR)/ocamlcompopt.sh -dlcode
 COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
 MKLIB=$(CAMLRUN) $(ROOTDIR)/tools/ocamlmklib
 
