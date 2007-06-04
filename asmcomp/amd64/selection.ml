@@ -32,7 +32,7 @@ type addressing_expr =
 
 let rec select_addr exp =
   match exp with
-    Cconst_symbol s when not !dlcode ->
+    Cconst_symbol s when not Clflags.!dlcode ->
       (Asymbol s, 0)
   | Cop((Caddi | Cadda), [arg; Cconst_int m]) ->
       let (a, n) = select_addr arg in (a, n + m)

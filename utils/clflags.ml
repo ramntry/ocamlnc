@@ -90,4 +90,5 @@ let std_include_dir () =
 ;;
 
 let shared = ref false (* -shared *)
+let dlcode = ref false (* -dlcode *)
 

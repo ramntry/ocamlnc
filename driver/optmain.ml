@@ -106,6 +106,8 @@ let main () =
              " Optimize code size rather than speed";
        "-config", Arg.Unit show_config,
              " print configuration values and exit";
+       "-dlcode", Arg.Set dlcode,
+             " Compile into code that can be dynlinked";
        "-dtypes", Arg.Set save_types,
              " Save type information in <filename>.annot";
        "-for-pack", Arg.String (fun s -> for_package := Some s),
