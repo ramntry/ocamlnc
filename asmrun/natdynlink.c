@@ -129,7 +129,7 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
 CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
 {
   CAMLparam2 (filename, symbol);
-  CAMLlocal1 (res);
+  CAMLlocal2 (res, v);
   void *handle;
 
   /* TODO: dlclose in case of error... */
@@ -138,10 +138,12 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
   
   if (NULL == handle) {
     res = caml_alloc(1,1);
-    Field(res, 0) = caml_copy_string(caml_dlerror());
+    v = caml_copy_string(caml_dlerror());
+    Store_field(res, 0, v);
   } else {
     res = caml_alloc(1,0);
-    Field(res, 0) = caml_natdynlink_run(handle, symbol);
+    v = caml_natdynlink_run(handle, symbol);
+    Store_field(res, 0, v);
   }
   CAMLreturn(res);
 }
@@ -149,7 +151,9 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
 CAMLprim value caml_natdynlink_loadsym(value symbol)
 {
   CAMLparam1 (symbol);
-  value sym = (value) caml_globalsym(String_val(symbol));
+  CAMLlocal1 (sym);
+
+  sym = (value) caml_globalsym(String_val(symbol));
   if (!sym) caml_failwith(String_val(symbol));
   CAMLreturn(sym);
 }
