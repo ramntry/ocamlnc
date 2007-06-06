@@ -29,6 +29,8 @@ static void *getsym(void *handle, char *module, char *name, int opt){
 /* Data segments are used by the Is_atom predicate (mlvalues.h)
    to detect static Caml blocks.
 
+   Code segments are used in signals_asm.c
+
    TODO: use dichotomic search 
 */
 
@@ -39,6 +41,7 @@ typedef struct segment {
 } segment;
 
 segment *caml_dyn_data_segments = NULL;
+segment *caml_dyn_code_segments = NULL;
 
 static segment *segment_cons(void *begin, void *end, segment *tl) {
   segment *lnk = caml_stat_alloc(sizeof(segment));
@@ -51,6 +54,12 @@ static segment *segment_cons(void *begin, void *end, segment *tl) {
 int caml_is_in_data(void *p) {
   segment *lnk;
   for (lnk = caml_dyn_data_segments; NULL != lnk; lnk = lnk->next)
+    if (p >= lnk->begin && p <= lnk->end) return 1;
+  return 0;
+}
+int caml_is_in_code(void *p) {
+  segment *lnk;
+  for (lnk = caml_dyn_code_segments; NULL != lnk; lnk = lnk->next)
     if (p >= lnk->begin && p <= lnk->end) return 1;
   return 0;
 }
@@ -115,7 +124,8 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
   
   sym = optsym("__code_begin");
   sym2 = optsym("__code_end");
-  /* TODO: register code segment */
+  if (NULL != sym && NULL != sym2)
+    caml_dyn_code_segments = segment_cons(sym,sym2,caml_dyn_code_segments); 
   
   entrypoint = optsym("__entry");
   if (NULL != entrypoint) result = caml_callback((value)(&entrypoint), 0);
