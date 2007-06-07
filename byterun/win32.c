@@ -485,10 +485,12 @@ static void caml_reset_stack (void *faulting_address)
 }
 
 extern char * caml_code_area_start, * caml_code_area_end;
+CAMLextern int caml_is_in_code(void *);
 
 #define In_code_area(pc) \
-  ((char *)(pc) >= caml_code_area_start && \
-   (char *)(pc) <= caml_code_area_end)
+ ( ((char *)(pc) >= caml_code_area_start && \
+    (char *)(pc) <= caml_code_area_end)     \
+   || caml_is_in_code((void *)(pc))  )
 
 static LONG CALLBACK
     caml_UnhandledExceptionFilter (EXCEPTION_POINTERS* exn_info)
