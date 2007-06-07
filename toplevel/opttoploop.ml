@@ -126,14 +126,14 @@ let load_lambda ppf (size, lam) =
   let slam = Simplif.simplify_lambda lam in
   if !Clflags.dump_lambda then fprintf ppf "%a@." Printlambda.lambda slam;
 
-  let fn = 
-    if !Clflags.keep_asm_file then !phrase_name
-    else Filename.temp_file ("caml" ^ !phrase_name) ""
+  let dll = 
+    if !Clflags.keep_asm_file then !phrase_name ^ ext_dll
+    else Filename.temp_file ("caml" ^ !phrase_name) ext_dll
   in
+  let fn = Filename.chop_extension dll in
   Asmgen.compile_implementation fn ppf (size, lam);
-  let dll = fn ^ ext_dll in
   Asmlink.call_linker_shared [fn ^ ext_obj] dll;
-  Sys.remove (fn ^ ext_obj);
+  Sys.remove (fn ^ ext_obj); 
 
   let dll = 
     if Filename.is_implicit dll 
