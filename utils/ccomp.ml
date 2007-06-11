@@ -38,11 +38,15 @@ let build_diversion lst =
   at_exit (fun () -> Misc.remove_file responsefile);
   "@" ^ responsefile
 
+let need_diversion = match Sys.os_type with
+  | "Win32" | "Cygwin" -> true
+  | _ -> false
+
 let quote_files lst =
   let s =
     String.concat " "
       (List.map (fun f -> if f = "" then f else Filename.quote f) lst) in
-  if Sys.os_type = "Win32" && String.length s >= 256
+  if String.length s >= 256 && need_diversion
   then build_diversion lst
   else s
 
