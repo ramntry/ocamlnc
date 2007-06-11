@@ -39,7 +39,7 @@ let build_diversion lst =
   "@" ^ responsefile
 
 let need_diversion = match Sys.os_type with
-  | "Win32" | "Cygwin" -> true
+  | "Win32" (* | "Cygwin" *) -> true
   | _ -> false
 
 let quote_files lst =
