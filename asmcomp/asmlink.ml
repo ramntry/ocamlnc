@@ -360,7 +360,7 @@ let call_linker file_list startup_file output_name =
   | (("win32"|"mingw"|"cygwin"), _) when not !Clflags.output_c_object ->
       let cmd =
         Printf.sprintf 
-	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s%s"
+	  "flexlink -chain %s -merge-manifest -exe -o %s %s %s %s %s %s %s %s %s"
 	  (match Config.system with
 	     | "win32" -> "msvc"
 	     | "mingw" -> "mingw"
