@@ -295,11 +295,6 @@ let make_shared_startup_file ppf units filename genfuns =
 let call_linker_shared file_list output_name =
   let files = Ccomp.quote_files file_list in
   let cmd = match Config.system with
-    | "macosx" | "rhapsody" ->
-	Printf.sprintf 
-	  "gcc -bundle -flat_namespace -undefined suppress -all_load -o %s %s"
-	  (Filename.quote output_name)
-	  files
     | "mingw" | "win32" | "cygwin" ->
 	Printf.sprintf
 	  "flexlink -chain %s -o %s %s %s %s %s %s"
@@ -318,7 +313,10 @@ let call_linker_shared file_list output_name =
 	  (if !Clflags.verbose then "" else ">NUL")
     | _ ->
 	Printf.sprintf 
-	  "gcc -shared %s %s %s -o %s %s"
+	  "gcc %s %s %s %s -o %s %s"
+	  (match Config.system with
+	     | "macosx" | "rhapsody" -> "-bundle -flat_namespace -undefined suppress -all_load"
+	     | _ -> "-shared")
           (Clflags.std_include_flag "-I")
 	  (Ccomp.quote_files
 	     (List.map (fun dir -> if dir = "" then "" else "-L" ^ dir)
