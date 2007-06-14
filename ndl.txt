@@ -1,0 +1,185 @@
+Some notes about the natdynlink branch
+--------------------------------------
+
+Motivations:
+
+- port Dynlink to native code. Possible applications:
+  * A faster Camlp4 (relies on Dynlink to load extensions; currently
+    only in bytecode).
+  * A simpler ocamlbuild (currently, it recompiles itself with
+    the "ocamlbuild plugin" statically linked).
+  * Already used (with success) in the Ocsigen project. 
+  * Other similar scenario: Xcaml application server (Alex Baretta 
+    expressed some interest in natdynlink).
+  * A framework like Gerd's Netplex would probably benefit from
+    dynlink (ability to load components as described in conf files).
+  * Provide low-level features needed by MetaOCAML (currently
+    they use their own hack).
+  * A more efficient HOL-Light?
+  * Lexifi...
+ 
+- simplify the life for Windows users:
+  * enable dynamic loading of C code under Cygwin (no more -custom
+    toplevels)
+  * simplify Makefiles (compile only once) and source code (no need
+    to deal with declspecs any more)
+
+ 
+
+
+From the users' point of view:
+
+- new options for ocamlopt: -dlcode and -shared
+
+    -dlcode must be used when compiling a unit so that it can be put into
+    a plugin
+
+       * Currently, -dlcode is a no-op except for amd64 where 
+         it lets the back-end produce position independant code
+         (this is not the same as -fpic, though). 
+       * The resulting .cmx file is not affected by -dlcode. 
+       * Units compiled with -dlcode can be linked statically.
+       * Code produced by -dlcode might be slighlty slower, but I did
+         not observe that in practice. Should we make it the default?
+
+    -shared is used to create a plugin from a set of .cmx and
+    .cmxa files, and also C objects/libraries.
+       * The recommended extension for dynlinkable units is .cmxs.
+       * A .cmxs file is a shared object (.so / .dll / ...).
+       * Checked to work under Linux x86, Linux AMD 64, Win32 MSVC,
+         Win32 MinGw, Win32 Cygwin.
+       * The "transitive closure" algorithm is the same as for
+         a normal linking command (objects and libraries must be
+         ordered in the same way; objects embedded in libraries
+         are included only if necessary, unless -linkall is given).
+       * An option -o must be given.
+       * -shared implicitly forces -dlcode.
+
+- dynlink.cmxa: Dynlink for native code
+
+  The same OCaml interface as Dynlink. Of course, the filename passed
+  to loadfile must refer to a plugin produced by "ocamlopt -shared"
+  (the .cmxs extension is not mandatory).
+
+  A new function Dynlink.is_native has been added, so that user code
+  can decide how to use Dynlink (.cmo or .cmxs?).
+
+  The following functions raise a Failure exception in native code:
+  digest_interface, add_interfaces, add_available_units,
+  clear_available_units. Dynlink.allow_unsafe_modules is a no-op (the
+  loader has currently no way to check whether the .cmxs only contains
+  OCaml code).
+
+  Plugins and also the main program (at least when linked with
+  dynlink.cmxa) records their dependencies: MD5 of imported .cmi (as
+  for bytecode) and MD5 of imported .cmx (when available).  The error
+  Dynlink.Inconsistent_import means that there is a conflict one of
+  these (not necessarily on the .cmi). Should we use two different
+  values to signal mismatch on .cmi and mismatch on .cmx?  (And should
+  we report the MD5 in the error value?)
+   
+  The error Not_a_bytecode_file means that the magic number embedded
+  in the plugin is invalid. Cannot_open_dll means that the plugin
+  could not be open by the OS as a shared library.
+
+- A new native toplevel "ocamlnat"
+    
+  Big latencies between phrases (for each phrase, it produces a file
+  with assembler source code, compiles it, link it into a shared
+  library, and load the result dynamically).
+
+  Under Windows, temporaries DLL files cannot be removed as long as
+  they are open. ocamlnat currently never close or erase them.
+
+- camlp4 in native code accepts .cmxs files
+
+- Windows ports.
+
+  The 32-bit Cygwin port now supports dynamic linking of C code
+  (e.g. in the toplevel). 
+
+  The native 32-bit windows ports (Mingw/MSVC) no longer need two 
+  different compilations for C code (before, one had to compile
+  differently according to whether the C code would be linked
+  statically or dynamically).
+
+  A dynamically loaded C DLL can refer to any symbol from the
+  main program (symbols of the caml runtime, or symbols of C code
+  linked statically) and to any symbol from a previously loaded
+  C DLL.
+
+  The dllimport/dllexport declspecs modifiers in the C code are no
+  longer needed.
+
+  The tool ocamlmklib is now available under Windows.
+
+  The Makefiles for otherlibraries have been simplified accordingly.
+  Now, they are mostly shared with the Unix versions.
+
+  Similarly, the OCaml bytecode runtime system is no longer compiled
+  twice. Dynamically loaded C code can now backlink to the static
+  version directly. ocamlrun.dll and ocamlrun.{a,lib} are gone.
+  
+  
+  All these improvements (and the support for native dynlink) are made
+  possible by the FlexDLL tool (http://alain.frisch.fr/flexdll.html),
+  which simulates the behavior of the dlopen POSIX API under Windows.
+  FlexDLL is a wrapper around the native linker. OCaml users will need
+  to have FlexDLL installed. There is a binary distribution of
+  FlexDLL. To compile FlexDLL from sources, we need OCaml. It should
+  not be too difficult to put FlexDLL in the bootstrap loop (one
+  should simply produce a first version of ocamlrun.exe with the
+  normal linker instead of using flexlink, then use this ocamlrun
+  to start the bootstrap; when flexlink.exe is available, one can
+  produce a more clever ocamlrun.exe which supports dynamic linking).
+  But maybe there is no need to put FlexDLL in the bootstrap loop.
+
+  One might want to let the user decides which version of flexlink.exe
+  to use. Currently, flexlink.exe is simply searched for in the PATH.
+  This is not critical because flexlink.exe can deal with the three
+  supported toolchains (MSVC/Cygwin/Mingw).
+
+Minor changes:
+
+- "-dllib" options recorded in libraries are not ignored when
+  -use_runtime or -use_prims are used (unless -no_auto_link is used).
+  Rationale: one might want to use a specific version of ocamlrun and 
+  still use dynamic C libraries.
+
+- removes "-implib" option of ocamlmklib
+  
+- ocamlopt now checks that at most one of -a,-pack,-shared is given.
+
+
+
+Notes about the internal implementation of native dynlink:
+
+- Most of the low-level code is in a new file asmrun/natdynlink.c
+  and in asmrun/roots.c.
+
+  Actions to be taken when dynlinking OCaml code, for each OCaml unit
+  in the plugin:
+
+  * Register frametables
+  * Register global roots (slots for toplevel values in OCaml units)
+  * Register code segments (for signals and stack overflow detection)
+  * Register static data segments
+  * Call the entry point
+
+- the CAMLexport macro is now useless; CAMLextern is the same as
+  extern.
+
+- flexlink.exe is now responsible for dealing with manifest file
+  (MS VC++ 2005)
+
+- the AMD64 code generator has been adapted to support the generation
+  of position-independant code (see http://www.x86-64.org/documentation.html).
+
+  Effect of compiling with -dlcode:
+
+  Calls and jumps to known symbols go through the PLT
+  (procedure linkage table). Loading the address of a symbol
+  goes through the GOT (global offset table). The direct addressing
+  mode is disabled. The symbols caml_negf_mask and caml_absf_mask
+  are produced in every unit (could do this on demand) to avoid
+  the extra indirection.
