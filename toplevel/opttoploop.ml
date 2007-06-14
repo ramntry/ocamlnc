@@ -36,6 +36,10 @@ let global_symbol id =
   try ndl_loadsym sym
   with _ -> fatal_error ("Opttoploop.global_symbol " ^ (Ident.unique_name id))
 
+let need_symbol sym =
+  try ignore (ndl_loadsym sym); false
+  with _ -> true
+
 let dll_run dll entry =
   match (try Result (Obj.magic (ndl_run_toplevel dll entry)) with exn -> Exception exn) with
     | Exception _ as r -> r
@@ -131,7 +135,7 @@ let load_lambda ppf (size, lam) =
     else Filename.temp_file ("caml" ^ !phrase_name) ext_dll
   in
   let fn = Filename.chop_extension dll in
-  Asmgen.compile_implementation fn ppf (size, lam);
+  Asmgen.compile_implementation ~toplevel:need_symbol fn ppf (size, lam);
   Asmlink.call_linker_shared [fn ^ ext_obj] dll;
   Sys.remove (fn ^ ext_obj); 
 

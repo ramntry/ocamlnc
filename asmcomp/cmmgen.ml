@@ -1927,6 +1927,36 @@ let curry_function arity =
   then intermediate_curry_functions arity 0
   else [tuplify_function (-arity)]
 
+
+module IntSet = Set.Make(
+  struct
+    type t = int
+    let compare = compare
+  end)
+
+let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
+  (* These apply funs are always present in the main program.
+     TODO: add more, and do the same for send and curry funs
+     (maybe up to 10-15?). *)
+
+let generic_functions shared units =
+  let (apply,send,curry) =
+    List.fold_left
+      (fun (apply,send,curry) ui ->
+	 List.fold_right IntSet.add ui.Compilenv.ui_apply_fun apply,
+	 List.fold_right IntSet.add ui.Compilenv.ui_send_fun send,
+	 List.fold_right IntSet.add ui.Compilenv.ui_curry_fun curry)
+      (IntSet.empty,IntSet.empty,IntSet.empty)
+      units
+  in
+  let apply =
+    if shared then IntSet.diff apply default_apply
+    else IntSet.union apply default_apply
+  in
+  let accu = IntSet.fold (fun n accu -> apply_function n :: accu) apply [] in
+  let accu = IntSet.fold (fun n accu -> send_function n :: accu) send accu in
+  IntSet.fold (fun n accu -> curry_function n @ accu) curry accu
+
 (* Generate the entry point *)
 
 let entry_point namelist =

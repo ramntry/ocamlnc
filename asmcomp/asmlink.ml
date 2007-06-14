@@ -198,43 +198,6 @@ let scan_file obj_name tolink = match read_file obj_name with
 
 (* Second pass: generate the startup file and link it with everything else *)
 
-module IntSet = Set.Make(
-  struct
-    type t = int
-    let compare = compare
-  end)
-
-let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
-  (* These apply funs are always present in the main program.
-     TODO: add more, and do the same for send and curry funs
-     (maybe up to 10-15?). *)
-
-let generic_functions ppf shared units_list =
-  let compile_phrase p = Asmgen.compile_phrase ppf p in
-  let (apply,send,curry) =
-    List.fold_left
-      (fun (apply,send,curry) ui ->
-	 List.fold_right IntSet.add ui.ui_apply_fun apply,
-	 List.fold_right IntSet.add ui.ui_send_fun send,
-	 List.fold_right IntSet.add ui.ui_curry_fun curry)
-      (IntSet.empty,IntSet.empty,IntSet.empty)
-      units_list
-  in
-  let apply =
-    if shared then IntSet.diff apply default_apply
-    else IntSet.union apply default_apply
-  in
-  IntSet.iter
-    (fun n -> compile_phrase (Cmmgen.apply_function n))
-    apply;
-  IntSet.iter
-    (fun n -> compile_phrase (Cmmgen.send_function n))
-    send;
-  IntSet.iter
-    (fun n -> List.iter (compile_phrase) (Cmmgen.curry_function n))
-    curry
-
-
 module StringSet = Set.Make(String)
 
 let make_startup_file ppf filename units_list =
@@ -248,7 +211,7 @@ let make_startup_file ppf filename units_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
   compile_phrase (Cmmgen.entry_point name_list);
   let units = List.map (fun (info,_,_) -> info) units_list in
-  generic_functions ppf false units;
+  List.iter compile_phrase (Cmmgen.generic_functions false units);
   Array.iter
     (fun name -> compile_phrase (Cmmgen.predef_exception name))
     Runtimedef.builtin_exceptions;
@@ -271,15 +234,16 @@ let make_startup_file ppf filename units_list =
   close_out oc
 
 let make_shared_startup_file ppf units filename =
+  let compile_phrase p = Asmgen.compile_phrase ppf p in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup";
   Compilenv.reset "_shared_startup"; 
   Emit.begin_assembly();
-  generic_functions ppf true (List.map fst units);
-  Asmgen.compile_phrase ppf (Cmmgen.plugin_header units);
-
-  Asmgen.compile_phrase ppf 
+  List.iter compile_phrase 
+    (Cmmgen.generic_functions true (List.map fst units));
+  compile_phrase (Cmmgen.plugin_header units);
+  compile_phrase
     (Cmmgen.global_table 
        (List.map (fun (ui,_) -> ui.Compilenv.ui_symbol) units));
   (* this is to force a reference to all units, otherwise the linker
