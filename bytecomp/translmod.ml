@@ -80,24 +80,6 @@ let rec compose_coercions c1 c2 =
 (* Record the primitive declarations occuring in the module compiled *)
 
 let primitive_declarations = ref ([] : string list)
-let nprimitive_declarations = ref ([] : string list)
-
-let register_prim descr =
-  match descr.val_kind with
-    | Val_prim p ->
-	primitive_declarations := 
-	  p.Primitive.prim_name :: !primitive_declarations;
-	let nname = 
-	  if p.Primitive.prim_native_name <> "" 
-	  then p.Primitive.prim_native_name
-	  else p.Primitive.prim_name in
-	nprimitive_declarations := nname :: !nprimitive_declarations
-    | _ -> ()
-
-let reset_prims () =
-  primitive_declarations := [];
-  nprimitive_declarations := []
-
 
 (* Keep track of the root path (from the root of the namespace to the
    currently compiled module expression).  Useful for naming exceptions. *)
@@ -305,7 +287,11 @@ and transl_structure fields cc rootpath = function
       transl_let rec_flag pat_expr_list
                  (transl_structure ext_fields cc rootpath rem)
   | Tstr_primitive(id, descr) :: rem ->
-      register_prim descr;
+      begin match descr.val_kind with
+        Val_prim p -> primitive_declarations :=
+                        p.Primitive.prim_name :: !primitive_declarations
+      | _ -> ()
+      end;
       transl_structure fields cc rootpath rem
   | Tstr_type(decls) :: rem ->
       transl_structure fields cc rootpath rem
@@ -358,7 +344,7 @@ let _ =
 
 let transl_implementation module_name (str, cc) =
   reset_labels ();
-  reset_prims ();
+  primitive_declarations := [];
   let module_id = Ident.create_persistent module_name in
   Lprim(Psetglobal module_id,
         [transl_label_init
@@ -398,7 +384,11 @@ let transl_store_structure glob map prims str =
       Lsequence(subst_lambda subst lam,
                 transl_store (add_idents false ids subst) rem)
   | Tstr_primitive(id, descr) :: rem ->
-      register_prim descr;
+      begin match descr.val_kind with
+        Val_prim p -> primitive_declarations :=
+                        p.Primitive.prim_name :: !primitive_declarations
+      | _ -> ()
+      end;
       transl_store subst rem
   | Tstr_type(decls) :: rem ->
       transl_store subst rem
@@ -552,7 +542,7 @@ let build_ident_map restr idlist =
 
 let transl_store_gen module_name (str, restr) topl =
   reset_labels ();
-  reset_prims ();
+  primitive_declarations := [];
   let module_id = Ident.create_persistent module_name in
   let (map, prims, size) = build_ident_map restr (defined_idents str) in
   let f = function
