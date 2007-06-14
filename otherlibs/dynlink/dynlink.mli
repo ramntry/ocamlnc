@@ -28,11 +28,11 @@ val init : unit -> unit
 (** {6 Dynamic loading of compiled files} *)
 
 val loadfile : string -> unit
-(** Load the given Caml object file ([.cmo] file if the program
-    is bytecode, [.cmx/.so] file if the program is native) or
-    library file ([.cma] file if the program is bytecode,
-    [.cmxa/.so] file if the program is native), 
-    and link it with the running program.
+(** In bytecode: load the given bytecode object file ([.cmo] file) or
+    bytecode library file ([.cma] file), and link it with the running 
+    program. In native code: load the given OCaml plugin file (usually
+    [.cmxs]), and link it with the running 
+    program.
     All toplevel expressions in the loaded compilation units
     are evaluated. No facilities are provided to
     access value names defined by the unit. Therefore, the unit
