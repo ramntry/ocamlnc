@@ -25,7 +25,6 @@ val emit_char: char -> unit
 val emit_string_literal: string -> unit
 val emit_string_directive: string -> string -> unit
 val emit_bytes_directive: string -> string -> unit
-val escape_symbol: char -> string -> string
 
 type frame_descr =
   { fd_lbl: int;                        (* Return address *)

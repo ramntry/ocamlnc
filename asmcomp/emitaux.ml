@@ -34,18 +34,6 @@ let emit_printf fmt =
 
 let emit_int32 n = emit_printf "0x%lx" n
 
-let escape_symbol esc s =
-  let b = Buffer.create (String.length s) in
-  for i = 0 to String.length s - 1 do
-    let c = s.[i] in
-    match c with
-      'A'..'Z' | 'a'..'z' | '0'..'9' | '_' ->
-        Buffer.add_char b c
-    | _ ->
-        Printf.bprintf b "%c%02x" esc (Char.code c)
-  done;
-  Buffer.contents b
-
 let emit_symbol esc s =
   for i = 0 to String.length s - 1 do
     let c = s.[i] in
