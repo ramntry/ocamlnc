@@ -224,17 +224,15 @@ let generic_functions ppf shared units_list =
     if shared then IntSet.diff apply default_apply
     else IntSet.union apply default_apply
   in
-  not (IntSet.is_empty apply && IntSet.is_empty send && IntSet.is_empty curry),
-  fun () ->
-    IntSet.iter
-      (fun n -> compile_phrase (Cmmgen.apply_function n))
-      apply;
-    IntSet.iter
-      (fun n -> compile_phrase (Cmmgen.send_function n))
-      send;
-    IntSet.iter
-      (fun n -> List.iter (compile_phrase) (Cmmgen.curry_function n))
-      curry
+  IntSet.iter
+    (fun n -> compile_phrase (Cmmgen.apply_function n))
+    apply;
+  IntSet.iter
+    (fun n -> compile_phrase (Cmmgen.send_function n))
+    send;
+  IntSet.iter
+    (fun n -> List.iter (compile_phrase) (Cmmgen.curry_function n))
+    curry
 
 
 module StringSet = Set.Make(String)
@@ -250,8 +248,7 @@ let make_startup_file ppf filename units_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
   compile_phrase (Cmmgen.entry_point name_list);
   let units = List.map (fun (info,_,_) -> info) units_list in
-  let _,genfuns = generic_functions ppf false units in
-  genfuns();
+  generic_functions ppf false units;
   Array.iter
     (fun name -> compile_phrase (Cmmgen.predef_exception name))
     Runtimedef.builtin_exceptions;
@@ -273,13 +270,13 @@ let make_startup_file ppf filename units_list =
   Emit.end_assembly();
   close_out oc
 
-let make_shared_startup_file ppf units filename genfuns =
+let make_shared_startup_file ppf units filename =
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup";
   Compilenv.reset "_shared_startup"; 
   Emit.begin_assembly();
-  genfuns();
+  generic_functions ppf true (List.map fst units);
   Asmgen.compile_phrase ppf (Cmmgen.plugin_header units);
 
   Asmgen.compile_phrase ppf 
@@ -333,17 +330,15 @@ let link_shared ppf objfiles output_name =
     (fun (info, file_name, crc) -> check_consistency file_name info crc)
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
-  let units = List.map (fun (ui,_,_) -> ui) units_tolink in
   let objfiles = List.rev (List.map object_file_name objfiles) @ 
     !Clflags.ccobjs in
-  let need,genfuns = generic_functions ppf true units in
 
   let startup =
     if !Clflags.keep_startup_file
     then output_name ^ ".startup" ^ ext_asm
     else Filename.temp_file "camlstartup" ext_asm in
   make_shared_startup_file ppf 
-    (List.map (fun (ui,_,crc) -> (ui,crc)) units_tolink) startup genfuns;
+    (List.map (fun (ui,_,crc) -> (ui,crc)) units_tolink) startup;
   let startup_obj = output_name ^ ".startup" ^ ext_obj in
   if Proc.assemble_file startup startup_obj <> 0
   then raise(Error(Assembler_error startup));
