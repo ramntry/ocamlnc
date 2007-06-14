@@ -597,7 +597,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
     }
 
     Instruct(SETGLOBAL):
-      if (*pc != 0xffff) caml_modify(&Field(caml_global_data, *pc), accu);
+      caml_modify(&Field(caml_global_data, *pc), accu);
       accu = Val_unit;
       pc++;
       Next;
