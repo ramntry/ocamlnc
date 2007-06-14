@@ -27,7 +27,7 @@ CAMLexport value * caml_stack_high;
 CAMLexport value * caml_stack_threshold;
 CAMLexport value * caml_extern_sp;
 CAMLexport value * caml_trapsp;
-value * caml_trap_barrier;
+CAMLexport value * caml_trap_barrier;
 value caml_global_data;
 
 uintnat caml_max_stack_size;            /* also used in gc_ctrl.c */

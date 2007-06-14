@@ -33,7 +33,7 @@ extern sighandler caml_win32_signal(int sig, sighandler action);
 #endif
 
 CAMLexport int volatile caml_something_to_do = 0;
-void (* volatile caml_async_action_hook)(void) = NULL;
+CAMLexport void (* volatile caml_async_action_hook)(void) = NULL;
 
 void caml_process_event(void)
 {
