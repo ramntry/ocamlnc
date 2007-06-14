@@ -59,7 +59,4 @@ depend:
 shell.cmo: dummy.cmi
 setpath.cmo fileselect.cmo lexical.cmi searchid.cmi typecheck.cmi: $(TOPDIR)/toplevel/toplevellib.cma
 
-dummy.mli:
-	cp dummyWin.mli dummy.mli
-
 include	.depend
