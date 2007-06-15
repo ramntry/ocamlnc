@@ -1,7 +1,7 @@
 include ../../config/Makefile
 
-CAMLOPT=../../boot/ocamlrun ../../ocamlopt -thread
-SUBCAMLOPT=../../../boot/ocamlrun ../../../ocamlopt
+CAMLOPT=../../boot/ocamlrun ../../ocamlopt -thread -dlcode
+SUBCAMLOPT=../../../boot/ocamlrun ../../../ocamlopt -dlcode
 COMPFLAGS=
 #SHARED=-shared -closed -S -dstartup
 #SHARED=-shared

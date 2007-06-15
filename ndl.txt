@@ -183,3 +183,9 @@ Notes about the internal implementation of native dynlink:
   mode is disabled. The symbols caml_negf_mask and caml_absf_mask
   are produced in every unit (could do this on demand) to avoid
   the extra indirection.
+
+
+References:
+- http://caml.inria.fr/pub/ml-archives/caml-list/2004/11/45b4f99ed99c2e068051e5817507087b.en.html
+- http://www.boblycat.org/~malc/scaml/index2.html
+- http://caml.inria.fr/pub/ml-archives/caml-list/2006/03/08ebf483412934fc50d020ce3403e22a.fr.html
