@@ -208,7 +208,7 @@ opt: runtimeopt ocamlopt libraryopt otherlibrariesopt
 
 # Native-code versions of the tools
 opt.opt: ocamlc.opt ocamlopt.opt ocamllex.opt ocamltoolsopt.opt \
-	ocamlbuild.native camlp4opt ocamldoc.opt ocamlnat
+	ocamlbuild.native camlp4opt ocamldoc.opt
 
 # Installation
 install: installbyt installopt
