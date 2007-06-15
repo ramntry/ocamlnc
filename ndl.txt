@@ -150,6 +150,7 @@ Minor changes:
   
 - ocamlopt now checks that at most one of -a,-pack,-shared is given.
 
+- there is now an ocamldep.opt (built during opt.opt) even on Windows
 
 
 Notes about the internal implementation of native dynlink:

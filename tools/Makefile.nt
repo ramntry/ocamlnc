@@ -12,4 +12,12 @@
 
 # $Id$
 
-include Makefile
+include Makefile.shared
+
+# To make custom toplevels
+
+OCAMLMKTOP=ocamlmktop.cmo
+OCAMLMKTOP_IMPORTS=misc.cmo config.cmo clflags.cmo ccomp.cmo
+
+ocamlmktop.exe: $(OCAMLMKTOP)
+	$(CAMLC) $(LINKFLAGS) -o ocamlmktop $(OCAMLMKTOP_IMPORTS) $(OCAMLMKTOP)
