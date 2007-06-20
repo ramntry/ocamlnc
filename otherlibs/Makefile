@@ -13,81 +13,12 @@
 
 # $Id$
 
-# Common Makefile for otherlibs
+# Common Makefile for otherlibs on the Unix ports
 
-ROOTDIR=../..
-include $(ROOTDIR)/config/Makefile
+CAMLC=$(ROOTDIR)/ocamlcomp.sh
+CAMLOPT=$(ROOTDIR)/ocamlcompopt.sh -dlcode
+CFLAGS=-I$(ROOTDIR)/byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
 
-# Compilation options
-CC=$(BYTECC)
-CFLAGS?=-I$(ROOTDIR)/byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
-CAMLRUN=$(ROOTDIR)/boot/ocamlrun
-CAMLC ?= $(ROOTDIR)/ocamlcomp.sh
-CAMLOPT ?= $(ROOTDIR)/ocamlcompopt.sh -dlcode
-COMPFLAGS=-warn-error A -g $(EXTRACAMLFLAGS)
-MKLIB=$(CAMLRUN) $(ROOTDIR)/tools/ocamlmklib
-
-# Variables to be defined by individual libraries:
-#LIBNAME=
-#CLIBNAME=
-#CMIFILES=
-#CAMLOBJS=
-#COBJS=
-#EXTRACFLAGS=
-#EXTRACAMLFLAGS=
-#LINKOPTS=
-#LDOPTS=
-#HEADERS=
-
-CMIFILES ?= $(CAMLOBJS:.cmo=.cmi)
-CAMLOBJS_NAT ?= $(CAMLOBJS:.cmo=.cmx)
-CLIBNAME ?= $(LIBNAME)
-
-all: lib$(CLIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
-
-allopt: lib$(CLIBNAME).$(A) $(LIBNAME).cmxa $(LIBNAME).$(CMXS) $(CMIFILES)
-
-$(LIBNAME).cma: $(CAMLOBJS)
-	$(MKLIB) -o $(LIBNAME) -oc $(CLIBNAME) -ocamlc '$(CAMLC)' -linkall $(CAMLOBJS) $(LINKOPTS)
-
-$(LIBNAME).cmxa: $(CAMLOBJS_NAT)
-	$(MKLIB) -o $(LIBNAME) -oc $(CLIBNAME) -ocamlopt '$(CAMLOPT)' -linkall $(CAMLOBJS_NAT) $(LINKOPTS)
-
-$(LIBNAME).cmxs: $(LIBNAME).cmxa lib$(CLIBNAME).$(A)
-	$(CAMLOPT) -shared -o $(LIBNAME).cmxs -I . $(LIBNAME).cmxa
-
-lib$(CLIBNAME).$(A): $(COBJS)
-	$(MKLIB) -oc $(CLIBNAME) $(COBJS) $(LDOPTS)
-
-install::
-	if test -f dll$(CLIBNAME)$(EXT_DLL); then \
-	  cp dll$(CLIBNAME)$(EXT_DLL) $(STUBLIBDIR)/; fi
-	cp lib$(CLIBNAME).$(A) $(LIBDIR)/
-	cd $(LIBDIR); $(RANLIB) lib$(CLIBNAME).$(A)
-	cp $(LIBNAME).cma $(CMIFILES) $(CMIFILES:.cmi=.mli) $(LIBDIR)/
-	if test -n "$(HEADERS)"; then cp $(HEADERS) $(LIBDIR)/caml/; fi
-
-installopt:
-	cp $(CAMLOBJS_NAT) $(LIBNAME).cmxa $(LIBNAME).$(A) $(LIBDIR)/
-	cd $(LIBDIR); $(RANLIB) $(LIBNAME).a
-	if test -f $(LIBNAME).cmxs; then cp $(LIBNAME).cmxs $(LIBDIR)/; fi
-
-partialclean:
-	rm -f *.cm*
-
-clean:: partialclean
-	rm -f *.dll *.so *.a *.lib *.o *.obj
-
-.SUFFIXES: .ml .mli .cmi .cmo .cmx .$(O)
-
-.mli.cmi:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmo:
-	$(CAMLC) -c $(COMPFLAGS) $<
-
-.ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) $<
-
-.c.$(O):
-	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
+include ../Makefile.shared
+# Note .. is the current directory (this makefile is included from
+# a subdirectory)
