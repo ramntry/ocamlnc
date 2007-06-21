@@ -84,7 +84,7 @@ clean:: partialclean
 	$(CAMLC) -c $(COMPFLAGS) $<
 
 .ml.cmx:
-	$(CAMLOPT) -c $(COMPFLAGS) $<
+	$(CAMLOPT) -dlcode -c $(COMPFLAGS) $<
 
 .c.$(O):
 	$(BYTECC) $(BYTECCCOMPOPTS) $(CFLAGS) -c $<
