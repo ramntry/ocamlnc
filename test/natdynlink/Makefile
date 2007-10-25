@@ -57,7 +57,7 @@ packed1.cmx: api.cmx packed1.ml
 	$(CAMLOPT) -c $(COMPFLAGS) -for-pack Mypack packed1.ml
 
 mypack.cmx: packed1.cmx
-	$(CAMLOPT) -c $(COMPFLAGS) -S -pack -o mypack.cmx packed1.cmx
+	$(CAMLOPT) $(COMPFLAGS) -S -pack -o mypack.cmx packed1.cmx
 
 mylib.cmxa: plugin.cmx plugin2.cmx
 	$(CAMLOPT) $(COMPFLAGS) -a -o mylib.cmxa plugin.cmx plugin2.cmx
