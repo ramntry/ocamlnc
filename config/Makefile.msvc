@@ -17,9 +17,7 @@
 
 ######### General configuration
 
-#PREFIX=C:/ocamlms
-PREFIX=C:/cygwin/home/frisch/natdynlink_ins_win32
-
+PREFIX=C:/ocamlms
 
 ### Where to install the binaries.
 BINDIR=$(PREFIX)/bin
@@ -94,6 +92,10 @@ NATIVECCLIBS=advapi32.lib
 
 ### How to invoke the C preprocessor
 CPP=cl /nologo /EP
+
+### Path to the FlexDLL includes
+FLEXDIR=$(shell flexlink -where)
+FLEXLINK=-I"$(FLEXDIR)"
 
 ### How to build an EXE
 MKEXE=flexlink -merge-manifest -exe -o $(1) $(2) -- $(3)

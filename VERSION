@@ -1,6 +1,1 @@
-3.10.0
-
-# The version string is the first line of this file.
-# It must be in the format described in stdlib/sys.mli
-
-# $Id$
+3.10.0 (natdynlink)

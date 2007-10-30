@@ -16,7 +16,8 @@
 include ../config/Makefile
 
 CC=$(BYTECC)
-CFLAGS=-DOCAML_STDLIB_DIR='"$(LIBDIR)"' -I../../flexdll/
+CFLAGS=-DOCAML_STDLIB_DIR='"$(LIBDIR)"' $(FLEXLINK)
+
 
 COMMONOBJS=interp.o misc.o stacks.o fix_code.o startup.o \
   fail.o signals.o signals_byt.o freelist.o major_gc.o minor_gc.o \

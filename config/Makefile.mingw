@@ -17,8 +17,7 @@
 
 ######### General configuration
 
-#PREFIX=C:/ocamlmgw
-PREFIX=C:/cygwin/home/frisch/natdynlink_ins_mingw
+PREFIX=C:/ocamlmgw
 
 ### Where to install the binaries
 BINDIR=$(PREFIX)/bin
@@ -94,6 +93,10 @@ NATIVECCLIBS=
 
 ### How to invoke the C preprocessor
 CPP=$(BYTECC) -E
+
+### Path to the FlexDLL includes
+FLEXDIR=$(shell flexlink -where)
+FLEXLINK=-I"$(FLEXDIR)"
 
 ### How to build an EXE
 MKEXE=flexlink -merge-manifest  -chain mingw -exe -o $(1) $(2) -- $(3)

@@ -499,7 +499,7 @@ if test $withsharedlibs = "yes"; then
   cmxs="cmxs"
   case "$host" in
     *-*-cygwin*)
-      flexlink="-I`which flexlink | xargs dirname`"
+      flexlink="-I`flexlink -where`"
       mksharedlib="flexlink -chain cygwin -o"
       shared_libraries_supported=true;;
     *-*-linux-gnu|*-*-linux|*-*-freebsd[3-9]*|*-*-netbsd*|*-*-gnu*)
