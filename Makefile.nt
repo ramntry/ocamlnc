@@ -217,8 +217,6 @@ installbyt:
 	mkdir -p $(BINDIR)
 	mkdir -p $(LIBDIR)
 	cd byterun ; $(MAKEREC) install
-	echo "$(STUBLIBDIR)" > $(LIBDIR)/ld.conf
-	echo "$(LIBDIR)" >> $(LIBDIR)/ld.conf
 	cp ocamlc $(BINDIR)/ocamlc.exe
 	cp ocaml $(BINDIR)/ocaml.exe
 	cd stdlib ; $(MAKEREC) install
