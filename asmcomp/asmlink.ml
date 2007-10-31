@@ -258,7 +258,7 @@ let call_linker_shared file_list output_name =
   let cmd = match Config.system with
     | "mingw" | "win32" | "cygwin" ->
 	Printf.sprintf
-	  "flexlink -chain %s -o %s %s %s %s %s %s"
+	  "flexlink -merge-manifest -chain %s -o %s %s %s %s %s %s"
 	  (match Config.system with 
 	     | "mingw" -> "mingw"
 	     | "win32" -> "msvc"
@@ -361,7 +361,7 @@ let call_linker file_list startup_file output_name =
             (Filename.quote startup_file)
             (Ccomp.quote_files (List.rev file_list))
       in if Ccomp.command cmd <> 0 then raise(Error Linking_error)
-  | ("msvc",_) ->
+  | (("win32"|"mingw"|"cygwin"), _) when !Clflags.output_c_object ->
       let cmd =
         Printf.sprintf "%s /out:%s %s %s"
           Config.native_partial_linker
