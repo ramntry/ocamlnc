@@ -174,6 +174,8 @@ and expression ppf tbl e =
   | Pexp_poly (e, _) -> expression ppf tbl e;
   | Pexp_object cs -> class_structure ppf tbl cs;
   | Pexp_newtype (_, e) -> expression ppf tbl e
+  | Pexp_pack (me, _) -> module_expr ppf tbl me
+  | Pexp_unpack (e1, _, _, e2) -> expression ppf tbl e1; expression ppf tbl e2
 
 and expression_option ppf tbl eo =
   match eo with

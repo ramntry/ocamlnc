@@ -265,15 +265,17 @@ let check_sig_item type_names module_names modtype_names loc = function
 
 (* Check and translate a module type expression *)
 
+let transl_modtype_longident loc env lid =
+  try
+    let (path, info) = Env.lookup_modtype lid env in
+    path
+  with Not_found ->
+    raise(Error(loc, Unbound_modtype lid))
+
 let rec transl_modtype env smty =
   match smty.pmty_desc with
     Pmty_ident lid ->
-      begin try
-        let (path, info) = Env.lookup_modtype lid env in
-        Tmty_ident path
-      with Not_found ->
-        raise(Error(smty.pmty_loc, Unbound_modtype lid))
-      end
+      Tmty_ident (transl_modtype_longident smty.pmty_loc env lid)
   | Pmty_signature ssg ->
       Tmty_signature(transl_signature env ssg)
   | Pmty_functor(param, sarg, sres) ->
@@ -815,8 +817,10 @@ let type_module = type_module None
 let type_structure = type_structure None
 
 (* Fill in the forward declaration *)
-let _ =
-  Typecore.type_module := type_module
+let () =
+  Typecore.type_module := type_module;
+  Typetexp.transl_modtype_longident := transl_modtype_longident;
+  Typetexp.transl_modtype := transl_modtype
 
 (* Normalize types in a signature *)
 

@@ -915,6 +915,10 @@ expr:
       { mkexp (Pexp_object($2)) }
   | OBJECT class_structure error
       { unclosed "object" 1 "end" 3 }
+  | LPAREN MODULE module_expr COLON package_type RPAREN
+      { mkexp (Pexp_pack ($3, $5)) }
+  | LET MODULE LPAREN UIDENT COLON package_type RPAREN EQUAL expr IN seq_expr
+      { mkexp (Pexp_unpack ($9, $4, $6, $11)) }
 ;
 simple_expr:
     val_longident
@@ -1353,6 +1357,19 @@ simple_core_type2:
       { mktyp(Ptyp_variant(List.rev $3, true, Some [])) }
   | LBRACKETLESS opt_bar row_field_list GREATER name_tag_list RBRACKET
       { mktyp(Ptyp_variant(List.rev $3, true, Some (List.rev $5))) }
+  | LPAREN MODULE package_type RPAREN
+      { mktyp(Ptyp_package $3) }
+;
+package_type:
+    mty_longident { ($1, []) }
+  | mty_longident WITH package_type_cstrs { ($1, $3) }
+
+package_type_cstr:
+    TYPE LIDENT EQUAL core_type { ($2, $4) }
+;
+package_type_cstrs:
+    package_type_cstr { [$1] }
+  | package_type_cstr AND package_type_cstrs { $1::$3 }
 ;
 row_field_list:
     row_field                                   { [$1] }
