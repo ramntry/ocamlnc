@@ -639,6 +639,15 @@ let rec type_module anchor env smod =
            mod_env = env;
            mod_loc = smod.pmod_loc }
 
+  | Pmod_unpack (sexp, (p, l)) ->
+      let l, mty = Typetexp.create_package_mty smod.pmod_loc env (p, l) in
+      let mty = transl_modtype env mty in
+      let exp = Typecore.type_expect env sexp (Typecore.create_package_type smod.pmod_loc env (p, l)) in
+      rm { mod_desc = Tmod_unpack(exp, mty);
+           mod_type = mty;
+           mod_env = env;
+           mod_loc = smod.pmod_loc }
+
 and type_structure anchor env sstr scope =
   let type_names = ref StringSet.empty
   and module_names = ref StringSet.empty

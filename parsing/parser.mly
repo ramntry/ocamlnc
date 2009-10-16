@@ -440,6 +440,8 @@ module_expr:
       { $2 }
   | LPAREN module_expr error
       { unclosed "(" 1 ")" 3 }
+  | LPAREN VAL expr COLON package_type RPAREN
+      { mkmod(Pmod_unpack($3, $5)) }
 ;
 structure:
     structure_tail                              { $1 }

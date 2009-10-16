@@ -224,6 +224,10 @@ and add_module bv modl =
       add_module bv mod1; add_module bv mod2
   | Pmod_constraint(modl, mty) ->
       add_module bv modl; add_modtype bv mty
+  | Pmod_unpack(e, (lid, l)) ->
+      add bv lid;
+      List.iter (fun (_, ty) -> add_type bv ty) l;
+      add_expr bv e
 
 and add_structure bv item_list =
   List.fold_left add_struct_item bv item_list 

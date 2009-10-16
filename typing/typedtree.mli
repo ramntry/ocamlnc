@@ -131,6 +131,7 @@ and module_expr_desc =
   | Tmod_functor of Ident.t * module_type * module_expr
   | Tmod_apply of module_expr * module_expr * module_coercion
   | Tmod_constraint of module_expr * module_type * module_coercion
+  | Tmod_unpack of expression * module_type
 
 and structure = structure_item list
 
