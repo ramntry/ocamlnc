@@ -28,6 +28,7 @@ type error =
   | Illegal_renaming of string * string
   | Inconsistent_import of string * string * string
   | Need_recursive_types of string * string
+  | Need_no_applicative_functors of string * string
 
 exception Error of error
 
@@ -136,7 +137,7 @@ let current_unit = ref ""
 
 (* Persistent structure descriptions *)
 
-type pers_flags = Rectypes
+type pers_flags = Rectypes | NoAppFunc
 
 type pers_struct =
   { ps_name: string;
@@ -190,10 +191,19 @@ let read_pers_struct modname filename =
       raise(Error(Illegal_renaming(ps.ps_name, filename)));
     check_consistency filename ps.ps_crcs;
     List.iter
-      (function Rectypes ->
-        if not !Clflags.recursive_types then
-          raise(Error(Need_recursive_types(ps.ps_name, !current_unit))))
+      (function
+        | Rectypes ->
+            if not !Clflags.recursive_types then
+              raise(Error(Need_recursive_types(ps.ps_name, !current_unit)))
+        | NoAppFunc ->
+            if !Clflags.applicative_functors then
+              raise(Error(Need_no_applicative_functors(ps.ps_name, !current_unit)))
+      )
       ps.ps_flags;
+    if !current_unit = ps.ps_name && not !Clflags.applicative_functors
+        && not (List.mem NoAppFunc ps.ps_flags) then
+      raise(Error(Need_no_applicative_functors(ps.ps_name, !current_unit)));
+
     Hashtbl.add persistent_structures modname ps;
     ps
   with End_of_file | Failure _ ->
@@ -817,7 +827,10 @@ let save_signature_with_imports sg modname filename imports =
     let crc = Digest.file filename in
     let crcs = (modname, crc) :: imports in
     output_value oc crcs;
-    let flags = if !Clflags.recursive_types then [Rectypes] else [] in
+    let flags =
+      (if !Clflags.recursive_types then [Rectypes] else []) @
+      (if not !Clflags.applicative_functors then [NoAppFunc] else [])
+    in
     output_value oc flags;
     close_out oc;
     (* Enter signature in persistent table so that imported_unit()
@@ -870,3 +883,12 @@ let report_error ppf = function
       fprintf ppf
         "@[<hov>Unit %s imports from %s, which uses recursive types.@ %s@]"
         import export "The compilation flag -rectypes is required"
+  | Need_no_applicative_functors (import, export) ->
+      if import = export then
+        fprintf ppf
+          "@[<hov>The interface for module %s has been compiled with flag -no-app-funct.@ %s@]"
+          import "The compilation flag -no-app-funct is required"
+      else
+        fprintf ppf
+          "@[<hov>Unit %s imports from %s, which has been compiled with flag -no-app-funct.@ %s@]"
+          import export "The compilation flag -no-app-funct is required"
