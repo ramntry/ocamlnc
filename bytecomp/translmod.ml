@@ -128,7 +128,7 @@ let init_shape modl =
         raise Not_found
     | Tmty_signature sg ->
         Const_block(0, [Const_block(0, init_shape_struct env sg)])
-    | Tmty_functor(id, arg, res) ->
+    | Tmty_functor(id, arg, res, _) ->
         raise Not_found (* can we do better? *)
   and init_shape_struct env sg =
     match sg with

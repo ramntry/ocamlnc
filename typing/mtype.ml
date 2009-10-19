@@ -36,8 +36,8 @@ let rec strengthen env mty p =
   match scrape env mty with
     Tmty_signature sg ->
       Tmty_signature(strengthen_sig env sg p)
-  | Tmty_functor(param, arg, res) when !Clflags.applicative_functors ->
-      Tmty_functor(param, arg, strengthen env res (Papply(p, Pident param)))
+  | Tmty_functor(param, arg, res, Applicative) ->
+      Tmty_functor(param, arg, strengthen env res (Papply(p, Pident param)), Applicative)
   | mty ->
       mty
 
@@ -97,11 +97,11 @@ let nondep_supertype env mid mty =
         else mty
     | Tmty_signature sg ->
         Tmty_signature(nondep_sig env va sg)
-    | Tmty_functor(param, arg, res) ->
+    | Tmty_functor(param, arg, res, kind) ->
         let var_inv =
           match va with Co -> Contra | Contra -> Co | Strict -> Strict in
         Tmty_functor(param, nondep_mty env var_inv arg,
-                     nondep_mty (Env.add_module param arg env) va res)
+                     nondep_mty (Env.add_module param arg env) va res, kind)
 
   and nondep_sig env va = function
     [] -> []
@@ -173,7 +173,7 @@ let rec type_paths env p mty =
   match scrape env mty with
     Tmty_ident p -> []
   | Tmty_signature sg -> type_paths_sig env p 0 sg
-  | Tmty_functor(param, arg, res) -> []
+  | Tmty_functor(param, arg, res, _kind) -> []
 
 and type_paths_sig env p pos sg =
   match sg with
@@ -197,7 +197,7 @@ let rec no_code_needed env mty =
   match scrape env mty with
     Tmty_ident p -> false
   | Tmty_signature sg -> no_code_needed_sig env sg
-  | Tmty_functor(_, _, _) -> false  
+  | Tmty_functor _ -> false  
 
 and no_code_needed_sig env sg =
   match sg with

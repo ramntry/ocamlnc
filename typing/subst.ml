@@ -275,10 +275,10 @@ let rec modtype s = function
       end
   | Tmty_signature sg ->
       Tmty_signature(signature s sg)
-  | Tmty_functor(id, arg, res) ->
+  | Tmty_functor(id, arg, res, k) ->
       let id' = Ident.rename id in
       Tmty_functor(id', modtype s arg,
-                        modtype (add_module id (Pident id') s) res)
+                        modtype (add_module id (Pident id') s) res, k)
 
 and signature s sg =
   (* Components of signature may be mutually recursive (e.g. type declarations

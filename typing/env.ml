@@ -590,7 +590,7 @@ let rec components_of_module env sub path mty =
               Tbl.add (Ident.name id) (decl', !pos) c.comp_cltypes)
         sg pl;
         Structure_comps c
-  | Tmty_functor(param, ty_arg, ty_res) ->
+  | Tmty_functor(param, ty_arg, ty_res, _kind) ->
         Functor_comps {
           fcomp_param = param;
           (* fcomp_arg must be prefixed eagerly, because it is interpreted

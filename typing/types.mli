@@ -185,7 +185,9 @@ type cltype_declaration =
 type module_type =
     Tmty_ident of Path.t
   | Tmty_signature of signature
-  | Tmty_functor of Ident.t * module_type * module_type
+  | Tmty_functor of Ident.t * module_type * module_type * functor_kind
+
+and functor_kind = Applicative | Generative
 
 and signature = signature_item list
 

@@ -223,8 +223,8 @@ let subst_module_type env t =
         Types.Tmty_ident new_p
     | Types.Tmty_signature _ ->
         t
-    | Types.Tmty_functor (id, mt1, mt2) ->
-        Types.Tmty_functor (id, iter mt1, iter mt2)
+    | Types.Tmty_functor (id, mt1, mt2, kind) ->
+        Types.Tmty_functor (id, iter mt1, iter mt2, kind)
   in
   iter t
 

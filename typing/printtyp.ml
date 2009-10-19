@@ -791,7 +791,7 @@ let rec tree_of_modtype = function
       Omty_ident (tree_of_path p)
   | Tmty_signature sg ->
       Omty_signature (tree_of_signature sg)
-  | Tmty_functor(param, ty_arg, ty_res) ->
+  | Tmty_functor(param, ty_arg, ty_res, _kind) ->
       Omty_functor
         (Ident.name param, tree_of_modtype ty_arg, tree_of_modtype ty_res)
 

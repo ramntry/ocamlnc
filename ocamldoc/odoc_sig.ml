@@ -1059,7 +1059,7 @@ module Analyser =
            let mp_type_code = get_string_of_file loc_start loc_end in
            print_DEBUG (Printf.sprintf "mp_type_code=%s" mp_type_code);
            match sig_module_type with
-             Types.Tmty_functor (ident, param_module_type, body_module_type) ->
+             Types.Tmty_functor (ident, param_module_type, body_module_type, _) ->
                let mp_kind = analyse_module_type_kind env
                    current_module_name pmodule_type2 param_module_type
                in
@@ -1120,7 +1120,7 @@ module Analyser =
       | Parsetree.Pmty_functor (_,pmodule_type2,module_type2) (* of string * module_type * module_type *) ->
           (
            match sig_module_type with
-             Types.Tmty_functor (ident, param_module_type, body_module_type) ->
+             Types.Tmty_functor (ident, param_module_type, body_module_type, _) ->
                let loc_start = pmodule_type2.Parsetree.pmty_loc.Location.loc_start.Lexing.pos_cnum in
                let loc_end = pmodule_type2.Parsetree.pmty_loc.Location.loc_end.Lexing.pos_cnum in
                let mp_type_code = get_string_of_file loc_start loc_end in
