@@ -62,8 +62,8 @@ let simpl_module_type ?code t =
 	   None -> Types.Tmty_signature []
 	 | Some s -> raise (Use_code s)
 	)
-    | Types.Tmty_functor (id, mt1, mt2, kind) ->
-        Types.Tmty_functor (id, iter mt1, iter mt2, kind)
+    | Types.Tmty_functor (id, mt1, mt2) ->
+        Types.Tmty_functor (id, iter mt1, iter mt2)
   in
   iter t
 

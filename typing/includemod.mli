@@ -41,7 +41,6 @@ type error =
       Ident.t * class_declaration * class_declaration *
       Ctype.class_match_failure list
   | Unbound_modtype_path of Path.t
-  | Generative_functor_where_applicative_expected
 
 exception Error of error list
 

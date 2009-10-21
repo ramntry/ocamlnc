@@ -169,7 +169,7 @@ let rec approx_modtype env smty =
       let arg = approx_modtype env sarg in
       let (id, newenv) = Env.enter_module param arg env in
       let res = approx_modtype newenv sres in
-      Tmty_functor(id, arg, res, if !Clflags.applicative_functors then Applicative else Generative)
+      Tmty_functor(id, arg, res)
   | Pmty_with(sbody, constraints) ->
       approx_modtype env sbody
 
@@ -283,7 +283,7 @@ let rec transl_modtype env smty =
       let arg = transl_modtype env sarg in
       let (id, newenv) = Env.enter_module param arg env in
       let res = transl_modtype newenv sres in
-      Tmty_functor(id, arg, res, if !Clflags.applicative_functors then Applicative else Generative)
+      Tmty_functor(id, arg, res)
   | Pmty_with(sbody, constraints) ->
       let body = transl_modtype env sbody in
       let init_sg = extract_sig env sbody.pmty_loc body in
@@ -432,7 +432,7 @@ exception Not_a_path
 let rec path_of_module mexp =
   match mexp.mod_desc with
     Tmod_ident p -> p
-  | Tmod_apply({mod_type = Tmty_functor (_, _, _, Applicative)} as funct, arg, coercion) ->
+  | Tmod_apply(funct, arg, coercion) when !Clflags.applicative_functors ->
       Papply(path_of_module funct, path_of_module arg)
   | _ -> raise Not_a_path
 
@@ -441,7 +441,7 @@ let rec path_of_module mexp =
 let rec closed_modtype = function
     Tmty_ident p -> true
   | Tmty_signature sg -> List.for_all closed_signature_item sg
-  | Tmty_functor(id, param, body, _kind) -> closed_modtype body
+  | Tmty_functor(id, param, body) -> closed_modtype body
 
 and closed_signature_item = function
     Tsig_value(id, desc) -> Ctype.closed_schema desc.val_type
@@ -594,16 +594,15 @@ let rec type_module funct_body anchor env smod =
       let mty = transl_modtype env smty in
       let (id, newenv) = Env.enter_module name mty env in
       let body = type_module true None newenv sbody in
-      let kind = if !Clflags.applicative_functors then Applicative else Generative in
       rm { mod_desc = Tmod_functor(id, mty, body);
-           mod_type = Tmty_functor(id, mty, body.mod_type, kind);
+           mod_type = Tmty_functor(id, mty, body.mod_type);
            mod_env = env;
            mod_loc = smod.pmod_loc }
   | Pmod_apply(sfunct, sarg) ->
       let funct = type_module funct_body None env sfunct in
       let arg = type_module funct_body None env sarg in
       begin match Mtype.scrape env funct.mod_type with
-        Tmty_functor(param, mty_param, mty_res, kind) as mty_functor ->
+        Tmty_functor(param, mty_param, mty_res) as mty_functor ->
           let coercion =
             try
               Includemod.modtypes env arg.mod_type mty_param
@@ -611,7 +610,6 @@ let rec type_module funct_body anchor env smod =
               raise(Error(sarg.pmod_loc, Not_included msg)) in
           let mty_appl =
             try
-              if kind = Generative then raise Not_a_path;
               let path = path_of_module arg in
               Subst.modtype (Subst.add_module param path Subst.identity)
                             mty_res
@@ -643,8 +641,7 @@ let rec type_module funct_body anchor env smod =
            mod_loc = smod.pmod_loc }
 
   | Pmod_unpack (sexp, (p, l)) ->
-      if funct_body && !Clflags.applicative_functors then
-        raise (Error (smod.pmod_loc, Not_allowed_in_functor_body));
+      if funct_body then raise (Error (smod.pmod_loc, Not_allowed_in_functor_body));
       let l, mty = Typetexp.create_package_mty smod.pmod_loc env (p, l) in
       let mty = transl_modtype env mty in
       let exp = Typecore.type_expect env sexp (Typecore.create_package_type smod.pmod_loc env (p, l)) in
@@ -841,7 +838,7 @@ let () =
 let rec normalize_modtype env = function
     Tmty_ident p -> ()
   | Tmty_signature sg -> normalize_signature env sg
-  | Tmty_functor(id, param, body, _kind) -> normalize_modtype env body
+  | Tmty_functor(id, param, body) -> normalize_modtype env body
 
 and normalize_signature env = List.iter (normalize_signature_item env)
 
@@ -858,7 +855,7 @@ and normalize_signature_item env = function
 let rec simplify_modtype mty =
   match mty with
     Tmty_ident path -> mty
-  | Tmty_functor(id, arg, res, kind) -> Tmty_functor(id, arg, simplify_modtype res, kind)
+  | Tmty_functor(id, arg, res) -> Tmty_functor(id, arg, simplify_modtype res)
   | Tmty_signature sg -> Tmty_signature(simplify_signature sg)
 
 and simplify_signature sg =

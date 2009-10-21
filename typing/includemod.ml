@@ -36,7 +36,6 @@ type error =
       Ident.t * class_declaration * class_declaration *
       Ctype.class_match_failure list
   | Unbound_modtype_path of Path.t
-  | Generative_functor_where_applicative_expected
 
 exception Error of error list
 
@@ -146,16 +145,12 @@ and try_modtypes env subst mty1 mty2 =
       try_modtypes env subst (expand_module_path env p1) mty2
   | (Tmty_signature sig1, Tmty_signature sig2) ->
       signatures env subst sig1 sig2
-  | (Tmty_functor(param1, arg1, res1, kind1), Tmty_functor(param2, arg2, res2, kind2)) ->
+  | (Tmty_functor(param1, arg1, res1), Tmty_functor(param2, arg2, res2)) ->
       let arg2' = Subst.modtype subst arg2 in
       let cc_arg = modtypes env Subst.identity arg2' arg1 in
       let cc_res =
         modtypes (Env.add_module param1 arg2' env)
           (Subst.add_module param2 (Pident param1) subst) res1 res2 in
-      begin match kind1, kind2 with
-        | Generative, Applicative -> raise(Error[Generative_functor_where_applicative_expected])
-        | _ -> ()
-      end;
       begin match (cc_arg, cc_res) with
           (Tcoerce_none, Tcoerce_none) -> Tcoerce_none
         | _ -> Tcoerce_functor(cc_arg, cc_res)
@@ -386,8 +381,6 @@ let include_err ppf = function
       Includeclass.report_error reason
   | Unbound_modtype_path path ->
       fprintf ppf "Unbound module type %a" Printtyp.path path
-  | Generative_functor_where_applicative_expected ->
-      fprintf ppf "A generative functor is used where an applicative functor is expected"
 
 let report_error ppf = function
   |  [] -> ()
