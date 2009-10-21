@@ -308,6 +308,9 @@ and expression i ppf x =
   | Pexp_newtype (s, e) ->
       line i ppf "Pexp_newtype \"%s\"\n" s;
       expression i ppf e
+  | Pexp_open (m, e) ->
+      line i ppf "Pexp_open \"%a\"\n" fmt_longident m;
+      expression i ppf e
 
 and value_description i ppf x =
   line i ppf "value_description\n";

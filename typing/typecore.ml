@@ -71,6 +71,12 @@ let type_module =
   ref ((fun env md -> assert false) :
        Env.t -> Parsetree.module_expr -> Typedtree.module_expr)
 
+(* Forward declaration, to be filled in by Typemod.type_open *)
+
+let type_open =
+  ref (fun _ -> assert false)
+
+
 (* Forward declaration, to be filled in by Typeclass.class_structure *)
 let type_object =
   ref (fun env s -> assert false :
@@ -1631,7 +1637,8 @@ let rec type_exp env sexp =
       (* non-expansive if the body is non-expansive, so we don't introduce
          any new extra node in the typed AST. *)
       re { body with exp_loc = sexp.pexp_loc; exp_type = ety }
-
+  | Pexp_open (lid, e) ->
+      type_exp (!type_open env sexp.pexp_loc lid) e
 
 and type_argument env sarg ty_expected' =
   (* ty_expected' may be generic *)
