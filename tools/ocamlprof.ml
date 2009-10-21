@@ -288,7 +288,6 @@ and rw_exp iflag sexp =
   | Pexp_newtype (_, sexp) ->
       rewrite_exp iflag sexp
   | Pexp_pack (smod, _) -> rewrite_mod iflag smod
-  | Pexp_unpack (sexp1, _, _, sexp2) -> rewrite_exp iflag sexp1; rewrite_exp iflag sexp2
 
 and rewrite_ifbody iflag ghost sifbody =
   if !instr_if && not ghost then

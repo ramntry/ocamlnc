@@ -764,8 +764,6 @@ and transl_exp0 e =
       Llet(Strict, id, !transl_module Tcoerce_none None modl, transl_exp body)
   | Texp_pack modl ->
       !transl_module Tcoerce_none None modl
-  | Texp_unpack  (arg, id, body) ->
-      Llet(Strict, id, transl_exp arg, transl_exp body)
   | Texp_assert (cond) ->
       if !Clflags.noassert
       then lambda_unit

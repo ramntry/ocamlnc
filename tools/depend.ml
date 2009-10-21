@@ -160,10 +160,6 @@ let rec add_expr bv exp =
       add_pattern bv pat; List.iter (add_class_field bv) fieldl
   | Pexp_newtype (_, e) -> add_expr bv e
   | Pexp_pack (m, _) -> add_module bv m
-  | Pexp_unpack (e1, id, (lid, l), e2) ->
-      add bv lid;
-      List.iter (fun (_, ty) -> add_type bv ty) l;
-      add_expr bv e1; add_expr (StringSet.add id bv) e2
 and add_pat_expr_list bv pel =
   List.iter (fun (p, e) -> add_pattern bv p; add_expr bv e) pel
 

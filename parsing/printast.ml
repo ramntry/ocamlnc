@@ -319,11 +319,6 @@ and expression i ppf x =
       line i ppf "Pexp_pack %a" fmt_longident p;
       list i package_with ppf l;
       module_expr i ppf me
-  | Pexp_unpack (e1, m, (p,l), e2) ->
-      line i ppf "Pexp_unpack %s : %a" m fmt_longident p;
-      list i package_with ppf l;
-      expression i ppf e1;
-      expression i ppf e2
 
 and value_description i ppf x =
   line i ppf "value_description\n";

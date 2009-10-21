@@ -919,8 +919,6 @@ expr:
       { unclosed "object" 1 "end" 3 }
   | LPAREN MODULE module_expr COLON package_type RPAREN
       { mkexp (Pexp_pack ($3, $5)) }
-  | LET MODULE LPAREN UIDENT COLON package_type RPAREN EQUAL expr IN seq_expr
-      { mkexp (Pexp_unpack ($9, $4, $6, $11)) }
 ;
 simple_expr:
     val_longident

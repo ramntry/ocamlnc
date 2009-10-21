@@ -117,7 +117,6 @@ and expression_desc =
   | Pexp_object of class_structure
   | Pexp_newtype of string * expression
   | Pexp_pack of module_expr * package_type
-  | Pexp_unpack of expression * string * package_type * expression
 
 (* Value descriptions *)
 

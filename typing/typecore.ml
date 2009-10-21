@@ -1652,28 +1652,6 @@ let rec type_exp env sexp =
         exp_type = create_package_type loc env (p, l);
         exp_env = env }
 
-  | Pexp_unpack (e1, name, (p, l), sbody) ->
-      let loc = sexp.pexp_loc in
-      let ty = newvar() in
-      Ident.set_current_time ty.level;
-      let l, mty = Typetexp.create_package_mty loc env (p, l) in
-      let mty = !Typetexp.transl_modtype env mty in
-      let arg  = type_expect env e1 (create_package_type loc env (p, l)) in
-      let (id, new_env) = Env.enter_module name mty env in
-      Ctype.init_def(Ident.current_time());
-
-      let body = type_exp new_env sbody in
-      begin try
-        Ctype.unify new_env body.exp_type ty
-      with Unify _ ->
-        raise(Error(loc, Scoping_let_module(name, body.exp_type)))
-      end;
-      re {
-        exp_desc = Texp_unpack(arg, id, body);
-        exp_loc = loc;
-        exp_type = ty;
-        exp_env = env }
-
 and type_argument env sarg ty_expected' =
   (* ty_expected' may be generic *)
   let no_labels ty =
