@@ -14549,7 +14549,7 @@ module Struct =
                      | Ast.TyNil _ -> None
                      | t -> Some (mkpolytype (ctyp t))) in
                   let e = mkexp loc (Pexp_poly (expr e, t))
-                  in (Pcf_meth ((s, (mkprivate b), e, (mkloc loc)))) :: l
+                  in (Pcf_meth ((s, (mkprivate b), false, e, (mkloc loc)))) :: l
               | CrVal (loc, s, b, e) ->
                   (Pcf_val ((s, (mkmutable b), (expr e), (mkloc loc)))) :: l
               | CrVir (loc, s, b, t) ->

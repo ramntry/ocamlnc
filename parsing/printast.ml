@@ -469,9 +469,9 @@ and class_field i ppf x =
       line i ppf
         "Pcf_virt \"%s\" %a %a\n" s fmt_private_flag pf fmt_location loc;
       core_type (i+1) ppf ct;
-  | Pcf_meth (s, pf, e, loc) ->
+  | Pcf_meth (s, pf, override, e, loc) ->
       line i ppf
-        "Pcf_meth \"%s\" %a %a\n" s fmt_private_flag pf fmt_location loc;
+        "Pcf_meth \"%s\" %s %a %a\n" s (if override then "override " else "") fmt_private_flag pf fmt_location loc;
       expression (i+1) ppf e;
   | Pcf_cstr (ct1, ct2, loc) ->
       line i ppf "Pcf_cstr %a\n" fmt_location loc;

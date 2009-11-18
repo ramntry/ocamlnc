@@ -291,7 +291,7 @@ and add_class_field bv = function
   | Pcf_val(_, _, e, _) -> add_expr bv e
   | Pcf_valvirt(_, _, ty, _)
   | Pcf_virt(_, _, ty, _) -> add_type bv ty
-  | Pcf_meth(_, _, e, _) -> add_expr bv e
+  | Pcf_meth(_, _, _, e, _) -> add_expr bv e
   | Pcf_cstr(ty1, ty2, _) -> add_type bv ty1; add_type bv ty2
   | Pcf_let(_, pel, _) -> add_pat_expr_list bv pel
   | Pcf_init e -> add_expr bv e

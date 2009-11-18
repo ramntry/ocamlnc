@@ -47,6 +47,7 @@ type t =
   | Bad_module_name of string               (* 25 *)
   | Unused_var of string                    (* 26 *)
   | Unused_var_strict of string             (* 27 *)
+  | Missing_override_modifier               (* 28 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -83,9 +84,10 @@ let number = function
   | All_clauses_guarded -> 25
   | Unused_var _ -> 26
   | Unused_var_strict _ -> 27
+  | Missing_override_modifier -> 28
 ;;
 
-let last_warning_number = 27;;
+let last_warning_number = 28;;
 (* Must be the max number returned by the [number] function. *)
 
 let letter = function
@@ -238,6 +240,8 @@ let message = function
        but no fields are borrowed from the original."
   | Bad_module_name (modname) ->
       "bad source file name: \"" ^ modname ^ "\" is not a valid module name."
+  | Missing_override_modifier ->
+      "missing override modifier"
 ;;
 
 let nerrors = ref 0;;

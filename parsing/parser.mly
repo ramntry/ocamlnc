@@ -197,6 +197,15 @@ let exp_of_label lbl =
 let pat_of_label lbl =
   mkpat (Ppat_var(Longident.last lbl))
 
+let parse_method_modifiers =
+  let rec aux override = function
+    | "override" :: rest -> aux true rest
+    | [] -> syntax_error()
+    | name :: args -> override, name, args
+  in
+  aux false
+
+
 %}
 
 /* Tokens */
@@ -677,11 +686,24 @@ virtual_method:
   | METHOD VIRTUAL private_flag label COLON poly_type
       { $4, $3, $6, symbol_rloc () }
 ;
-concrete_method :
-    METHOD private_flag label strict_binding
-      { $3, $2, ghexp(Pexp_poly ($4, None)), symbol_rloc () }
-  | METHOD private_flag label COLON poly_type EQUAL seq_expr
-      { $3, $2, ghexp(Pexp_poly($7,Some $5)), symbol_rloc () }
+concrete_method:
+    METHOD private_flag lident_list strict_binding_without_val_ident
+      {
+        let override, name, args = parse_method_modifiers (List.rev $3) in
+        let body = List.fold_right (fun arg body -> ghexp(Pexp_function("", None, [ghpat(Ppat_var arg), body]))) args $4 in
+        name, $2, override, ghexp(Pexp_poly (body, None)), symbol_rloc ()
+      }
+  | METHOD private_flag lident_list COLON poly_type EQUAL seq_expr
+      {
+        let override, name, args = parse_method_modifiers (List.rev $3) in
+        if args <> [] then syntax_error ();
+        name, $2, override, ghexp(Pexp_poly($7,Some $5)), symbol_rloc ()
+      }
+;
+
+lident_list:
+  | lident_list LIDENT { $2 :: $1 }
+  | LIDENT { [$1] }
 ;
 
 /* Class types */
@@ -778,6 +800,11 @@ seq_expr:
   | expr SEMI seq_expr            { mkexp(Pexp_sequence($1, $3)) }
 ;
 labeled_simple_pattern:
+    val_ident %prec below_EQUAL
+      { ("", None, mkpat(Ppat_var $1)) }
+  | labeled_simple_pattern_without_val_ident { $1 }
+;
+labeled_simple_pattern_without_val_ident:
     QUESTION LPAREN label_let_pattern opt_default RPAREN
       { ("?" ^ fst $3, $4, snd $3) }
   | QUESTION label_var
@@ -792,7 +819,7 @@ labeled_simple_pattern:
       { (fst $2, None, snd $2) }
   | LABEL simple_pattern
       { ($1, None, $2) }
-  | simple_pattern
+  | simple_pattern_without_val_ident
       { ("", None, $1) }
 ;
 pattern_var:
@@ -1034,9 +1061,13 @@ fun_binding:
       { let (t, t') = $1 in ghexp(Pexp_constraint($3, t, t')) }
 ;
 strict_binding:
+    val_ident %prec below_EQUAL fun_binding
+      { let (l, o, p) = ("", None, mkpat(Ppat_var $1)) in ghexp(Pexp_function(l, o, [p, $2])) }
+  | strict_binding_without_val_ident { $1 }
+strict_binding_without_val_ident:
     EQUAL seq_expr
       { $2 }
-  | labeled_simple_pattern fun_binding
+  | labeled_simple_pattern_without_val_ident fun_binding
       { let (l, o, p) = $1 in ghexp(Pexp_function(l, o, [p, $2])) }
   | LPAREN TYPE LIDENT RPAREN fun_binding
       { mkexp(Pexp_newtype($3, $5)) }
@@ -1119,6 +1150,9 @@ pattern:
 simple_pattern:
     val_ident %prec below_EQUAL
       { mkpat(Ppat_var $1) }
+  | simple_pattern_without_val_ident { $1 }
+;
+simple_pattern_without_val_ident:
   | UNDERSCORE
       { mkpat(Ppat_any) }
   | signed_constant

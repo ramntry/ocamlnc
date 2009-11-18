@@ -50,6 +50,7 @@ type error =
       Ident.t * Types.class_declaration * (type_expr * type_expr) list
   | Final_self_clash of (type_expr * type_expr) list
   | Mutability_mismatch of string * mutable_flag
+  | MethodDoesNotOverride of string
 
 exception Error of Location.t * error
 
@@ -508,7 +509,16 @@ let rec class_field cl_num self_type meths vars
       (val_env, met_env, par_env, fields, concr_meths, warn_meths,
        warn_vals, inher)
 
-  | Pcf_meth (lab, priv, expr, loc)  ->
+  | Pcf_meth (lab, priv, override, expr, loc)  ->
+      begin
+        match override, Concr.mem lab concr_meths with
+        | true, false ->
+            raise(Error(loc, MethodDoesNotOverride lab));
+        | false, true ->
+            Location.prerr_warning loc (Warnings.Missing_override_modifier)
+        | true, true | false, false -> ()
+      end;
+
       if Concr.mem lab warn_meths then
         Location.prerr_warning loc (Warnings.Method_override [lab]);
       let (_, ty) =
@@ -1597,3 +1607,7 @@ let report_error ppf = function
       fprintf ppf
         "@[The instance variable is %s;@ it cannot be redefined as %s@]"
         mut1 mut2
+  | MethodDoesNotOverride lab ->
+      fprintf ppf
+        "@[The method %s does not override an existing method@]"
+        lab

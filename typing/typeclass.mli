@@ -75,6 +75,7 @@ type error =
       Ident.t * Types.class_declaration * (type_expr * type_expr) list
   | Final_self_clash of (type_expr * type_expr) list
   | Mutability_mismatch of string * mutable_flag
+  | MethodDoesNotOverride of string
 
 exception Error of Location.t * error
 

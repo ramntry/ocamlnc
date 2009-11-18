@@ -189,7 +189,7 @@ and class_field =
   | Pcf_valvirt of (string * mutable_flag * core_type * Location.t)
   | Pcf_val   of (string * mutable_flag * expression * Location.t)
   | Pcf_virt  of (string * private_flag * core_type * Location.t)
-  | Pcf_meth  of (string * private_flag * expression * Location.t)
+  | Pcf_meth  of (string * private_flag * bool * expression * Location.t)
   | Pcf_cstr  of (core_type * core_type * Location.t)
   | Pcf_let   of rec_flag * (pattern * expression) list * Location.t
   | Pcf_init  of expression

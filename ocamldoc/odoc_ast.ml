@@ -602,7 +602,7 @@ module Analyser =
 
             iter acc_inher (acc_fields @ ele_comments @ [ Class_method met ]) loc.Location.loc_end.Lexing.pos_cnum q
 
-        | (Parsetree.Pcf_meth  (label, private_flag, _, loc)) :: q ->
+        | (Parsetree.Pcf_meth  (label, private_flag, _, _, loc)) :: q ->
             let complete_name = Name.concat current_class_name label in
             let (info_opt, ele_comments) = get_comments_in_class last_pos loc.Location.loc_start.Lexing.pos_cnum in
             let exp =

@@ -1018,7 +1018,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
           [ <:ctyp<>> -> None
           | t -> Some (mkpolytype (ctyp t)) ] in
         let e = mkexp loc (Pexp_poly (expr e) t) in
-        [Pcf_meth (s, mkprivate b, e, mkloc loc) :: l]
+        [Pcf_meth (s, mkprivate b, False (* todo: override *), e, mkloc loc) :: l]
     | CrVal loc s b e -> [Pcf_val (s, mkmutable b, expr e, mkloc loc) :: l]
     | CrVir loc s b t ->
         [Pcf_virt (s, mkprivate b, mkpolytype (ctyp t), mkloc loc) :: l]
