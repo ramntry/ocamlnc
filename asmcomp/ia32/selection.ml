@@ -73,6 +73,11 @@ let rec select_addr exp =
   | arg ->
       (Alinear arg, 0)
     
+(* C functions to be turned into Ifloatspecial instructions if -ffast-math *)
+
+let inline_float_ops =
+  ["atan"; "atan2"; "cos"; "log"; "log10"; "sin"; "sqrt"; "tan"]
+
 (* Special constraints on operand and result registers *)
 
 exception Use_default
@@ -86,32 +91,35 @@ let pseudoregs_for_operation op arg res =
   match op with
   (* Two-address binary operations *)
     Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor)  | Iaddf|Isubf|Imulf|Idivf ->
-      ([|res.(0); arg.(1)|], res, false)
+      ([|res.(0); arg.(1)|], res)
   (* Two-address unary operations *)
   | Iintop_imm((Iadd|Isub|Imul|Idiv|Iand|Ior|Ixor|Ilsl|Ilsr|Iasr), _)
   | Inegf|Iabsf ->
-      (res, res, false)
+      (res, res)
   (* For shifts with variable shift count, second arg must be in ecx *)
   | Iintop(Ilsl|Ilsr|Iasr) ->
-      ([|res.(0); ecx|], res, false)
+      ([|res.(0); ecx|], res)
   (* For div and mod, first arg must be in eax, edx is clobbered,
      and result is in eax or edx respectively.
      Keep it simple, just force second argument in ecx. *)
   | Iintop(Idiv) ->
-      ([| eax; ecx |], [| eax |], true)
+      ([| eax; ecx |], [| eax |])
   | Iintop(Imod) ->
-      ([| eax; ecx |], [| edx |], true)
+      ([| eax; ecx |], [| edx |])
   (* For mod with immediate operand, arg must not be in eax.
      Keep it simple, force it in edx. *)
   | Iintop_imm(Imod, _) ->
-      ([| edx |], [| edx |], true)
+      ([| edx |], [| edx |])
   (* For storing a byte, the argument must be in eax...edx.
      (But for a short, any reg will do!)
      Keep it simple, just force the argument to be in edx. *)
   | Istore((Byte_unsigned | Byte_signed), addr) ->
       let newarg = Array.copy arg in
       newarg.(0) <- edx;
-      (newarg, res, false)
+      (newarg, res)
+  (* Inline trig & exp functions have arguments and result on the FP stack *)
+  | Ispecific(Ifloatspecial _) ->
+      (Array.map (fun _ -> tos) arg, [| tos |])
   (* Other instructions are regular *)
   | _ -> raise Use_default
 
@@ -189,6 +197,10 @@ method select_operation op args =
       | _ ->
           super#select_operation op args
       end
+  (* Recognize inlined trig & exp floating point operations *)
+  | Cextcall(fn, ty_res, false, dbg)
+    when !fast_math && List.mem fn inline_float_ops ->
+      (Ispecific(Ifloatspecial fn), args)
   (* Default *)
   | _ -> super#select_operation op args
 
@@ -196,14 +208,11 @@ method select_operation op args =
 
 method insert_op_debug op dbg rs rd =
   try
-    let (rsrc, rdst, move_res) = pseudoregs_for_operation op rs rd in
+    let (rsrc, rdst) = pseudoregs_for_operation op rs rd in
     self#insert_moves rs rsrc;
     self#insert_debug (Iop op) dbg rsrc rdst;
-    if move_res then begin
-      self#insert_moves rdst rd;
-      rd
-    end else
-      rdst
+    self#insert_moves rdst rd;
+    rd
   with Use_default ->
     super#insert_op_debug op dbg rs rd
 

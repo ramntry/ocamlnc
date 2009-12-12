@@ -319,6 +319,23 @@ let emit_float_test cmp neg arg lbl =
     `	{emit_string branch_opcode}	{emit_label lbl}\n`
   end
 
+(* Emit the code for an inlined trig / exp float function *)
+
+let emit_floatspecial = function
+    "atan"  -> `	fld1; fpatan\n`
+  | "atan2" -> `	fpatan\n`
+  | "cos"   -> `	fcos\n`
+  | "log"   -> `	fldln2; fxch; fyl2x\n`
+  | "log10" -> `	fldlg2; fxch; fyl2x\n`
+  | "sin"   -> `	fsin\n`
+  | "sqrt"  -> `	fsqrt\n`
+  | "tan"   -> `	fptan; fstp %st(0)\n`
+  | _ -> assert false
+
+(* Determine if the given register is the top of the floating-point stack *)
+
+let is_tos = function { loc = Reg 100; typ = Float } -> true | _ -> false
+
 (* Output the assembly code for an instruction *)
 
 (* Name of current function *)
@@ -348,6 +365,13 @@ let emit_instr fallthrough i =
               `	subl	$8, %esp\n`;
               `	fstpl	0(%esp)\n`;
               `	movsd	0(%esp), {emit_reg dst}\n`;
+              `	addl	$8, %esp\n`
+          | {typ = Float; loc = Stack _}, {loc = Reg 100} ->
+              `	fldl	{emit_reg src}\n`
+          | {typ = Float; loc = Reg _}, {loc = Reg 100} ->
+              `	subl	$8, %esp\n`;
+              `	movsd	{emit_reg src}, 0(%esp)\n`;
+              `	fldl	0(%esp)\n`;
               `	addl	$8, %esp\n`
           | {typ = Float}, _ ->
               `	movsd	{emit_reg src}, {emit_reg dst}\n`
@@ -573,6 +597,8 @@ let emit_instr fallthrough i =
         `	pushl	{emit_addressing (offset_addressing addr 4) i.arg 0}\n`;
         `	pushl	{emit_addressing addr i.arg 0}\n`;
         stack_offset := !stack_offset + 8
+    | Lop(Ispecific(Ifloatspecial s)) ->
+        emit_floatspecial s
     | Lreloadretaddr ->
         ()
     | Lreturn ->

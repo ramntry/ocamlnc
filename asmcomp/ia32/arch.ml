@@ -42,6 +42,7 @@ type specific_operation =
   | Ipush_symbol of string              (* Push a symbol *)
   | Ipush_load of addressing_mode       (* Load a scalar and push *)
   | Ipush_load_float of addressing_mode (* Load a float and push *)
+  | Ifloatspecial of string             (* Inline trig & exp functions *)
 
 (* Sizes, endianness *)
 
@@ -115,7 +116,13 @@ let print_specific_operation printreg op ppf arg =
       fprintf ppf "push [%a]" (print_addressing printreg addr) arg
   | Ipush_load_float addr ->
       fprintf ppf "pushfloat [%a]" (print_addressing printreg addr) arg
-      
+  | Ifloatspecial name ->
+      fprintf ppf "%s " name;
+      for i = 0 to Array.length arg - 1 do
+        if i > 0 then fprintf ppf ", ";
+        printreg ppf arg.(i)
+      done
+    
 (* Stack alignment constraints *)
 
 let stack_alignment =
