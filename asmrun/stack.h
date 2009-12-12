@@ -32,7 +32,7 @@
 #define Callback_link(sp) ((struct caml_context *)((sp) + 104))
 #endif
 
-#ifdef TARGET_i386
+#if defined(TARGET_i386) || defined(TARGET_ia32)
 #define Saved_return_address(sp) *((intnat *)((sp) - 4))
 #ifdef SYS_macosx
 #define Callback_link(sp) ((struct caml_context *)((sp) + 16))

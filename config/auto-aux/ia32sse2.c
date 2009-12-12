@@ -13,12 +13,10 @@
 
 /* $Id$ */
 
-/* Test whether IA32 assembler supports SSE2 instructions */
+/* Test whether SSE2 instructions are supported */
 
 int main()
 {
-  asm("pmuludq %mm1, %mm0");
-  asm("paddq %mm1, %mm0");
-  asm("psubq %mm1, %mm0");
+  asm("addsd %xmm0, %xmm0");
   return 0;
 }

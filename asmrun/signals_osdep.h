@@ -116,7 +116,7 @@
 
 /****************** I386, Linux */
 
-#elif defined(TARGET_i386) && defined(SYS_linux_elf)
+#elif (defined(TARGET_i386) || defined(TARGET_ia32)) && defined(SYS_linux_elf)
 
   #define DECLARE_SIGNAL_HANDLER(name) \
     static void name(int sig, struct sigcontext context)
@@ -129,7 +129,7 @@
 
 /****************** I386, BSD */
 
-#elif defined(TARGET_i386) && defined(SYS_bsd)
+#elif (defined(TARGET_i386) || defined(TARGET_ia32)) && defined(SYS_bsd)
 
   #define DECLARE_SIGNAL_HANDLER(name) \
     static void name(int sig, siginfo_t * info, void * context)
@@ -142,7 +142,7 @@
 
 /****************** I386, MacOS X */
 
-#elif defined(TARGET_i386) && defined(SYS_macosx)
+#elif (defined(TARGET_i386) || defined(TARGET_ia32)) && defined(SYS_macosx)
 
   #define DECLARE_SIGNAL_HANDLER(name) \
     static void name(int sig, siginfo_t * info, void * context)
@@ -166,7 +166,7 @@
 
 /****************** I386, Solaris x86 */
 
-#elif defined(TARGET_i386) && defined(SYS_solaris)
+#elif (defined(TARGET_i386) || defined(TARGET_ia32)) && defined(SYS_solaris)
 
   #define DECLARE_SIGNAL_HANDLER(name) \
     static void name(int sig, siginfo_t * info, void * context)

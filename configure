@@ -40,6 +40,7 @@ dl_defs=''
 verbose=no
 withcurses=yes
 withsharedlibs=yes
+withsse2=yes
 gcc_warnings="-Wall"
 partialld="ld -r"
 
@@ -95,6 +96,8 @@ while : ; do
         pthread_wanted=no;;
     -no-tk|--no-tk)
         tk_wanted=no;;
+    -no-sse2|--no-sse2)
+        withsse2=no;;
     -tkdefs*|--tkdefs*)
         tk_defs=$2; shift;;
     -tklibs*|--tklibs*)
@@ -619,22 +622,22 @@ case "$host" in
   sparc*-*-*bsd*)               arch=sparc; system=bsd;;
   sparc*-*-linux*)              arch=sparc; system=linux;;
   sparc*-*-gnu*)                arch=sparc; system=gnu;;
-  i[3456]86-*-linux*)           arch=i386; system=linux_`sh ./runtest elf.c`;;
-  i[3456]86-*-*bsd*)            arch=i386; system=bsd_`sh ./runtest elf.c`;;
-  i[3456]86-*-nextstep*)        arch=i386; system=nextstep;;
+  i[3456]86-*-linux*)           arch=ia32; system=linux_`sh ./runtest elf.c`;;
+  i[3456]86-*-*bsd*)            arch=ia32; system=bsd_`sh ./runtest elf.c`;;
+  i[3456]86-*-nextstep*)        arch=ia32; system=nextstep;;
   i[3456]86-*-solaris*)         if $arch64; then
                                   arch=amd64; system=solaris
                                 else
-                                  arch=i386; system=solaris
+                                  arch=ia32; system=solaris
                                 fi;;
-  i[3456]86-*-beos*)            arch=i386; system=beos;;
-  i[3456]86-*-cygwin*)          arch=i386; system=cygwin;;
+  i[3456]86-*-beos*)            arch=ia32; system=beos;;
+  i[3456]86-*-cygwin*)          arch=ia32; system=cygwin;;
   i[3456]86-*-darwin*)          if $arch64; then
                                   arch=amd64; system=macosx
                                 else
-                                  arch=i386; system=macosx
+                                  arch=ia32; system=macosx
                                 fi;;
-  i[3456]86-*-gnu*)             arch=i386; system=gnu;;
+  i[3456]86-*-gnu*)             arch=ia32; system=gnu;;
   mips-*-irix6*)                arch=mips; system=irix;;
   hppa1.1-*-hpux*)              arch=hppa; system=hpux;;
   hppa2.0*-*-hpux*)             arch=hppa; system=hpux;;
@@ -657,6 +660,19 @@ case "$host" in
   x86_64-*-openbsd*)            arch=amd64; system=openbsd;;
   x86_64-*-darwin9.5)           arch=amd64; system=macosx;;
 esac
+
+# For ia32, fall down on older i386 port if requested or if SSE2 not supported
+
+if test "$arch" = "ia32" && test "$withsse2" = "no"; then
+  arch=i386
+fi
+
+if test "$arch" = "ia32"; then
+  if sh ./runtest ia32sse2.c; then :; else
+    echo "SSE2 instruction set not supported, falling back on old i386 code generator."
+    arch=i386
+  fi
+fi
 
 # Some platforms exist both in 32-bit and 64-bit variants, not distinguished
 # by $host.  Turn off native code compilation on platforms where 64-bit mode
@@ -721,6 +737,10 @@ case "$arch,$model,$system" in
                     aspp='/usr/ccs/bin/as -P';;
   i386,*,*)         as='as'
                     aspp='gcc -c';;
+  ia32,*,solaris)   as='as'
+                    aspp='/usr/ccs/bin/as -P';;
+  ia32,*,*)         as='as'
+                    aspp='gcc -c';;
   ia64,*,*)         as='as -xexplicit'
                     aspp='gcc -c -Wa,-xexplicit';;
   mips,*,irix)      as='as -n32 -O2 -nocpp -g0'
@@ -749,11 +769,15 @@ case "$arch,$model,$system" in
   i386,*,linux_elf) profiling='prof';;
   i386,*,gnu) profiling='prof';;
   i386,*,bsd_elf) profiling='prof';;
-  amd64,*,macosx) profiling='prof';;
   i386,*,macosx) profiling='prof';;
+  ia32,*,linux_elf) profiling='prof';;
+  ia32,*,gnu) profiling='prof';;
+  ia32,*,bsd_elf) profiling='prof';;
+  ia32,*,macosx) profiling='prof';;
   sparc,*,solaris)
     profiling='prof'
     case "$nativecc" in gcc*) ;; *) cc_profile='-xpg';; esac;;
+  amd64,*,macosx) profiling='prof';;
   amd64,*,linux) profiling='prof';;
   amd64,*,gnu) profiling='prof';;
   *) profiling='noprof';;
@@ -1125,7 +1149,7 @@ fi
 # Determine if system stack overflows can be detected
 
 case "$arch,$system" in
-  i386,linux_elf|amd64,linux|power,rhapsody|amd64,macosx|i386,macosx|amd64,macosx)
+  i386,linux_elf|ia32,linux_elf|amd64,linux|power,rhapsody|amd64,macosx|ia32,macosx|amd64,macosx)
     echo "System stack overflow can be detected."
     echo "#define HAS_STACK_OVERFLOW_DETECTION" >> s.h;;
   *)
@@ -1136,11 +1160,8 @@ esac
 
 case "$arch" in
   alpha)    bng_arch=alpha; bng_asm_level=1;;
-  i386)     bng_arch=ia32
-            if sh ./trycompile ia32sse2.c
-            then bng_asm_level=2
-            else bng_asm_level=1
-            fi;;
+  i386)     bng_arch=ia32; bng_asm_level=1;;
+  ia32)     bng_arch=ia32; bng_asm_level=2;;
   mips)     bng_arch=mips; bng_asm_level=1;;
   power)    bng_arch=ppc; bng_asm_level=1;;
   sparc)    bng_arch=sparc; bng_asm_level=1;;
