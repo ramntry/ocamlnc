@@ -725,6 +725,8 @@ let begin_assembly() =
   `	EXTERN _caml_young_limit: DWORD\n`;
   `	EXTERN _caml_exception_pointer: DWORD\n`;
   `	EXTERN _caml_extra_params: DWORD\n`;
+  `	EXTERN _caml_absf_mask: DWORD\n`;
+  `	EXTERN _caml_negf_mask: DWORD\n`;
   `	EXTERN _caml_call_gc: PROC\n`;
   `	EXTERN _caml_c_call: PROC\n`;
   `	EXTERN _caml_allocN: PROC\n`;

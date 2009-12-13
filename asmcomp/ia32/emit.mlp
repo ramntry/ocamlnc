@@ -332,10 +332,6 @@ let emit_floatspecial = function
   | "tan"   -> `	fptan; fstp %st(0)\n`
   | _ -> assert false
 
-(* Determine if the given register is the top of the floating-point stack *)
-
-let is_tos = function { loc = Reg 100; typ = Float } -> true | _ -> false
-
 (* Output the assembly code for an instruction *)
 
 (* Name of current function *)
