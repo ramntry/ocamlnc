@@ -12,7 +12,7 @@
 
 (* $Id: emit_nt.mlp 9270 2009-05-20 11:52:42Z doligez $ *)
 
-(* Emission of Intel 386 assembly code, MASM syntax. *)
+(* Emission of IA32 assembly code, MASM syntax. *)
 
 module StringSet =
   Set.Make(struct type t = string let compare = compare end)
@@ -105,18 +105,6 @@ let emit_reg16 r =
   match r.loc with
     Reg r when r < 7 -> emit_string (reg_low_half_name.(r))
   | _ -> fatal_error "Emit.emit_reg16"
-
-(* Check if the given register overlaps (same location) with the given
-   array of registers *)
-
-let register_overlap reg arr =
-  try
-    for i = 0 to Array.length arr - 1 do
-      if reg.loc = arr.(i).loc then raise Exit
-    done;
-    false
-  with Exit ->
-    true
 
 (* Output an addressing mode *)
 
@@ -223,32 +211,11 @@ let instr_for_intop = function
   | _ -> fatal_error "Emit: instr_for_intop"
 
 let instr_for_floatop = function
-    Inegf -> "fchs"
-  | Iabsf -> "fabs"
-  | Iaddf -> "fadd"
-  | Isubf -> "fsub"
-  | Imulf -> "fmul"
-  | Idivf -> "fdiv"
-  | Ispecific Isubfrev -> "fsubr"
-  | Ispecific Idivfrev -> "fdivr"
-  | _ -> fatal_error "Emit: instr_for_floatop"
-
-let instr_for_floatop_reversed = function
-    Iaddf -> "fadd"
-  | Isubf -> "fsubr"
-  | Imulf -> "fmul"
-  | Idivf -> "fdivr"
-  | Ispecific Isubfrev -> "fsub"
-  | Ispecific Idivfrev -> "fdiv"
-  | _ -> fatal_error "Emit: instr_for_floatop_reversed"
-
-let instr_for_floatarithmem = function
-    Ifloatadd -> "fadd"
-  | Ifloatsub -> "fsub"
-  | Ifloatsubrev -> "fsubr"
-  | Ifloatmul -> "fmul"
-  | Ifloatdiv -> "fdiv"
-  | Ifloatdivrev -> "fdivr"
+  | Iaddf -> "addsd"
+  | Isubf -> "subsd"
+  | Imulf -> "mulsd"
+  | Idivf -> "divsd"
+  | _ -> fatal_error "Emit_ia32: instr_for_floatop"
 
 let name_for_cond_branch = function
     Isigned Ceq -> "e"     | Isigned Cne -> "ne"
@@ -271,81 +238,43 @@ let output_epilogue () =
   let n = frame_size() - 4 in
   if n > 0 then `	add    esp, {emit_int n}\n`
 
-(* Determine if the given register is the top of the floating-point stack *)
-
-let is_tos = function { loc = Reg _; typ = Float } -> true | _ -> false
-
 (* Emit the code for a floating-point comparison *)
 
 let emit_float_test cmp neg arg lbl =
-  let actual_cmp =
-    match (is_tos arg.(0), is_tos arg.(1)) with
-      (true, true) ->
-      (* both args on top of FP stack *)
-      `	fcompp\n`;
-      cmp
-    | (true, false) ->
-      (* first arg on top of FP stack *)
-      `	fcomp	{emit_reg arg.(1)}\n`;
-      cmp
-    | (false, true) ->
-      (* second arg on top of FP stack *)
-      `	fcomp	{emit_reg arg.(0)}\n`;
-      Cmm.swap_comparison cmp
-    | (false, false) ->
-      `	fld	{emit_reg arg.(0)}\n`;
-      `	fcomp	{emit_reg arg.(1)}\n`;
-      cmp
-    in
-  `	fnstsw	ax\n`;
-  begin match actual_cmp with
-    Ceq ->
-      if neg then begin
-      `	and	ah, 68\n`;
-      `	xor	ah, 64\n`;
-      `	jne	`
-      end else begin
-      `	and	ah, 69\n`;
-      `	cmp	ah, 64\n`;
-      `	je	`
-      end
-  | Cne ->
-      if neg then begin
-      `	and	ah, 69\n`;
-      `	cmp	ah, 64\n`;
-      `	je	`
-      end else begin
-      `	and	ah, 68\n`;
-      `	xor	ah, 64\n`;
-      `	jne	`
-      end
-  | Cle ->
-      `	and	ah, 69\n`;
-      `	dec	ah\n`;
-      `	cmp	ah, 64\n`;
-      if neg
-      then `	jae	`
-      else `	jb	`
-  | Cge ->
-      `	and	ah, 5\n`;
-      if neg
-      then `	jne	`
-      else `	je	`
-  | Clt ->
-      `	and	ah, 69\n`;
-      `	cmp	ah, 1\n`;
-      if neg
-      then `	jne	`
-      else `	je	`
-  | Cgt ->
-      `	and	ah, 69\n`;
-      if neg
-      then `	jne	`
-      else `	je	`
+  begin match cmp with
+  | Ceq | Cne -> `	ucomisd	`
+  | _         -> `	comisd	`
   end;
-  `{emit_label lbl}\n`
+  `{emit_reg arg.(1)}, {emit_reg arg.(0)}\n`;
+  let (branch_opcode, need_jp) =
+    match (cmp, neg) with
+      (Ceq, false) -> ("je", true)
+    | (Ceq, true)  -> ("jne", true)
+    | (Cne, false) -> ("jne", true)
+    | (Cne, true)  -> ("je", true)
+    | (Clt, false) -> ("jb", true)
+    | (Clt, true)  -> ("jae", true)
+    | (Cle, false) -> ("jbe", true)
+    | (Cle, true)  -> ("ja", true)
+    | (Cgt, false) -> ("ja", false)
+    | (Cgt, true)  -> ("jbe", false)
+    | (Cge, false) -> ("jae", true)
+    | (Cge, true)  -> ("jb", false) in
+  if need_jp then
+    if neg then begin
+      `	jp	{emit_label lbl}\n`;
+      `	{emit_string branch_opcode}	{emit_label lbl}\n`
+    end else begin
+      let next = new_label() in
+      `	jp	{emit_label next}\n`;
+      `	{emit_string branch_opcode}	{emit_label lbl}\n`;
+      `{emit_label next}:\n`
+    end
+  else begin
+    `	{emit_string branch_opcode}	{emit_label lbl}\n`
+  end
 
-(* Emit a Ifloatspecial instruction *)
+(* Emit the code for an inlined trig / exp float function *)
 
 let emit_floatspecial = function
     "atan"  -> `	fld1\n\tfpatan\n`
@@ -355,7 +284,7 @@ let emit_floatspecial = function
   | "log10" -> `	fldlg2\n\tfxch\n\tfyl2x\n`
   | "sin"   -> `	fsin\n`
   | "sqrt"  -> `	fsqrt\n`
-  | "tan"   -> `	fptan\n\tfstp st(0)\n`
+  | "tan"   -> `	fptan\nfstp st(0)\n`
   | _ -> assert false
 
 (* Output the assembly code for an instruction *)
@@ -375,17 +304,25 @@ let emit_instr i =
     | Lop(Imove | Ispill | Ireload) ->
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
-          if src.typ = Float then
-            if is_tos src then
+          match (src, dst) with
+          | {typ = (Addr|Int)}, _ ->
+              `	mov	{emit_reg dst}, {emit_reg src}\n`
+          | {typ = Float; loc = Reg 100}, {loc = Stack _} ->
               `	fstp	{emit_reg dst}\n`
-            else if is_tos dst then
+          | {typ = Float; loc = Reg 100}, {loc = Reg _} ->
+              `	sub	esp, 8\n`;
+              `	fstp	REAL8 PTR [esp]\n`;
+              `	movsd	{emit_reg dst}, REAL8 PTR [esp]\n`;
+              `	add	esp, 8\n`
+          | {typ = Float; loc = Stack _}, {loc = Reg 100} ->
               `	fld	{emit_reg src}\n`
-            else begin
-              `	fld	{emit_reg src}\n`;
-              `	fstp	{emit_reg dst}\n`
-            end
-          else
-            `	mov	{emit_reg dst}, {emit_reg src}\n`
+          | {typ = Float; loc = Reg _}, {loc = Reg 100} ->
+              `	sub	esp, 8\n`;
+              `	movsd	REAL8 PTR [esp], {emit_reg src}\n`;
+              `	fld	REAL8 PTR [esp]\n`;
+              `	add	esp, 8\n`
+          | {typ = Float}, _ ->
+              `	movsd	{emit_reg dst}, {emit_reg src}\n`
         end
     | Lop(Iconst_int n) ->
         if n = 0n then begin
@@ -397,17 +334,11 @@ let emit_instr i =
     | Lop(Iconst_float s) ->
         begin match Int64.bits_of_float (float_of_string s) with
         | 0x0000_0000_0000_0000L ->       (* +0.0 *)
-          `	fldz\n`
-        | 0x8000_0000_0000_0000L ->       (* -0.0 *)
-          `	fldz\n	fchs\n`
-        | 0x3FF0_0000_0000_0000L ->       (*  1.0 *)
-          `	fld1\n`
-        | 0xBFF0_0000_0000_0000L ->       (* -1.0 *)
-          `	fld1\n	fchs\n`
+          `	xorpd	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
         | _ ->
           let lbl = new_label() in
           float_constants := (lbl, s) :: !float_constants;
-          `	fld	{emit_label lbl}\n`
+          `	movlpd	{emit_reg i.res.(0)}, {emit_label lbl}\n`
         end
     | Lop(Iconst_symbol s) ->
         add_used_symbol s;
@@ -458,9 +389,10 @@ let emit_instr i =
           | Sixteen_signed ->
               `	movsx	{emit_reg dest}, WORD PTR {emit_addressing addr i.arg 0}\n`
           | Single ->
-            `	fld	REAL4 PTR {emit_addressing addr i.arg 0}\n`
+            `	movss	{emit_reg dest}, REAL4 PTR {emit_addressing addr i.arg 0}\n`;
+            `	cvtss2sd {emit_reg dest}, {emit_reg dest}\n`
           | Double | Double_u ->
-            `	fld	REAL8 PTR {emit_addressing addr i.arg 0}\n`
+            `	movsd	{emit_reg dest}, REAL8 PTR {emit_addressing addr i.arg 0}\n`
         end
     | Lop(Istore(chunk, addr)) ->
         begin match chunk with
@@ -471,19 +403,10 @@ let emit_instr i =
           | Sixteen_unsigned | Sixteen_signed ->
             `	mov	WORD PTR {emit_addressing addr i.arg 1}, {emit_reg16 i.arg.(0)}\n`
           | Single ->
-              if is_tos i.arg.(0) then
-                `	fstp	REAL4 PTR {emit_addressing addr i.arg 1}\n`
-              else begin
-                `	fld	{emit_reg i.arg.(0)}\n`;
-                `	fstp	REAL4 PTR {emit_addressing addr i.arg 1}\n`
-              end
+            `	cvtsd2ss xmm7, {emit_reg i.arg.(0)}\n`;
+            `	movss	REAL4 PTR {emit_addressing addr i.arg 1}, xmm7\n`
           | Double | Double_u ->
-              if is_tos i.arg.(0) then
-                `	fstp	REAL8 PTR {emit_addressing addr i.arg 1}\n`
-              else begin
-                `	fld	{emit_reg i.arg.(0)}\n`;
-                `	fstp	REAL8 PTR {emit_addressing addr i.arg 1}\n`
-              end
+            `	movlpd	REAL8 PTR {emit_addressing addr i.arg 1}, {emit_reg i.arg.(0)}\n`
         end
     | Lop(Ialloc n) ->
         if !fastcode_flag then begin
@@ -561,56 +484,16 @@ let emit_instr i =
     | Lop(Iintop_imm(op, n)) ->
         (* We have i.arg.(0) = i.res.(0) *)
         `	{emit_string(instr_for_intop op)}	{emit_reg i.res.(0)}, {emit_int n}\n`
-    | Lop(Inegf | Iabsf as floatop) ->
-        if not (is_tos i.arg.(0)) then
-          `	fld	{emit_reg i.arg.(0)}\n`;
-        `	{emit_string(instr_for_floatop floatop)}\n`
-    | Lop(Iaddf | Isubf | Imulf | Idivf | Ispecific(Isubfrev | Idivfrev)
-          as floatop) ->
-        begin match (is_tos i.arg.(0), is_tos i.arg.(1)) with
-          (true, true) ->
-          (* both operands on top of FP stack *)
-          `	{emit_string(instr_for_floatop_reversed floatop)}\n`
-        | (true, false) ->
-          (* first operand on stack *)
-          `	{emit_string(instr_for_floatop floatop)}	{emit_reg i.arg.(1)}\n`
-        | (false, true) ->
-          (* second operand on stack *)
-          `	{emit_string(instr_for_floatop_reversed floatop)}	{emit_reg i.arg.(0)}\n`
-        | (false, false) ->
-          (* both operands in memory *)
-          `	fld	{emit_reg i.arg.(0)}\n`;
-          `	{emit_string(instr_for_floatop floatop)}	{emit_reg i.arg.(1)}\n`
-        end
+    | Lop(Inegf) ->
+        `	xorpd	{emit_reg i.res.(0)}, {emit_symbol "caml_negf_mask"}\n`
+    | Lop(Iabsf) ->
+        `	andpd	{emit_reg i.res.(0)}, {emit_symbol "caml_absf_mask"}\n`
+    | Lop(Iaddf | Isubf | Imulf | Idivf as floatop) ->
+        `	{emit_string(instr_for_floatop floatop)}	{emit_reg i.res.(0)}, {emit_reg i.arg.(1)}\n`
     | Lop(Ifloatofint) ->
-        begin match i.arg.(0).loc with
-          Stack s ->
-            `	fild	{emit_reg i.arg.(0)}\n`
-        | _ ->
-            `	push	{emit_reg i.arg.(0)}\n`;
-            `	fild	DWORD PTR [esp]\n`;
-            `	add	esp, 4\n`
-        end
+        `	cvtsi2sd	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}\n`
     | Lop(Iintoffloat) ->
-        if not (is_tos i.arg.(0)) then
-          `	fld	{emit_reg i.arg.(0)}\n`;
-        stack_offset := !stack_offset - 8;
-        `	sub	esp, 8\n`;
-        `	fnstcw	[esp+4]\n`;
-        `	mov	ax, [esp+4]\n`;
-        `	mov	ah, 12\n`;
-        `	mov	[esp], ax\n`;
-        `	fldcw	[esp]\n`;
-        begin match i.res.(0).loc with
-          Stack s ->
-            `	fistp	{emit_reg i.res.(0)}\n`
-        | _ ->
-            `	fistp	DWORD PTR [esp]\n`;
-            `	mov	{emit_reg i.res.(0)}, [esp]\n`
-        end;
-        `	fldcw	[esp+4]\n`;
-        `	add	esp, 8\n`;
-        stack_offset := !stack_offset + 8
+        `	cvttsd2si	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}\n`
     | Lop(Ispecific(Ilea addr)) ->
         `	lea	{emit_reg i.res.(0)}, DWORD PTR {emit_addressing addr i.arg 0}\n`
     | Lop(Ispecific(Istore_int(n, addr))) ->
@@ -652,19 +535,7 @@ let emit_instr i =
         `	push	DWORD PTR {emit_addressing (offset_addressing addr 4) i.arg 0}\n`;
         `	push	DWORD PTR {emit_addressing addr i.arg 0}\n`;
         stack_offset := !stack_offset + 8
-    | Lop(Ispecific(Ifloatarithmem(double, op, addr))) ->
-        if not (is_tos i.arg.(0)) then
-          `	fld	{emit_reg i.arg.(0)}\n`;
-        let size = if double then "REAL8" else "REAL4" in
-        `	{emit_string(instr_for_floatarithmem op)}	{emit_string size} PTR {emit_addressing addr i.arg 1}\n`
     | Lop(Ispecific(Ifloatspecial s)) ->
-        (* Push args on float stack if necessary *)
-        for k = 0 to Array.length i.arg - 1 do
-          if not (is_tos i.arg.(k)) then `	fld	{emit_reg i.arg.(k)}\n`
-        done;
-        (* Fix-up for binary instrs whose args were swapped *)
-        if Array.length i.arg = 2 && is_tos i.arg.(1) then
-          `	fxch	st(1)\n`;
         emit_floatspecial s
     | Lreloadretaddr ->
         ()
@@ -845,8 +716,11 @@ let data l =
 (* Beginning / end of an assembly file *)
 
 let begin_assembly() =
-  `.386\n`;
-  `	.MODEL	FLAT\n\n`;
+  `.586\n`;
+  `.MODEL flat,stdcall\n`;
+  `OPTION casemap:none\n`;
+  `.MMX\n`;
+  `.XMM\n`;
   `	EXTERN _caml_young_ptr: DWORD\n`;
   `	EXTERN _caml_young_limit: DWORD\n`;
   `	EXTERN _caml_exception_pointer: DWORD\n`;

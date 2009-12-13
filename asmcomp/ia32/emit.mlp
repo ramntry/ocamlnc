@@ -30,9 +30,9 @@ open Emitaux
 
 let fastcode_flag = ref true
 
-let stack_offset = ref 0
-
 (* Layout of the stack frame *)
+
+let stack_offset = ref 0
 
 let frame_size () =                     (* includes return address *)
   let sz =
