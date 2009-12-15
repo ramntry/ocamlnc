@@ -45,15 +45,6 @@ all: libasmrun.$(A)
 libasmrun.$(A): $(OBJS)
 	$(call MKLIB,libasmrun.$(A), $(OBJS))
 
-i386nt.obj: i386nt.asm
-	$(ASM)i386nt.obj i386nt.asm
-
-amd64nt.obj: amd64nt.asm
-	$(ASM)amd64nt.obj amd64nt.asm
-
-i386.o: i386.S
-	$(CC) -c -DSYS_$(SYSTEM) i386.S
-
 install:
 	cp libasmrun.$(A) $(LIBDIR)
 
@@ -64,10 +55,15 @@ $(LINKEDFILES): %.c: ../byterun/%.c
 win32.$(O): ../byterun/win32.c
 	$(CC) -c $(NATIVECCCOMPOPTS) -DNATIVE_CODE $(IFLEXDIR) ../byterun/win32.c
 
-.SUFFIXES: .c .$(O)
+.SUFFIXES: .c .$(O) .o .obj .asm .S
 
 .c.$(O):
 	$(CC) $(CFLAGS) -c $<
+.S.o:
+	$(CC) -c -DSYS_$(SYSTEM) $<
+.asm.obj:
+	$(ASM)$*.obj $*.asm
+
 
 clean::
 	rm -f $(LINKEDFILES)

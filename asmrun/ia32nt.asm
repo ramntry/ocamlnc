@@ -15,7 +15,7 @@
 
 ; Asm part of the runtime system, IA32 architecture, Intel syntax
 
-	.386
+	.586
 	.MODEL FLAT
 
         EXTERN  _caml_garbage_collection: PROC
@@ -310,15 +310,19 @@ _caml_system__frametable LABEL DWORD
 _caml_extra_params LABEL DWORD
         BYTE    64 DUP (?)
 
-        PUBLIC  caml_negf_mask
-        ALIGN   16
-caml_negf_mask LABEL DWORD
-	DWORD	0, 80000000H, 0, 0
+MASKS SEGMENT PARA PUBLIC 'DATA'
 
-        PUBLIC  caml_absf_mask
+        PUBLIC  _caml_negf_mask
         ALIGN   16
-caml_absf_mask LABEL DWORD
-	DWORD	FFFFFFFFH, 7FFFFFFFH, 0, 0
+_caml_negf_mask LABEL QWORD
+	QWORD	8000000000000000H, 0
+
+        PUBLIC  _caml_absf_mask
+        ALIGN   16
+_caml_absf_mask LABEL QWORD
+	QWORD	7FFFFFFFFFFFFFFFH, 0
+
+MASKS   ENDS
 
         END
 

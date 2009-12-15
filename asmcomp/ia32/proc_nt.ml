@@ -36,12 +36,12 @@ open Mach
 *)
 
 let int_reg_name =
-  [| "%eax"; "%ebx"; "%ecx"; "%edx"; "%esi"; "%edi"; "%ebp" |]
+  [| "eax"; "ebx"; "ecx"; "edx"; "esi"; "edi"; "ebp" |]
 
 let float_reg_name =
-  [| "%tos"; 
-     "%xmm0"; "%xmm1"; "%xmm2"; "%xmm3";
-     "%xmm4"; "%xmm5"; "%xmm6"; "%xmm7" |]
+  [| "tos"; 
+     "xmm0"; "xmm1"; "xmm2"; "xmm3";
+     "xmm4"; "xmm5"; "xmm6"; "xmm7" |]
 
 let num_register_classes = 2
 

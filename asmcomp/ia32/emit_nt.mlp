@@ -245,7 +245,7 @@ let emit_float_test cmp neg arg lbl =
   | Ceq | Cne -> `	ucomisd	`
   | _         -> `	comisd	`
   end;
-  `{emit_reg arg.(1)}, {emit_reg arg.(0)}\n`;
+  `{emit_reg arg.(0)}, {emit_reg arg.(1)}\n`;
   let (branch_opcode, need_jp) =
     match (cmp, neg) with
       (Ceq, false) -> ("je", true)
@@ -260,8 +260,10 @@ let emit_float_test cmp neg arg lbl =
     | (Cgt, true)  -> ("jbe", false)
     | (Cge, false) -> ("jae", true)
     | (Cge, true)  -> ("jb", false) in
+  let branch_if_not_comparable =
+    if cmp = Cne then not neg else neg in
   if need_jp then
-    if neg then begin
+    if branch_if_not_comparable then begin
       `	jp	{emit_label lbl}\n`;
       `	{emit_string branch_opcode}	{emit_label lbl}\n`
     end else begin
@@ -508,9 +510,13 @@ let emit_instr i =
         for n = Array.length i.arg - 1 downto 0 do
           let r = i.arg.(n) in
           match r with
-            {loc = Reg rn; typ = Float} ->
+            {loc = Reg 100; typ = Float} ->
               `	sub	esp, 8\n`;
               `	fstp	REAL8 PTR 0[esp]\n`;
+              stack_offset := !stack_offset + 8
+          | {loc = Reg _; typ = Float} ->
+              `	sub	esp, 8\n`;
+              `	movsd	REAL8 PTR 0[esp], {emit_reg r}\n`;
               stack_offset := !stack_offset + 8
           | {loc = Stack sl; typ = Float} ->
               let ofs = slot_offset sl 1 in
@@ -717,7 +723,7 @@ let data l =
 
 let begin_assembly() =
   `.586\n`;
-  `.MODEL flat,stdcall\n`;
+  `.MODEL flat\n`;
   `OPTION casemap:none\n`;
   `.MMX\n`;
   `.XMM\n`;
@@ -725,8 +731,8 @@ let begin_assembly() =
   `	EXTERN _caml_young_limit: DWORD\n`;
   `	EXTERN _caml_exception_pointer: DWORD\n`;
   `	EXTERN _caml_extra_params: DWORD\n`;
-  `	EXTERN _caml_absf_mask: DWORD\n`;
-  `	EXTERN _caml_negf_mask: DWORD\n`;
+  `	EXTERN _caml_absf_mask: OWORD\n`;
+  `	EXTERN _caml_negf_mask: OWORD\n`;
   `	EXTERN _caml_call_gc: PROC\n`;
   `	EXTERN _caml_c_call: PROC\n`;
   `	EXTERN _caml_allocN: PROC\n`;

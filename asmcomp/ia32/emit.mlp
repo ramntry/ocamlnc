@@ -305,8 +305,10 @@ let emit_float_test cmp neg arg lbl =
     | (Cgt, true)  -> ("jbe", false)
     | (Cge, false) -> ("jae", true)
     | (Cge, true)  -> ("jb", false) in
+  let branch_if_not_comparable =
+    if cmp = Cne then not neg else neg in
   if need_jp then
-    if neg then begin
+    if branch_if_not_comparable then begin
       `	jp	{emit_label lbl}\n`;
       `	{emit_string branch_opcode}	{emit_label lbl}\n`
     end else begin
