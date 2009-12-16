@@ -116,7 +116,7 @@ RANLIBCMD=
 ############# Configuration for the native-code compiler
 
 ### Name of architecture for the native-code compiler
-ARCH=i386
+ARCH=ia32
 
 ### Name of architecture model for the native-code compiler.
 MODEL=default
