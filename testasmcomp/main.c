@@ -65,7 +65,7 @@ int main(int argc, char **argv)
 #endif
 #ifdef INT_FLOAT
   { extern double FUN();
-#ifdef __mc68020__
+#if defined(__mc68020__) || defined(TARGET_ia32)
 #define call_gen_code call_gen_code_float
 #endif
     extern double call_gen_code();

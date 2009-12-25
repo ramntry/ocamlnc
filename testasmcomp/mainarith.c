@@ -244,6 +244,8 @@ void do_test(void)
 
       FLOATTEST(D[37], - F);
       FLOATTEST(D[38], fabs(F));
+
+      FLOATTEST(D[39], sin(F));
 }
 
 #ifdef __i386__

@@ -26,7 +26,7 @@ CAMLRUN=../boot/ocamlrun
 
 CODEGEN=./codegen
 CC=$(NATIVECC)
-CFLAGS=$(NATIVECCCOMPOPTS) -g
+CFLAGS=$(NATIVECCCOMPOPTS) -DTARGET_$(ARCH) -g
 
 PROGS=fib.out tak.out quicksort.out quicksort2.out soli.out integr.out \
       arith.out checkbound.out
@@ -156,7 +156,7 @@ power.o: power-$(SYSTEM).o
 
 .cmm.o:
 	$(CAMLRUN) $(CODEGEN) $*.cmm > $*.s
-	$(AS) $(ASFLAGS) -o $*.o $*.s
+	$(ASM) -o $*.o $*.s
 
 .S.o:
 	$(ASPP) $(ASPPFLAGS) -o $*.o $*.S
