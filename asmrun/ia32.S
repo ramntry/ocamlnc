@@ -38,8 +38,10 @@
  || defined(SYS_solaris) || defined(SYS_beos) || defined(SYS_cygwin) \
  || defined(SYS_mingw) || defined(SYS_gnu)
 #define FUNCTION_ALIGN 4
+#define SIXTEEN_ALIGN 16
 #else
 #define FUNCTION_ALIGN 2
+#define SIXTEEN_ALIGN 4
 #endif
 
 #if defined(PROFILING)
@@ -106,9 +108,29 @@ LBL(105):
         pushl   %eax
         movl    %esp, G(caml_gc_regs)
         /* MacOSX note: 16-alignment of stack preserved at this point */
+    /* Save floating-point registers */
+        subl    $(8*8), %esp
+        movlpd  %xmm0, 0*8(%esp)
+        movlpd  %xmm1, 1*8(%esp)
+        movlpd  %xmm2, 2*8(%esp)
+        movlpd  %xmm3, 3*8(%esp)
+        movlpd  %xmm4, 4*8(%esp)
+        movlpd  %xmm5, 5*8(%esp)
+        movlpd  %xmm6, 6*8(%esp)
+        movlpd  %xmm7, 7*8(%esp)
+        /* MacOSX note: 16-alignment of stack preserved at this point */
     /* Call the garbage collector */
         call    G(caml_garbage_collection)
     /* Restore all regs used by the code generator */
+        movlpd  0*8(%esp), %xmm0
+        movlpd  1*8(%esp), %xmm1
+        movlpd  2*8(%esp), %xmm2
+        movlpd  3*8(%esp), %xmm3
+        movlpd  4*8(%esp), %xmm4
+        movlpd  5*8(%esp), %xmm5
+        movlpd  6*8(%esp), %xmm6
+        movlpd  7*8(%esp), %xmm7
+        addl    $(8*8), %esp
         popl    %eax
         popl    %ebx
         popl    %ecx
@@ -409,7 +431,7 @@ G(caml_extra_params):
 #endif
 
         .globl  G(caml_negf_mask)
-        .align  16
+        .align  SIXTEEN_ALIGN
 G(caml_negf_mask):
         .long   0, 0x80000000, 0, 0
         .globl  G(caml_absf_mask)
