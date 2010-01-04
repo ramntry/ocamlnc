@@ -518,26 +518,26 @@ module Make (Loc : Sig.Loc)
 
   value map_expr f = object
     inherit map as super;
-    method expr x = f (super#expr x);
+    method override expr x = f (super#expr x);
   end;
   value map_patt f = object
     inherit map as super;
-    method patt x = f (super#patt x);
+    method override patt x = f (super#patt x);
   end;
   value map_ctyp f = object
     inherit map as super;
-    method ctyp x = f (super#ctyp x);
+    method override ctyp x = f (super#ctyp x);
   end;
   value map_str_item f = object
     inherit map as super;
-    method str_item x = f (super#str_item x);
+    method override str_item x = f (super#str_item x);
   end;
   value map_sig_item f = object
     inherit map as super;
-    method sig_item x = f (super#sig_item x);
+    method override sig_item x = f (super#sig_item x);
   end;
   value map_loc f = object
     inherit map as super;
-    method loc x = f (super#loc x);
+    method override loc x = f (super#loc x);
   end;
 end;

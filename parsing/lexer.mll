@@ -69,6 +69,7 @@ let keyword_table =
     "of", OF;
     "open", OPEN;
     "or", OR;
+    "override", OVERRIDE;
 (*  "parser", PARSER; *)
     "private", PRIVATE;
     "rec", REC;

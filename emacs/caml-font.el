@@ -45,8 +45,8 @@
    (,(regexp-opt '("and" "as" "constraint" "class"
                    "exception" "external" "fun" "function" "functor"
                    "in" "inherit" "initializer" "let"
-                   "method" "mutable" "module" "of" "private" "rec"
-                   "type" "val" "virtual")
+                   "method" "mutable" "module" "of" "override" "private"
+                   "rec" "type" "val" "virtual")
                  'words)
     . font-lock-type-face)
 ;blocking

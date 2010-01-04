@@ -285,6 +285,7 @@ let pat_of_label lbl =
 %token OPEN
 %token <string> OPTLABEL
 %token OR
+%token OVERRIDE
 /* %token PARSER */
 %token PLUS
 %token PLUSDOT
@@ -644,8 +645,8 @@ class_self_pattern:
 class_fields:
     /* empty */
       { [] }
-  | class_fields INHERIT class_expr parent_binder
-      { Pcf_inher ($3, $4) :: $1 }
+  | class_fields INHERIT override_flag class_expr parent_binder
+      { Pcf_inher ($3, $4, $5) :: $1 }
   | class_fields VAL virtual_value
       { Pcf_valvirt $3 :: $1 }
   | class_fields VAL value
@@ -672,10 +673,10 @@ virtual_value:
       { $3, $2, $5, symbol_rloc () }
 ;
 value:
-    mutable_flag label EQUAL seq_expr
-      { $2, $1, $4, symbol_rloc () }
-  | mutable_flag label type_constraint EQUAL seq_expr
-      { $2, $1, (let (t, t') = $3 in ghexp(Pexp_constraint($5, t, t'))),
+    mutable_flag override_flag label EQUAL seq_expr
+      { $3, $1, $2, $5, symbol_rloc () }
+  | mutable_flag override_flag label type_constraint EQUAL seq_expr
+      { $3, $1, $2, (let (t, t') = $4 in ghexp(Pexp_constraint($6, t, t'))),
         symbol_rloc () }
 ;
 virtual_method:
@@ -685,10 +686,10 @@ virtual_method:
       { $4, $3, $6, symbol_rloc () }
 ;
 concrete_method :
-    METHOD private_flag label strict_binding
-      { $3, $2, ghexp(Pexp_poly ($4, None)), symbol_rloc () }
-  | METHOD private_flag label COLON poly_type EQUAL seq_expr
-      { $3, $2, ghexp(Pexp_poly($7,Some $5)), symbol_rloc () }
+    METHOD private_flag override_flag label strict_binding
+      { $4, $2, $3, ghexp(Pexp_poly ($5, None)), symbol_rloc () }
+  | METHOD private_flag override_flag label COLON poly_type EQUAL seq_expr
+      { $4, $2, $3, ghexp(Pexp_poly($8,Some $6)), symbol_rloc () }
 ;
 
 /* Class types */
@@ -698,12 +699,14 @@ class_type:
       { $1 }
   | QUESTION LIDENT COLON simple_core_type_or_tuple MINUSGREATER class_type
       { mkcty(Pcty_fun("?" ^ $2 ,
-                       {ptyp_desc = Ptyp_constr(Ldot (Lident "*predef*", "option"), [$4]);
+                       {ptyp_desc =
+                        Ptyp_constr(Ldot (Lident "*predef*", "option"), [$4]);
                         ptyp_loc = $4.ptyp_loc},
                        $6)) }
   | OPTLABEL simple_core_type_or_tuple MINUSGREATER class_type
       { mkcty(Pcty_fun("?" ^ $1 ,
-                       {ptyp_desc = Ptyp_constr(Ldot (Lident "*predef*", "option"), [$2]);
+                       {ptyp_desc =
+                        Ptyp_constr(Ldot (Lident "*predef*", "option"), [$2]);
                         ptyp_loc = $2.ptyp_loc},
                        $4)) }
   | LIDENT COLON simple_core_type_or_tuple MINUSGREATER class_type
@@ -1591,6 +1594,10 @@ mutable_flag:
 virtual_flag:
     /* empty */                                 { Concrete }
   | VIRTUAL                                     { Virtual }
+;
+override_flag:
+    /* empty */                                 { Fresh }
+  | OVERRIDE                                    { Override }
 ;
 opt_bar:
     /* empty */                                 { () }
