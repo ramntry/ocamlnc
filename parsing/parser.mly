@@ -213,6 +213,7 @@ let pat_of_label lbl =
 %token AS
 %token ASSERT
 %token BACKQUOTE
+%token BANG
 %token BAR
 %token BARBAR
 %token BARRBRACKET
@@ -285,7 +286,6 @@ let pat_of_label lbl =
 %token OPEN
 %token <string> OPTLABEL
 %token OR
-%token OVERRIDE
 /* %token PARSER */
 %token PLUS
 %token PLUSDOT
@@ -375,7 +375,7 @@ The precedences must be listed from low to high.
 %nonassoc below_DOT
 %nonassoc DOT
 /* Finally, the first tokens of simple_expr are above everything else. */
-%nonassoc BACKQUOTE BEGIN CHAR FALSE FLOAT INT INT32 INT64
+%nonassoc BACKQUOTE BANG BEGIN CHAR FALSE FLOAT INT INT32 INT64
           LBRACE LBRACELESS LBRACKET LBRACKETBAR LIDENT LPAREN
           NEW NATIVEINT PREFIXOP STRING TRUE UIDENT
 
@@ -667,29 +667,31 @@ parent_binder:
           { None }
 ;
 virtual_value:
-    MUTABLE VIRTUAL label COLON core_type
-      { $3, Mutable, $5, symbol_rloc () }
+    override_flag MUTABLE VIRTUAL label COLON core_type
+      { if $1 = Override then syntax_error ();
+        $4, Mutable, $6, symbol_rloc () }
   | VIRTUAL mutable_flag label COLON core_type
       { $3, $2, $5, symbol_rloc () }
 ;
 value:
-    mutable_flag override_flag label EQUAL seq_expr
-      { $3, $1, $2, $5, symbol_rloc () }
-  | mutable_flag override_flag label type_constraint EQUAL seq_expr
-      { $3, $1, $2, (let (t, t') = $4 in ghexp(Pexp_constraint($6, t, t'))),
+    override_flag mutable_flag label EQUAL seq_expr
+      { $3, $2, $1, $5, symbol_rloc () }
+  | override_flag mutable_flag label type_constraint EQUAL seq_expr
+      { $3, $2, $1, (let (t, t') = $4 in ghexp(Pexp_constraint($6, t, t'))),
         symbol_rloc () }
 ;
 virtual_method:
-    METHOD PRIVATE VIRTUAL label COLON poly_type
-      { $4, Private, $6, symbol_rloc () }
+    METHOD override_flag PRIVATE VIRTUAL label COLON poly_type
+      { if $2 = Override then syntax_error ();
+        $5, Private, $7, symbol_rloc () }
   | METHOD VIRTUAL private_flag label COLON poly_type
       { $4, $3, $6, symbol_rloc () }
 ;
 concrete_method :
-    METHOD private_flag override_flag label strict_binding
-      { $4, $2, $3, ghexp(Pexp_poly ($5, None)), symbol_rloc () }
-  | METHOD private_flag override_flag label COLON poly_type EQUAL seq_expr
-      { $4, $2, $3, ghexp(Pexp_poly($8,Some $6)), symbol_rloc () }
+    METHOD override_flag private_flag label strict_binding
+      { $4, $3, $2, ghexp(Pexp_poly ($5, None)), symbol_rloc () }
+  | METHOD override_flag private_flag label COLON poly_type EQUAL seq_expr
+      { $4, $3, $2, ghexp(Pexp_poly($8,Some $6)), symbol_rloc () }
 ;
 
 /* Class types */
@@ -991,6 +993,8 @@ simple_expr:
       { unclosed "[" 1 "]" 4 }
   | PREFIXOP simple_expr
       { mkexp(Pexp_apply(mkoperator $1 1, ["",$2])) }
+  | BANG simple_expr
+      { mkexp(Pexp_apply(mkoperator "!" 1, ["",$2])) }
   | NEW class_longident
       { mkexp(Pexp_new($2)) }
   | LBRACELESS field_expr_list opt_semi GREATERRBRACE
@@ -1494,6 +1498,7 @@ operator:
   | INFIXOP2                                    { $1 }
   | INFIXOP3                                    { $1 }
   | INFIXOP4                                    { $1 }
+  | BANG                                        { "!" }
   | PLUS                                        { "+" }
   | PLUSDOT                                     { "+." }
   | MINUS                                       { "-" }
@@ -1597,7 +1602,7 @@ virtual_flag:
 ;
 override_flag:
     /* empty */                                 { Fresh }
-  | OVERRIDE                                    { Override }
+  | BANG                                        { Override }
 ;
 opt_bar:
     /* empty */                                 { () }
