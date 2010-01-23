@@ -50,8 +50,10 @@ method reload_operation op arg res =
       if stackp arg.(0)
       then let r = self#makereg arg.(0) in ([|r|], [|r|])
       else (arg, res)
-  | Iintop(Ilsl|Ilsr|Iasr) | Iintop_imm(_, _) | Ifloatofint | Iintoffloat |
-    Ispecific(Ipush) ->
+  | Ifloatofint | Iintoffloat ->
+      (* Result must be in register, but argument can be on stack *)
+      (arg, (if stackp res.(0) then [| self#makereg res.(0) |] else res))
+  | Iintop(Ilsl|Ilsr|Iasr) | Iintop_imm(_, _) | Ispecific(Ipush) ->
       (* The argument(s) can be either in register or on stack *)
       (arg, res)
   | _ -> (* Other operations: all args and results in registers *)
