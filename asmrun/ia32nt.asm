@@ -11,12 +11,15 @@
 ;
 ;*********************************************************************
 
-; $Id: i386nt.asm 7812 2007-01-29 12:11:18Z xleroy $
+; $Id: ia32nt.asm 29106 2010-01-23 12:26:05Z afrisch $
 
 ; Asm part of the runtime system, IA32 architecture, Intel syntax
 
 	.586
 	.MODEL FLAT
+        OPTION casemap:none
+        .MMX
+        .XMM
 
         EXTERN  _caml_garbage_collection: PROC
         EXTERN  _caml_apply2: PROC
@@ -56,9 +59,28 @@ L105:   push    ebp
         push    ebx
         push    eax
         mov     _caml_gc_regs, esp
+    ; Save floating-point registers
+        sub     esp, 8*8
+        movlpd  qword ptr [esp+0*8],xmm0
+        movlpd  qword ptr [esp+1*8],xmm1
+        movlpd  qword ptr [esp+2*8],xmm2
+        movlpd  qword ptr [esp+3*8],xmm3
+        movlpd  qword ptr [esp+4*8],xmm4
+        movlpd  qword ptr [esp+5*8],xmm5
+        movlpd  qword ptr [esp+6*8],xmm6
+        movlpd  qword ptr [esp+7*8],xmm7
     ; Call the garbage collector 
         call	_caml_garbage_collection
-    ; Restore all regs used by the code generator 
+    ; Restore all regs used by the code generator
+        movlpd  xmm0,qword ptr [esp+0*8]
+        movlpd  xmm1,qword ptr [esp+1*8]
+        movlpd  xmm2,qword ptr [esp+2*8]
+        movlpd  xmm3,qword ptr [esp+3*8]
+        movlpd  xmm4,qword ptr [esp+4*8]
+        movlpd  xmm5,qword ptr [esp+5*8]
+        movlpd  xmm6,qword ptr [esp+6*8]
+        movlpd  xmm7,qword ptr [esp+7*8]
+        add     esp, 8*8
 	pop     eax
         pop     ebx
         pop     ecx
