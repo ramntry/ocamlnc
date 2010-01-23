@@ -11,7 +11,7 @@
 ;
 ;*********************************************************************
 
-; $Id: ia32nt.asm 29106 2010-01-23 12:26:05Z afrisch $
+; $Id$
 
 ; Asm part of the runtime system, IA32 architecture, Intel syntax
 
