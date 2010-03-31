@@ -18,10 +18,15 @@
 #include <stdio.h>
 #include <signal.h>
 
-#define INLINE inline
+#define INLINE __inline
 
-#define TRACE(x) printf("%d: %s", x)
-#define TRACE1(x,y) printf("%d: %s %d", x, y)
+#if 1
+#define TRACE(x)
+#define TRACE1(x,y)
+#else
+#define TRACE(x) printf("%d: %s\n", GetCurrentThreadId(), x)
+#define TRACE1(x,y) printf("%d: %s %d\n", GetCurrentThreadId(), x, y)
+#endif
 
 typedef DWORD st_retcode;
 
@@ -32,7 +37,7 @@ typedef DWORD st_retcode;
 typedef HANDLE st_thread_id;
 
 static DWORD st_thread_create(st_thread_id * res, 
-                              DWORD WINAPI * (*fn)(void *), void * arg)
+                              LPTHREAD_START_ROUTINE fn, void * arg)
 {
   HANDLE h = CreateThread(NULL, 0, fn, arg, 0, NULL);
   TRACE1("st_thread_create", h);
@@ -63,7 +68,7 @@ static void st_thread_kill(st_thread_id thr)
 
 /* Scheduling hints */
 
-static void INLINE st_thread_yield(void)
+static INLINE void st_thread_yield(void)
 {
   Sleep(0);
 }
@@ -99,6 +104,7 @@ static void st_masterlock_init(st_masterlock * m)
 {
   TRACE("st_masterlock_init");
   InitializeCriticalSection(m);
+  EnterCriticalSection(m);
 }
 
 static INLINE void st_masterlock_acquire(st_masterlock * m)
@@ -110,8 +116,8 @@ static INLINE void st_masterlock_acquire(st_masterlock * m)
 
 static INLINE void st_masterlock_release(st_masterlock * m)
 {
-  TRACE("st_masterlock_release");
   LeaveCriticalSection(m);
+  TRACE("st_masterlock_released");
 }
 
 static INLINE int st_masterlock_waiters(st_masterlock * m)
@@ -160,8 +166,9 @@ static INLINE DWORD st_mutex_lock(st_mutex m)
 
 static INLINE DWORD st_mutex_trylock(st_mutex m)
 {
+  DWORD rc;
   TRACE1("st_mutex_trylock", m);
-  DWORD rc = WaitForSingleObject(m, 0);
+  rc = WaitForSingleObject(m, 0);
   if (rc == WAIT_FAILED)
     return GetLastError();
   if (rc == WAIT_TIMEOUT)

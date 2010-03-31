@@ -59,7 +59,7 @@ lib$(LIBNAME)nat.$(A): $(COBJS_NAT)
 	$(MKLIB) -o $(LIBNAME)nat $(COBJS_NAT) $(LDOPTS)
 
 st_stubs_n.$(O): st_stubs.c st_win32.h
-	$(NATIVECC) -DNATIVE_CODE -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) -c st_stubs.c
+	$(NATIVECC) -DNATIVE_CODE -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) -c st_stubs.c
 	mv st_stubs.$(O) st_stubs_n.$(O)
 
 $(CAMLOBJS:.cmo=.cmx): ../../ocamlopt
