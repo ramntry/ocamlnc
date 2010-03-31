@@ -20,6 +20,9 @@
 
 #define INLINE inline
 
+#define TRACE(x) printf("%d: %s", x)
+#define TRACE1(x,y) printf("%d: %s %d", x, y)
+
 typedef DWORD st_retcode;
 
 #define SIGPREEMPTION SIGTERM
@@ -32,6 +35,7 @@ static DWORD st_thread_create(st_thread_id * res,
                               DWORD WINAPI * (*fn)(void *), void * arg)
 {
   HANDLE h = CreateThread(NULL, 0, fn, arg, 0, NULL);
+  TRACE1("st_thread_create", h);
   if (h == NULL) return GetLastError();
   if (res == NULL)
     CloseHandle(h);
@@ -46,11 +50,13 @@ static DWORD st_thread_create(st_thread_id * res,
 
 static void st_thread_exit(void)
 {
+  TRACE("st_thread_exit");
   ExitThread(0);
 }
 
 static void st_thread_kill(st_thread_id thr)
 {
+  TRACE1("st_thread_kill", thr);
   TerminateThread(thr, 0);
   CloseHandle(thr);
 }
@@ -91,16 +97,20 @@ typedef CRITICAL_SECTION st_masterlock;
 
 static void st_masterlock_init(st_masterlock * m)
 {
+  TRACE("st_masterlock_init");
   InitializeCriticalSection(m);
 }
 
 static INLINE void st_masterlock_acquire(st_masterlock * m)
 {
+  TRACE("st_masterlock_acquire");
   EnterCriticalSection(m);
+  TRACE("st_masterlock_acquire (done)");
 }
 
 static INLINE void st_masterlock_release(st_masterlock * m)
 {
+  TRACE("st_masterlock_release");
   LeaveCriticalSection(m);
 }
 
@@ -117,12 +127,14 @@ static DWORD st_mutex_create(st_mutex * res)
 {
   st_mutex m = CreateMutex(0, FALSE, NULL);
   if (m == NULL) return GetLastError();
+  TRACE1("st_mutex_create", m);
   *res = m;
   return 0;
 }
 
 static DWORD st_mutex_destroy(st_mutex m)
 {
+  TRACE1("st_mutex_destroy", m);
   if (CloseHandle(m))
     return 0;
   else
@@ -131,10 +143,14 @@ static DWORD st_mutex_destroy(st_mutex m)
 
 static INLINE DWORD st_mutex_lock(st_mutex m)
 {
-  if (WaitForSingleObject(m, INFINITE) == WAIT_FAILED)
+  TRACE1("st_mutex_lock", m);
+  if (WaitForSingleObject(m, INFINITE) == WAIT_FAILED) {
+    TRACE1("st_mutex_lock (ERROR)", m);
     return GetLastError();
-  else
+  } else {
+    TRACE1("st_mutex_lock (done)", m);
     return 0;
+  }
 }
 
 /* Error codes with the 29th bit set are reserved for the application */
@@ -144,6 +160,7 @@ static INLINE DWORD st_mutex_lock(st_mutex m)
 
 static INLINE DWORD st_mutex_trylock(st_mutex m)
 {
+  TRACE1("st_mutex_trylock", m);
   DWORD rc = WaitForSingleObject(m, 0);
   if (rc == WAIT_FAILED)
     return GetLastError();
@@ -155,6 +172,7 @@ static INLINE DWORD st_mutex_trylock(st_mutex m)
 
 static INLINE DWORD st_mutex_unlock(st_mutex m)
 {
+  TRACE1("st_mutex_unlock", m);
   if (ReleaseMutex(m))
     return 0;
   else
@@ -252,6 +270,7 @@ static DWORD st_event_create(st_event * res)
 {
   st_event m =
     CreateEvent(NULL, TRUE/*manual reset*/, FALSE/*initially unset*/, NULL);
+  TRACE1("st_event_create", m);
   if (m == NULL) return GetLastError();
   *res = m;
   return 0;
@@ -259,6 +278,7 @@ static DWORD st_event_create(st_event * res)
 
 static DWORD st_event_destroy(st_event e)
 {
+  TRACE1("st_event_destroy", e);
   if (CloseHandle(e))
     return 0;
   else
@@ -267,6 +287,7 @@ static DWORD st_event_destroy(st_event e)
 
 static DWORD st_event_trigger(st_event e)
 {
+  TRACE1("st_event_trigger", e);
   if (SetEvent(e))
     return 0;
   else
@@ -275,6 +296,7 @@ static DWORD st_event_trigger(st_event e)
 
 static DWORD st_event_wait(st_event e)
 {
+  TRACE1("st_event_wait", e);
   if (WaitForSingleObject(e, INFINITE) == WAIT_FAILED)
     return GetLastError();
   else
