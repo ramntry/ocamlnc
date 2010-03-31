@@ -20,8 +20,8 @@ CAMLOPT=../../ocamlcompopt.sh -I ../unix
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
 COMPFLAGS=-warn-error A -g
 
-BYTECODE_C_OBJS=posix_b.o
-NATIVECODE_C_OBJS=posix_n.o
+BYTECODE_C_OBJS=st_stubs_b.o
+NATIVECODE_C_OBJS=st_stubs_n.o
 
 THREAD_OBJS= thread.cmo mutex.cmo condition.cmo event.cmo threadUnix.cmo
 
@@ -34,19 +34,19 @@ allopt: libthreadsnat.a threads.cmxa
 libthreads.a: $(BYTECODE_C_OBJS)
 	$(MKLIB) -o threads $(BYTECODE_C_OBJS)
 
-posix_b.o: posix.c
+st_stubs_b.o: st_stubs.c st_posix.h
 	$(BYTECC) -O -I../../byterun $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) \
-	   -c posix.c
-	mv posix.o posix_b.o
+	   -c st_stubs.c
+	mv st_stubs.o st_stubs_b.o
 
 # Dynamic linking with -lpthread is risky on many platforms, so
 # do not create a shared object for libthreadsnat.
 libthreadsnat.a: $(NATIVECODE_C_OBJS)
 	$(AR) rc libthreadsnat.a $(NATIVECODE_C_OBJS)
 
-posix_n.o: posix.c
-	$(NATIVECC) -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) $(SHAREDCCCOMPOPTS) -DNATIVE_CODE -DTARGET_$(ARCH) -DSYS_$(SYSTEM) -c posix.c
-	mv posix.o posix_n.o
+st_stubs_n.o: st_stubs.c st_posix.h
+	$(NATIVECC) -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) $(SHAREDCCCOMPOPTS) -DNATIVE_CODE -DTARGET_$(ARCH) -DSYS_$(SYSTEM) -c st_stubs.c
+	mv st_stubs.o st_stubs_n.o
 
 threads.cma: $(THREAD_OBJS)
 	$(MKLIB) -ocamlc '$(CAMLC)' -o threads $(THREAD_OBJS) \
@@ -65,9 +65,6 @@ threads.cmxa: $(THREAD_OBJS:.cmo=.cmx)
 
 $(THREAD_OBJS:.cmo=.cmx): ../../ocamlopt
 
-thread.ml: thread_posix.ml
-	ln -s thread_posix.ml thread.ml
-
 partialclean:
 	rm -f *.cm*
 
@@ -83,6 +80,7 @@ install:
 	cp $(THREAD_OBJS:.cmo=.cmi) threads.cma $(LIBDIR)/threads
 	rm -f $(LIBDIR)/threads/stdlib.cma
 	cp thread.mli mutex.mli condition.mli event.mli threadUnix.mli $(LIBDIR)
+	cp threads.h $(LIBDIR)/caml/threads.h
 
 installopt:
 	cp libthreadsnat.a $(LIBDIR)/libthreadsnat.a
