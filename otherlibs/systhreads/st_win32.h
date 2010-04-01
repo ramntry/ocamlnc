@@ -13,6 +13,8 @@
 
 /* $Id: posix.c 9270 2009-05-20 11:52:42Z doligez $ */
 
+/* Win32 implementation of the "st" interface */
+
 #include <windows.h>
 #include <WinError.h>
 #include <stdio.h>
@@ -24,8 +26,9 @@
 #define TRACE(x)
 #define TRACE1(x,y)
 #else
-#define TRACE(x) printf("%d: %s\n", GetCurrentThreadId(), x)
-#define TRACE1(x,y) printf("%d: %s %d\n", GetCurrentThreadId(), x, y)
+#include <stdio.h>
+#define TRACE(x) printf("%d: %s\n", GetCurrentThreadId(), x); fflush(stdout)
+#define TRACE1(x,y) printf("%d: %s %p\n", GetCurrentThreadId(), x, (void *)y); fflush(stdout)
 #endif
 
 typedef DWORD st_retcode;
@@ -221,11 +224,13 @@ static DWORD st_condvar_create(st_condvar * res)
   if (c == NULL) return ERROR_NOT_ENOUGH_MEMORY;
   InitializeCriticalSection(&c->lock);
   c->waiters = NULL;
+  *res = c;
   return 0;
 }
 
 static DWORD st_condvar_destroy(st_condvar c)
 {
+  TRACE1("st_condvar_destroy", c);
   DeleteCriticalSection(&c->lock);
   free(c);
   return 0;
@@ -261,7 +266,7 @@ static DWORD st_condvar_broadcast(st_condvar c)
   /* Wake up all waiting threads */
   curr = c->waiters;
   while (curr != NULL) {
-    next = curr->waiters->next;
+    next = curr->next;
     TRACE1("st_condvar_signal: waking up", curr->event);
     if (! SetEvent(curr->event)) rc = GetLastError();
     curr = next;
@@ -272,48 +277,40 @@ static DWORD st_condvar_broadcast(st_condvar c)
   return rc;
 }
 
-static INLINE void st_condvar_prepare_wait(st_condvar c)
-{
-  return;
-}
-
 static DWORD st_condvar_wait(st_condvar c, st_mutex m)
 {
   HANDLE ev;
-  struct st_wait_list wait, **currp;
+  struct st_wait_list wait;
 
-  TRACE1("st_condvar_signal", c);
+  TRACE1("st_condvar_wait", c);
   /* Recover (or create) the event associated with the calling thread */
   ev = (HANDLE) TlsGetValue(st_thread_sem_key);
   if (ev == 0) {
     ev = CreateEvent(NULL,
-                     TRUE /*manual reset*/,
+                     FALSE /*auto reset*/,
                      FALSE /*initially unset*/,
                      NULL);
     if (ev == NULL) return GetLastError();
     TlsSetValue(st_thread_sem_key, (void *) ev);
   }
-  TRACE1("st_condvar_signal: our event is", ev);
   EnterCriticalSection(&c->lock);
-  /* Insert the current thread at the end of the waiting list (atomically) */
-  wait.sem = ev;
-  wait.next = NULL;
-  currp = &c->waiters;
-  while (*currp != NULL) { currp = &((*currp)->next); }
-  *currp = &wait;
+  /* Insert the current thread in the waiting list (atomically) */
+  wait.event = ev;
+  wait.next = c->waiters;
+  c->waiters = &wait;
   LeaveCriticalSection(&c->lock);
   /* Release the mutex m */
   LeaveCriticalSection(m);
   /* Wait for our event to be signaled.  There is no risk of lost
      wakeup, since we inserted ourselves on the waiting list of c
      before releasing m */
-  TRACE1("st_condvar_signal: blocking on event", ev);
+  TRACE1("st_condvar_wait: blocking on event", ev);
   if (WaitForSingleObject(ev, INFINITE) == WAIT_FAILED)
     return GetLastError();
   /* Reacquire the mutex m */
-  TRACE1("st_condvar_signal: restarted, acquiring mutex", m);
+  TRACE1("st_condvar_wait: restarted, acquiring mutex", m);
   EnterCriticalSection(m);
-  TRACE1("st_condvar_signal: acquired mutex", m);
+  TRACE1("st_condvar_wait: acquired mutex", m);
   return 0;
 }
 
@@ -362,12 +359,28 @@ static DWORD st_event_wait(st_event e)
 
 static void st_check_error(DWORD retcode, char * msg)
 {
-  char errmsg[1024];
+  char err[1024];
+  int errlen, msglen;
+  value str;
 
   if (retcode == 0) return;
   if (retcode == ERROR_NOT_ENOUGH_MEMORY) raise_out_of_memory();
-  sprintf(errmsg, "%s: error code %lx", retcode);
-  raise_sys_error(copy_string(errmsg));
+  if (! FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS,
+		      NULL,
+		      retcode,
+		      0,
+		      err,
+		      sizeof(err),
+		      NULL)) {
+    sprintf(err, "error code %lx", retcode);
+  }
+  msglen = strlen(msg);
+  errlen = strlen(err);
+  str = alloc_string(msglen + 2 + errlen);
+  memmove (&Byte(str, 0), msg, msglen);
+  memmove (&Byte(str, msglen), ": ", 2);
+  memmove (&Byte(str, msglen + 2), err, errlen);
+  raise_sys_error(str);
 }
 
 /* The tick thread: posts a SIGPREEMPTION signal periodically */
