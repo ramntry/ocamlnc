@@ -32,6 +32,20 @@ typedef DWORD st_retcode;
 
 #define SIGPREEMPTION SIGTERM
 
+/* Thread-local storage assocaiting a Win32 event to every thread. */
+static DWORD st_thread_sem_key;
+
+/* OS-specific initialization */
+
+static DWORD st_initialize(void)
+{
+  st_thread_sem_key = TlsAlloc();
+  if (st_thread_sem_key == TLS_OUT_OF_INDEXES)
+    return GetLastError();
+  else
+    return 0;
+}
+
 /* Thread creation.  Created in detached mode if [res] is NULL. */
 
 typedef HANDLE st_thread_id;
@@ -50,6 +64,14 @@ static DWORD st_thread_create(st_thread_id * res,
 }
 
 #define ST_THREAD_FUNCTION DWORD WINAPI
+
+/* Cleanup at thread exit */
+
+static void st_thread_cleanup(void)
+{
+  HANDLE ev = (HANDLE) TlsGetValue(st_thread_sem_key);
+  if (ev != NULL) CloseHandle(ev);
+}
 
 /* Thread termination */
 
@@ -127,36 +149,30 @@ static INLINE int st_masterlock_waiters(st_masterlock * m)
  
 /* Mutexes */
 
-typedef HANDLE st_mutex;
+typedef CRITICAL_SECTION * st_mutex;
 
 static DWORD st_mutex_create(st_mutex * res)
 {
-  st_mutex m = CreateMutex(0, FALSE, NULL);
-  if (m == NULL) return GetLastError();
-  TRACE1("st_mutex_create", m);
+  st_mutex m = malloc(sizeof(CRITICAL_SECTION));
+  if (m == NULL) return ERROR_NOT_ENOUGH_MEMORY;
+  InitializeCriticalSection(m);
   *res = m;
   return 0;
 }
 
 static DWORD st_mutex_destroy(st_mutex m)
 {
-  TRACE1("st_mutex_destroy", m);
-  if (CloseHandle(m))
-    return 0;
-  else
-    return GetLastError();
+  DeleteCriticalSection(m);
+  free(m);
+  return 0;
 }
 
 static INLINE DWORD st_mutex_lock(st_mutex m)
 {
   TRACE1("st_mutex_lock", m);
-  if (WaitForSingleObject(m, INFINITE) == WAIT_FAILED) {
-    TRACE1("st_mutex_lock (ERROR)", m);
-    return GetLastError();
-  } else {
-    TRACE1("st_mutex_lock (done)", m);
-    return 0;
-  }
+  EnterCriticalSection(m);
+  TRACE1("st_mutex_lock (done)", m);
+  return 0;
 }
 
 /* Error codes with the 29th bit set are reserved for the application */
@@ -166,107 +182,139 @@ static INLINE DWORD st_mutex_lock(st_mutex m)
 
 static INLINE DWORD st_mutex_trylock(st_mutex m)
 {
-  DWORD rc;
   TRACE1("st_mutex_trylock", m);
-  rc = WaitForSingleObject(m, 0);
-  if (rc == WAIT_FAILED)
-    return GetLastError();
-  if (rc == WAIT_TIMEOUT)
-    return ALREADY_LOCKED;
-  else
+  if (TryEnterCriticalSection(m)) {
+    TRACE1("st_mutex_trylock (success)", m);
     return PREVIOUSLY_UNLOCKED;
+  } else {
+    TRACE1("st_mutex_trylock (failure)", m);
+    return ALREADY_LOCKED;
+  }
 }
 
 static INLINE DWORD st_mutex_unlock(st_mutex m)
 {
   TRACE1("st_mutex_unlock", m);
-  if (ReleaseMutex(m))
-    return 0;
-  else
-    return GetLastError();
+  LeaveCriticalSection(m);
+  return 0;
 }
 
-/* Condition variables, emulated using semaphores. */
+/* Condition variables */
+
+/* A condition variable is just a list of threads currently
+   waiting on this c.v.  Each thread is represented by its
+   associated event. */
+
+struct st_wait_list {
+  HANDLE event;                  /* event of the first waiting thread */
+  struct st_wait_list * next;
+};
 
 typedef struct st_condvar_struct {
-  LONG count;                /* number of waiting threads */
-  HANDLE sem;                /* semaphore on which threads are waiting */
+  CRITICAL_SECTION lock;         /* protect the data structure */
+  struct st_wait_list * waiters; /* list of threads waiting */
 } * st_condvar;
-
-/* Note: this is not a general emulation of condition variables:
-   we assume that the master lock protects accesses to the "count" field.
-   The master lock must be held when calling the "st_condvar_signal",
-   "st_condvar_broadcast" and "st_condvar_prepare_wait" functions. */
 
 static DWORD st_condvar_create(st_condvar * res)
 {
-  DWORD rc;
   st_condvar c = malloc(sizeof(struct st_condvar_struct));
   if (c == NULL) return ERROR_NOT_ENOUGH_MEMORY;
-  c->sem = CreateSemaphore(NULL, 0, 0x7FFFFFFF, NULL);
-  if (c->sem == NULL) return GetLastError();
-  c->count = 0;
-  *res = c;
+  InitializeCriticalSection(&c->lock);
+  c->waiters = NULL;
   return 0;
 }
 
 static DWORD st_condvar_destroy(st_condvar c)
 {
-  if (CloseHandle(c->sem))
-    return 0;
-  else
-    return GetLastError();
+  DeleteCriticalSection(&c->lock);
+  free(c);
+  return 0;
 }
 
 static DWORD st_condvar_signal(st_condvar c)
 {
-  if (c->count > 0) {
-    c->count --;
-    /* Increment semaphore by 1, waking up one waiter */
-    if (ReleaseSemaphore(c->sem, 1, NULL))
-      return 0;
-    else
-      return GetLastError();
-  } else {
-    return 0;
+  DWORD rc = 0;
+  struct st_wait_list * curr, * next;
+
+  TRACE1("st_condvar_signal", c);
+  EnterCriticalSection(&c->lock);
+  curr = c->waiters;
+  if (curr != NULL) {
+    next = curr->next;
+    /* Wake up the first waiting thread */
+    TRACE1("st_condvar_signal: waking up", curr->event);
+    if (! SetEvent(curr->event)) rc = GetLastError();
+    /* Remove it from the waiting list */
+    c->waiters = next;
   }
+  LeaveCriticalSection(&c->lock);
+  return rc;
 }
 
 static DWORD st_condvar_broadcast(st_condvar c)
 {
-  LONG n = c->count;
-  if (n > 0) {
-    c->count = 0;
-    /* Increment semaphore by n, waking up all waiters */
-    if (ReleaseSemaphore(c->sem, n, NULL))
-      return 0;
-    else
-      return GetLastError();
-  } else {
-    return 0;
+  DWORD rc = 0;
+  struct st_wait_list * curr, * next;
+
+  TRACE1("st_condvar_broadcast", c);
+  EnterCriticalSection(&c->lock);
+  /* Wake up all waiting threads */
+  curr = c->waiters;
+  while (curr != NULL) {
+    next = curr->waiters->next;
+    TRACE1("st_condvar_signal: waking up", curr->event);
+    if (! SetEvent(curr->event)) rc = GetLastError();
+    curr = next;
   }
+  /* Remove them all from the waiting list */
+  c->waiters = NULL;
+  LeaveCriticalSection(&c->lock);
+  return rc;
 }
 
 static INLINE void st_condvar_prepare_wait(st_condvar c)
 {
-  c->count ++;
+  return;
 }
 
 static DWORD st_condvar_wait(st_condvar c, st_mutex m)
 {
-  HANDLE handles[2];
-  DWORD rc;
+  HANDLE ev;
+  struct st_wait_list wait, **currp;
 
-  if (! ReleaseMutex(m)) return GetLastError();
-  /* Wait for semaphore to be non-null, and decrement it.
-     Simultaneously, re-acquire mutex. */
-  handles[0] = c->sem;
-  handles[1] = m;
-  rc = WaitForMultipleObjects(2, handles, TRUE, INFINITE);
-  if (rc == WAIT_FAILED)
+  TRACE1("st_condvar_signal", c);
+  /* Recover (or create) the event associated with the calling thread */
+  ev = (HANDLE) TlsGetValue(st_thread_sem_key);
+  if (ev == 0) {
+    ev = CreateEvent(NULL,
+                     TRUE /*manual reset*/,
+                     FALSE /*initially unset*/,
+                     NULL);
+    if (ev == NULL) return GetLastError();
+    TlsSetValue(st_thread_sem_key, (void *) ev);
+  }
+  TRACE1("st_condvar_signal: our event is", ev);
+  EnterCriticalSection(&c->lock);
+  /* Insert the current thread at the end of the waiting list (atomically) */
+  wait.sem = ev;
+  wait.next = NULL;
+  currp = &c->waiters;
+  while (*currp != NULL) { currp = &((*currp)->next); }
+  *currp = &wait;
+  LeaveCriticalSection(&c->lock);
+  /* Release the mutex m */
+  LeaveCriticalSection(m);
+  /* Wait for our event to be signaled.  There is no risk of lost
+     wakeup, since we inserted ourselves on the waiting list of c
+     before releasing m */
+  TRACE1("st_condvar_signal: blocking on event", ev);
+  if (WaitForSingleObject(ev, INFINITE) == WAIT_FAILED)
     return GetLastError();
-  else
-    return 0;
+  /* Reacquire the mutex m */
+  TRACE1("st_condvar_signal: restarted, acquiring mutex", m);
+  EnterCriticalSection(m);
+  TRACE1("st_condvar_signal: acquired mutex", m);
+  return 0;
 }
 
 /* Triggered events */

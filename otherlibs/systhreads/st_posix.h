@@ -13,6 +13,8 @@
 
 /* $Id: posix.c 9270 2009-05-20 11:52:42Z doligez $ */
 
+/* POSIX thread implementation of the "st" interface */
+
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
@@ -37,6 +39,13 @@ typedef int st_retcode;
 
 #define SIGPREEMPTION SIGVTALRM
 
+/* OS-specific initialization */
+
+static int st_initialize(void)
+{
+  return 0;
+}
+
 /* Thread creation.  Created in detached mode if [res] is NULL. */
 
 typedef pthread_t st_thread_id;
@@ -56,6 +65,13 @@ static int st_thread_create(st_thread_id * res,
 }
 
 #define ST_THREAD_FUNCTION void *
+
+/* Cleanup at thread exit */
+
+static INLINE void st_thread_cleanup(void)
+{
+  return;
+}
 
 /* Thread termination */
 
@@ -215,11 +231,6 @@ static INLINE int st_condvar_signal(st_condvar c)
 static INLINE int st_condvar_broadcast(st_condvar c)
 {
   return pthread_cond_broadcast(c);
-}
-
-static INLINE void st_condvar_prepare_wait(st_condvar c)
-{
-  return;
 }
 
 static INLINE int st_condvar_wait(st_condvar c, st_mutex m)

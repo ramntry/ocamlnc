@@ -65,6 +65,7 @@ struct caml_thread_struct {
   struct caml_thread_struct * next;  /* Double linking of running threads */
   struct caml_thread_struct * prev;
 #ifdef NATIVE_CODE
+  char * top_of_stack;          /* Top of stack for this thread (approx.) */
   char * bottom_of_stack;       /* Saved value of caml_bottom_of_stack */
   uintnat last_retaddr;         /* Saved value of caml_last_return_address */
   value * gc_regs;              /* Saved value of caml_gc_regs */
@@ -258,6 +259,31 @@ static void caml_io_mutex_unlock_exn(void)
   if (chan != NULL) caml_io_mutex_unlock(chan);
 }
 
+/* Hook for estimating stack usage */
+
+static uintnat (*prev_stack_usage_hook)(void);
+
+static uintnat caml_thread_stack_usage(void)
+{
+  uintnat sz;
+  caml_thread_t th;
+
+  /* Don't add stack for current thread, this is done elsewhere */
+  for (sz = 0, th = curr_thread->next;
+       th != curr_thread;
+       th = th->next) {
+#ifdef NATIVE_CODE
+    sz += (value *) th->top_of_stack - (value *) th->bottom_of_stack;
+#else
+    sz += th->stack_high - th->sp;
+#endif    
+  }
+  if (prev_stack_usage_hook != NULL)
+    sz += prev_stack_usage_hook();
+  return sz;
+}
+
+
 /* Set up a thread info block and insert it in list of threads. */
 
 static caml_thread_t caml_thread_setup_info(value clos)
@@ -362,6 +388,8 @@ CAMLprim value caml_thread_initialize(value unit)   /* ML */
 
   /* Protect against repeated initialization (PR#1325) */
   if (curr_thread != NULL) return Val_unit;
+  /* OS-specific initialization */
+  st_initialize();
   /* Initialize and acquire the master lock */
   st_masterlock_init(&caml_master_lock);
   /* Set up a thread info block for the current thread */
@@ -404,6 +432,8 @@ CAMLprim value caml_thread_initialize(value unit)   /* ML */
     caml_channel_mutex_lock = caml_io_mutex_lock;
     caml_channel_mutex_unlock = caml_io_mutex_unlock;
     caml_channel_mutex_unlock_exn = caml_io_mutex_unlock_exn;
+    prev_stack_usage_hook = caml_stack_usage_hook;
+    caml_stack_usage_hook = caml_thread_stack_usage;
     /* Set up fork() to reinitialize the thread machinery in the child
        (PR#4577) */
     st_atfork(caml_thread_reinitialize);
@@ -427,6 +457,8 @@ static void caml_thread_stop(void)
   caml_threadstatus_terminate(Terminated(curr_thread->descr));
   /* Remove th from the doubly-linked list of threads and free its info block */
   caml_thread_remove_info(curr_thread);
+  /* OS-specific cleanups */
+  st_thread_cleanup();
   /* Release the runtime system */
   st_masterlock_release(&caml_master_lock);
 }
@@ -439,6 +471,7 @@ static ST_THREAD_FUNCTION caml_thread_start(void * arg)
   value clos;
 #ifdef NATIVE_CODE
   struct longjmp_buffer termination_buf;
+  char tos;
 #endif
 
   /* Associate the thread descriptor with the thread */
@@ -446,6 +479,8 @@ static ST_THREAD_FUNCTION caml_thread_start(void * arg)
   /* Acquire the global mutex */
   leave_blocking_section();
 #ifdef NATIVE_CODE
+  /* Record top of stack (approximative) */
+  th->top_of_stack = &tos;
   /* Setup termination handler (for caml_thread_exit) */
   if (sigsetjmp(termination_buf.buf, 0) == 0) {
     th->exit_buf = &termination_buf;
@@ -502,6 +537,7 @@ CAMLexport int caml_c_thread_register(void)
   th = caml_thread_setup_info(Val_unit /*no closure*/);
 #ifdef NATIVE_CODE
   th->exit_buf = NULL;
+  th->top_of_stack = (char *) &err;
 #endif
   /* Associate the thread descriptor with the thread */
   st_tls_set(thread_descriptor_key, (void *) th);
@@ -721,7 +757,6 @@ CAMLprim value caml_condition_wait(value wcond, value wmut)           /* ML */
   st_retcode retcode;
 
   Begin_roots2(wcond, wmut)     /* prevent deallocation of cond and mutex */
-    st_condvar_prepare_wait(cond);
     enter_blocking_section();
     retcode = st_condvar_wait(cond, mut);
     leave_blocking_section();
@@ -791,4 +826,3 @@ static st_retcode caml_threadstatus_wait (value wrapper)
   End_roots();
   return retcode;
 }
-
