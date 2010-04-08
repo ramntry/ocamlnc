@@ -40,7 +40,7 @@
           "\\<\\(a\\(nd\\|s\\)\\|c\\(onstraint\\|lass\\)"
           "\\|ex\\(ception\\|ternal\\)\\|fun\\(ct\\(ion\\|or\\)\\)?"
           "\\|in\\(herit\\)?\\|let\\|m\\(ethod\\|utable\\|odule\\)"
-          "\\|o\\(f\\|verride\\)\\|p\\(arser\\|rivate\\)\\|rec\\|type"
+          "\\|of\\|p\\(arser\\|rivate\\)\\|rec\\|type"
           "\\|v\\(al\\|irtual\\)\\)\\>")
          nil 'ForestGreen)
 ;blocking
