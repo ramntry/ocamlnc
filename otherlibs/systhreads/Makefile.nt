@@ -27,8 +27,6 @@ CMIFILES=$(CAMLOBJS:.cmo=.cmi)
 COBJS=st_stubs_b.$(O)
 COBJS_NAT=st_stubs_n.$(O)
 
-GENFILES=thread.ml
-
 LIBNAME=threads
 
 all: lib$(LIBNAME).$(A) $(LIBNAME).cma $(CMIFILES)
@@ -69,7 +67,6 @@ partialclean:
 
 clean: partialclean
 	rm -f *.dll *.$(A) *.$(O)
-	rm -f $(GENFILES)
 
 install:
 	cp dllthreads.dll $(STUBLIBDIR)/dllthreads.dll

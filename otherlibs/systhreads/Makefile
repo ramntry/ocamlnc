@@ -25,8 +25,6 @@ NATIVECODE_C_OBJS=st_stubs_n.o
 
 THREAD_OBJS= thread.cmo mutex.cmo condition.cmo event.cmo threadUnix.cmo
 
-GENFILES=thread.ml
-
 all: libthreads.a threads.cma
 
 allopt: libthreadsnat.a threads.cmxa
@@ -70,7 +68,6 @@ partialclean:
 
 clean: partialclean
 	rm -f *.o *.a *.so
-	rm -f $(GENFILES)
 
 install:
 	if test -f dllthreads.so; then cp dllthreads.so $(STUBLIBDIR)/dllthreads.so; fi
