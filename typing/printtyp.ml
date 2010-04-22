@@ -578,7 +578,7 @@ let rec tree_of_type_decl id decl =
         tree_of_manifest (Otyp_record (List.map tree_of_label lbls)),
         decl.type_private
   in
-  (name, args, ty, priv, constraints)
+  (decl.type_metadata, name, args, ty, priv, constraints)
 
 and tree_of_constructor (name, args) =
   (name, tree_of_typlist false args)
@@ -612,7 +612,7 @@ let tree_of_value_description id decl =
     | Val_prim p -> Primitive.description_list p
     | _ -> []
   in
-  Osig_value (id, ty, prims)
+  Osig_value (decl.val_metadata, id, ty, prims)
 
 let value_description id ppf decl =
   !Oprint.out_sig_item ppf (tree_of_value_description id decl)
@@ -802,7 +802,7 @@ and tree_of_signature = function
   | Tsig_type(id, _, _) :: rem when is_row_name (Ident.name id) ->
       tree_of_signature rem
   | Tsig_type(id, decl, rs) :: rem ->
-      Osig_type(tree_of_type_decl id decl, tree_of_rec rs) ::
+      tree_of_type_declaration id decl rs ::
       tree_of_signature rem
   | Tsig_exception(id, decl) :: rem ->
       tree_of_exception_declaration id decl :: tree_of_signature rem

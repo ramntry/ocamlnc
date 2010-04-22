@@ -123,7 +123,9 @@ and expression_desc =
 
 and value_description =
   { pval_type: core_type;
-    pval_prim: string list }
+    pval_prim: string list;
+    pval_metadata: metadata list;
+   }
 
 (* Type declarations *)
 
@@ -134,7 +136,9 @@ and type_declaration =
     ptype_private: private_flag;
     ptype_manifest: core_type option;
     ptype_variance: (bool * bool) list;
-    ptype_loc: Location.t }
+    ptype_loc: Location.t;
+    ptype_metadata: metadata list;
+   }
 
 and type_kind =
     Ptype_abstract
@@ -213,7 +217,8 @@ and signature = signature_item list
 
 and signature_item =
   { psig_desc: signature_item_desc;
-    psig_loc: Location.t }
+    psig_loc: Location.t;
+   }
 
 and signature_item_desc =
     Psig_value of string * value_description

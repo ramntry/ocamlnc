@@ -58,6 +58,7 @@ let enter_type env (name, sdecl) id =
         begin match sdecl.ptype_manifest with None -> None
         | Some _ -> Some(Ctype.newvar ()) end;
       type_variance = List.map (fun _ -> true, true, true) sdecl.ptype_params;
+      type_metadata = sdecl.ptype_metadata;
     }
   in
   Env.add_type id decl env
@@ -187,6 +188,7 @@ let transl_declaration env (name, sdecl) id =
             Some (transl_simple_type env no_row sty)
         end;
       type_variance = List.map (fun _ -> true, true, true) params;
+      type_metadata = sdecl.ptype_metadata;
     } in
 
   (* Check constraints *)
@@ -722,7 +724,10 @@ let transl_value_decl env valdecl =
   let ty = Typetexp.transl_type_scheme env valdecl.pval_type in
   match valdecl.pval_prim with
     [] ->
-      { val_type = ty; val_kind = Val_reg }
+      { val_type = ty;
+        val_kind = Val_reg;
+        val_metadata = valdecl.pval_metadata;
+       }
   | decl ->
       let arity = Ctype.arity ty in
       if arity = 0 then
@@ -732,7 +737,10 @@ let transl_value_decl env valdecl =
       && prim.prim_arity > 5
       && prim.prim_native_name = ""
       then raise(Error(valdecl.pval_type.ptyp_loc, Missing_native_external));
-      { val_type = ty; val_kind = Val_prim prim }
+      { val_type = ty;
+        val_kind = Val_prim prim;
+        val_metadata = valdecl.pval_metadata;
+       }
 
 (* Translate a "with" constraint -- much simplified version of
     transl_type_decl. *)
@@ -765,6 +773,7 @@ let transl_with_constraint env id row_path sdecl =
             Some(transl_simple_type env no_row sty)
         end;
       type_variance = [];
+      type_metadata = sdecl.ptype_metadata;
     }
   in
   begin match row_path with None -> ()
@@ -794,7 +803,9 @@ let abstract_type_decl arity =
       type_kind = Type_abstract;
       type_private = Public;
       type_manifest = None;
-      type_variance = replicate_list (true, true, true) arity } in
+      type_variance = replicate_list (true, true, true) arity;
+      type_metadata = [];
+     } in
   Ctype.end_def();
   generalize_decl decl;
   decl

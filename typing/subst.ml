@@ -183,6 +183,7 @@ let type_declaration s decl =
         end;
       type_private = decl.type_private;
       type_variance = decl.type_variance;
+      type_metadata = decl.type_metadata;
     }
   in
   cleanup_types ();
@@ -241,7 +242,9 @@ let class_type s cty =
 
 let value_description s descr =
   { val_type = type_expr s descr.val_type;
-    val_kind = descr.val_kind }
+    val_kind = descr.val_kind;
+    val_metadata = descr.val_metadata;
+   }
 
 let exception_declaration s tyl =
   List.map (type_expr s) tyl

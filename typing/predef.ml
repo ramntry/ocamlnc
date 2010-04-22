@@ -91,28 +91,36 @@ let build_initial_env add_type add_exception empty_env =
      type_kind = Type_abstract;
      type_private = Public;
      type_manifest = None;
-     type_variance = []}
+     type_variance = [];
+     type_metadata = [];
+    }
   and decl_bool =
     {type_params = [];
      type_arity = 0;
      type_kind = Type_variant(["false", []; "true", []]);
      type_private = Public;
      type_manifest = None;
-     type_variance = []}
+     type_variance = [];
+     type_metadata = [];
+    }
   and decl_unit =
     {type_params = [];
      type_arity = 0;
      type_kind = Type_variant(["()", []]);
      type_private = Public;
      type_manifest = None;
-     type_variance = []}
+     type_variance = [];
+     type_metadata = [];
+    }
   and decl_exn =
     {type_params = [];
      type_arity = 0;
      type_kind = Type_variant [];
      type_private = Public;
      type_manifest = None;
-     type_variance = []}
+     type_variance = [];
+     type_metadata = [];
+    }
   and decl_array =
     let tvar = newgenvar() in
     {type_params = [tvar];
@@ -120,7 +128,9 @@ let build_initial_env add_type add_exception empty_env =
      type_kind = Type_abstract;
      type_private = Public;
      type_manifest = None;
-     type_variance = [true, true, true]}
+     type_variance = [true, true, true];
+     type_metadata = [];
+    }
   and decl_list =
     let tvar = newgenvar() in
     {type_params = [tvar];
@@ -129,7 +139,9 @@ let build_initial_env add_type add_exception empty_env =
        Type_variant(["[]", []; "::", [tvar; type_list tvar]]);
      type_private = Public;
      type_manifest = None;
-     type_variance = [true, false, false]}
+     type_variance = [true, false, false];
+     type_metadata = [];
+    }
   and decl_format6 =
     {type_params = [
        newgenvar(); newgenvar(); newgenvar();
@@ -143,7 +155,9 @@ let build_initial_env add_type add_exception empty_env =
        true, true, true; true, true, true;
        true, true, true; true, true, true;
        true, true, true; true, true, true;
-     ]}
+     ];
+     type_metadata = [];
+    }
   and decl_option =
     let tvar = newgenvar() in
     {type_params = [tvar];
@@ -151,7 +165,9 @@ let build_initial_env add_type add_exception empty_env =
      type_kind = Type_variant(["None", []; "Some", [tvar]]);
      type_private = Public;
      type_manifest = None;
-     type_variance = [true, false, false]}
+     type_variance = [true, false, false];
+     type_metadata = [];
+    }
   and decl_lazy_t =
     let tvar = newgenvar() in
     {type_params = [tvar];
@@ -159,7 +175,9 @@ let build_initial_env add_type add_exception empty_env =
      type_kind = Type_abstract;
      type_private = Public;
      type_manifest = None;
-     type_variance = [true, false, false]}
+     type_variance = [true, false, false];
+     type_metadata = [];
+    }
   in
 
   add_exception ident_match_failure

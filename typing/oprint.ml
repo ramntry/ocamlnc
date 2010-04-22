@@ -21,6 +21,9 @@ let cautious f ppf arg =
   try f ppf arg with
     Ellipsis -> fprintf ppf "..."
 
+let print_metadata ppf l =
+  List.iter (fun s -> fprintf ppf "@[<2>`%S @]" s) l
+
 let rec print_ident ppf =
   function
     Oide_ident s -> fprintf ppf "%s" s
@@ -361,7 +364,7 @@ and print_out_sig_item ppf =
         print_out_type_decl
           (if rs = Orec_next then "and" else "type")
           ppf td
-  | Osig_value (name, ty, prims) ->
+  | Osig_value (metadata, name, ty, prims) ->
       let kwd = if prims = [] then "val" else "external" in
       let pr_prims ppf =
         function
@@ -370,10 +373,10 @@ and print_out_sig_item ppf =
             fprintf ppf "@ = \"%s\"" s;
             List.iter (fun s -> fprintf ppf "@ \"%s\"" s) sl
       in
-      fprintf ppf "@[<2>%s %a :@ %a%a@]" kwd value_ident name !out_type
+      fprintf ppf "@[<2>%a%s %a :@ %a%a@]" print_metadata metadata kwd value_ident name !out_type
         ty pr_prims prims
 
-and print_out_type_decl kwd ppf (name, args, ty, priv, constraints) =
+and print_out_type_decl kwd ppf (metadata, name, args, ty, priv, constraints) =
   let print_constraints ppf params =
     List.iter
       (fun (ty1, ty2) ->
@@ -395,7 +398,7 @@ and print_out_type_decl kwd ppf (name, args, ty, priv, constraints) =
     | _ -> ()
   in
   let print_name_args ppf =
-    fprintf ppf "%s %t%a" kwd type_defined print_manifest ty
+    fprintf ppf "%s %a%t%a" kwd print_metadata metadata type_defined print_manifest ty
   in
   let ty =
     match ty with

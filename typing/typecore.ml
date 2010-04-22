@@ -588,7 +588,7 @@ let add_pattern_variables env =
   let pv = get_ref pattern_variables in
   List.fold_right
     (fun (id, ty, loc) env ->
-       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg} env in
+       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg; val_metadata = []} env in
        Env.add_annot id (Annot.Iref_internal loc) e1;
     )
     pv env
@@ -620,7 +620,9 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
          let id' = Ident.create (Ident.name id) in
          ((id', id, ty)::pv,
           Env.add_value id' {val_type = ty;
-                             val_kind = Val_ivar (Immutable, cl_num)}
+                             val_kind = Val_ivar (Immutable, cl_num);
+                             val_metadata = [];
+                            }
             env))
       !pattern_variables ([], met_env)
   in
@@ -644,11 +646,19 @@ let type_self_pattern cl_num privty val_env met_env par_env spat =
   let (val_env, met_env, par_env) =
     List.fold_right
       (fun (id, ty, _loc) (val_env, met_env, par_env) ->
-         (Env.add_value id {val_type = ty; val_kind = Val_unbound} val_env,
+         (Env.add_value id {val_type = ty;
+                            val_kind = Val_unbound;
+                            val_metadata = [];
+                           } val_env,
           Env.add_value id {val_type = ty;
-                            val_kind = Val_self (meths, vars, cl_num, privty)}
+                            val_kind = Val_self (meths, vars, cl_num, privty);
+                            val_metadata = [];
+                           }
             met_env,
-          Env.add_value id {val_type = ty; val_kind = Val_unbound} par_env))
+          Env.add_value id {val_type = ty;
+                            val_kind = Val_unbound;
+                            val_metadata = [];
+                           } par_env))
       pv (val_env, met_env, par_env)
   in
   (pat, meths, vars, val_env, met_env, par_env)
@@ -1337,7 +1347,9 @@ let rec type_exp env sexp =
       let high = type_expect env shigh (instance Predef.type_int) in
       let (id, new_env) =
         Env.enter_value param {val_type = instance Predef.type_int;
-                                val_kind = Val_reg} env in
+                               val_kind = Val_reg;
+                               val_metadata = [];
+                              } env in
       let body = type_statement new_env sbody in
       re {
         exp_desc = Texp_for(id, low, high, dir, body);
@@ -1472,7 +1484,9 @@ let rec type_exp env sexp =
                   unify env res_ty (instance typ);
                   (Texp_apply({ exp_desc = Texp_ident(Path.Pident method_id,
                                                      {val_type = method_type;
-                                                       val_kind = Val_reg});
+                                                      val_kind = Val_reg;
+                                                      val_metadata = [];
+                                                     });
                                 exp_loc = loc;
                                 exp_type = method_type;
                                 exp_env = env },
@@ -1659,6 +1673,7 @@ let rec type_exp env sexp =
         type_private = Public;
         type_manifest = None;
         type_variance = [];
+        type_metadata = [];
       }
       in
 
@@ -1748,7 +1763,10 @@ and type_argument env sarg ty_expected' =
         {pat_desc = Tpat_var id; pat_type = ty;
          pat_loc = Location.none; pat_env = env},
         {exp_type = ty; exp_loc = Location.none; exp_env = env; exp_desc =
-         Texp_ident(Path.Pident id,{val_type = ty; val_kind = Val_reg})}
+         Texp_ident(Path.Pident id,{val_type = ty;
+                                    val_kind = Val_reg;
+                                    val_metadata = [];
+                                   })}
       in
       let eta_pat, eta_var = var_pair "eta" ty_arg in
       let func texp =

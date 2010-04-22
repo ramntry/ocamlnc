@@ -85,7 +85,9 @@ module Vars  : Map.S with type key = string
 
 type value_description =
   { val_type: type_expr;                (* Type of the value *)
-    val_kind: value_kind }
+    val_kind: value_kind;
+    val_metadata: metadata list;
+   }
 
 and value_kind =
     Val_reg                             (* Regular value *)
@@ -139,8 +141,10 @@ type type_declaration =
     type_kind: type_kind;
     type_private: private_flag;
     type_manifest: type_expr option;
-    type_variance: (bool * bool * bool) list }
-            (* covariant, contravariant, weakly contravariant *)
+    type_variance: (bool * bool * bool) list; (* covariant, contravariant, weakly contravariant *)
+    type_metadata: metadata list;
+   }
+            
 
 and type_kind =
     Type_abstract

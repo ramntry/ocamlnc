@@ -468,7 +468,7 @@ structure_item:
           [{ppat_desc = Ppat_any}, exp] -> mkstr(Pstr_eval exp)
         | _ -> mkstr(Pstr_value($2, List.rev $3)) }
   | EXTERNAL val_ident COLON core_type EQUAL primitive_declaration
-      { mkstr(Pstr_primitive($2, {pval_type = $4; pval_prim = $6})) }
+      { mkstr(Pstr_primitive($2, {pval_type = $4; pval_prim = $6; pval_metadata = []})) }
   | TYPE type_declarations
       { mkstr(Pstr_type(List.rev $2)) }
   | EXCEPTION UIDENT constructor_arguments
@@ -533,10 +533,10 @@ signature:
   | signature signature_item SEMISEMI           { $2 :: $1 }
 ;
 signature_item:
-    VAL val_ident COLON core_type
-      { mksig(Psig_value($2, {pval_type = $4; pval_prim = []})) }
-  | EXTERNAL val_ident COLON core_type EQUAL primitive_declaration
-      { mksig(Psig_value($2, {pval_type = $4; pval_prim = $6})) }
+    metadata VAL val_ident COLON core_type
+      { mksig(Psig_value($3, {pval_type = $5; pval_prim = []; pval_metadata = $1})) }
+  | metadata EXTERNAL val_ident COLON core_type EQUAL primitive_declaration
+      { mksig(Psig_value($3, {pval_type = $5; pval_prim = $7; pval_metadata = $1})) }
   | TYPE type_declarations
       { mksig(Psig_type(List.rev $2)) }
   | EXCEPTION UIDENT constructor_arguments
@@ -557,6 +557,11 @@ signature_item:
       { mksig(Psig_class (List.rev $2)) }
   | CLASS TYPE class_type_declarations
       { mksig(Psig_class_type (List.rev $3)) }
+;
+
+metadata:
+    BACKQUOTE STRING metadata { $2 :: $3 }
+  | { [] }
 ;
 
 module_declaration:
@@ -1216,16 +1221,18 @@ type_declarations:
 ;
 
 type_declaration:
-    type_parameters LIDENT type_kind constraints
-      { let (params, variance) = List.split $1 in
-        let (kind, private_flag, manifest) = $3 in
-        ($2, {ptype_params = params;
-              ptype_cstrs = List.rev $4;
+    metadata type_parameters LIDENT type_kind constraints
+      { let (params, variance) = List.split $2 in
+        let (kind, private_flag, manifest) = $4 in
+        ($3, {ptype_params = params;
+              ptype_cstrs = List.rev $5;
               ptype_kind = kind;
               ptype_private = private_flag;
               ptype_manifest = manifest;
               ptype_variance = variance;
-              ptype_loc = symbol_rloc()}) }
+              ptype_loc = symbol_rloc();
+              ptype_metadata = $1;
+             }) }
 ;
 constraints:
         constraints CONSTRAINT constrain        { $3 :: $1 }
@@ -1302,7 +1309,9 @@ with_constraint:
                          ptype_manifest = Some $5;
                          ptype_private = $4;
                          ptype_variance = variance;
-                         ptype_loc = symbol_rloc()}) }
+                         ptype_loc = symbol_rloc();
+                         ptype_metadata = [];
+                        }) }
     /* used label_longident instead of type_longident to disallow
        functor applications in type path */
   | TYPE type_parameters label_longident COLONEQUAL core_type
@@ -1313,7 +1322,9 @@ with_constraint:
                               ptype_manifest = Some $5;
                               ptype_private = Public;
                               ptype_variance = variance;
-                              ptype_loc = symbol_rloc()}) }
+                              ptype_loc = symbol_rloc();
+                              ptype_metadata = [];
+                             }) }
   | MODULE mod_longident EQUAL mod_ext_longident
       { ($2, Pwith_module $4) }
   | MODULE mod_longident COLONEQUAL mod_ext_longident

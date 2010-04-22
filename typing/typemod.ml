@@ -119,7 +119,9 @@ let merge_constraint initial_env loc sg lid constr =
             type_manifest = None;
             type_variance =
               List.map (fun (c,n) -> (not n, not c, not c))
-              sdecl.ptype_variance }
+              sdecl.ptype_variance;
+            type_metadata = sdecl.ptype_metadata;
+           }
         and id_row = Ident.create (s^"#row") in
         let initial_env = Env.add_type id_row decl_row initial_env in
         let newdecl = Typedecl.transl_with_constraint
@@ -133,7 +135,7 @@ let merge_constraint initial_env loc sg lid constr =
         let newdecl =
           Typedecl.transl_with_constraint initial_env id None sdecl in
         check_type_decl env id row_id newdecl decl rs rem;
-        Tsig_type(id, newdecl, rs) :: rem
+        Tsig_type(id, {newdecl with type_metadata = decl.type_metadata @ newdecl.type_metadata}, rs) :: rem
     | (Tsig_type(id, decl, rs) :: rem, [s], (Pwith_type _ | Pwith_typesubst _))
       when Ident.name id = s ^ "#row" ->
         merge env rem namelist (Some id)
