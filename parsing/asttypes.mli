@@ -39,4 +39,4 @@ type closed_flag = Closed | Open
 
 type label = string
 
-type metadata = string
+type metadata = string list

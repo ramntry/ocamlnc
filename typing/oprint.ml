@@ -22,7 +22,7 @@ let cautious f ppf arg =
     Ellipsis -> fprintf ppf "..."
 
 let print_metadata ppf l =
-  List.iter (fun s -> fprintf ppf "@[<2>`%S @]" s) l
+  List.iter (fun s -> fprintf ppf "@[<2> `%S@]" s) l
 
 let rec print_ident ppf =
   function
@@ -373,8 +373,8 @@ and print_out_sig_item ppf =
             fprintf ppf "@ = \"%s\"" s;
             List.iter (fun s -> fprintf ppf "@ \"%s\"" s) sl
       in
-      fprintf ppf "@[<2>%a%s %a :@ %a%a@]" print_metadata metadata kwd value_ident name !out_type
-        ty pr_prims prims
+      fprintf ppf "@[<2>%s %a :@ %a%a%a@]" kwd value_ident name !out_type
+        ty pr_prims prims print_metadata metadata
 
 and print_out_type_decl kwd ppf (metadata, name, args, ty, priv, constraints) =
   let print_constraints ppf params =
@@ -398,7 +398,7 @@ and print_out_type_decl kwd ppf (metadata, name, args, ty, priv, constraints) =
     | _ -> ()
   in
   let print_name_args ppf =
-    fprintf ppf "%s %a%t%a" kwd print_metadata metadata type_defined print_manifest ty
+    fprintf ppf "%s %t%a" kwd type_defined print_manifest ty
   in
   let ty =
     match ty with
@@ -423,10 +423,11 @@ and print_out_type_decl kwd ppf (metadata, name, args, ty, priv, constraints) =
         print_private priv
         !out_type ty
   in
-  fprintf ppf "@[<2>@[<hv 2>%t%a@]%a@]"
+  fprintf ppf "@[<2>@[<hv 2>%t%a@]%a%a@]"
     print_name_args
     print_out_tkind ty
     print_constraints constraints
+    print_metadata metadata
 and print_out_constr ppf (name, tyl) =
   match tyl with
     [] -> fprintf ppf "%s" name

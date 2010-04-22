@@ -533,10 +533,10 @@ signature:
   | signature signature_item SEMISEMI           { $2 :: $1 }
 ;
 signature_item:
-    metadata VAL val_ident COLON core_type
-      { mksig(Psig_value($3, {pval_type = $5; pval_prim = []; pval_metadata = $1})) }
-  | metadata EXTERNAL val_ident COLON core_type EQUAL primitive_declaration
-      { mksig(Psig_value($3, {pval_type = $5; pval_prim = $7; pval_metadata = $1})) }
+    VAL val_ident COLON core_type metadata
+      { mksig(Psig_value($2, {pval_type = $4; pval_prim = []; pval_metadata = $5})) }
+  | EXTERNAL val_ident COLON core_type EQUAL primitive_declaration metadata
+      { mksig(Psig_value($2, {pval_type = $4; pval_prim = $6; pval_metadata = $7})) }
   | TYPE type_declarations
       { mksig(Psig_type(List.rev $2)) }
   | EXCEPTION UIDENT constructor_arguments
@@ -1221,17 +1221,17 @@ type_declarations:
 ;
 
 type_declaration:
-    metadata type_parameters LIDENT type_kind constraints
-      { let (params, variance) = List.split $2 in
-        let (kind, private_flag, manifest) = $4 in
-        ($3, {ptype_params = params;
-              ptype_cstrs = List.rev $5;
+    type_parameters LIDENT type_kind constraints metadata
+      { let (params, variance) = List.split $1 in
+        let (kind, private_flag, manifest) = $3 in
+        ($2, {ptype_params = params;
+              ptype_cstrs = List.rev $4;
               ptype_kind = kind;
               ptype_private = private_flag;
               ptype_manifest = manifest;
               ptype_variance = variance;
               ptype_loc = symbol_rloc();
-              ptype_metadata = $1;
+              ptype_metadata = $5;
              }) }
 ;
 constraints:

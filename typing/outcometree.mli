@@ -91,9 +91,9 @@ and out_sig_item =
   | Osig_modtype of string * out_module_type
   | Osig_module of string * out_module_type * out_rec_status
   | Osig_type of out_type_decl * out_rec_status
-  | Osig_value of Asttypes.metadata list * string * out_type * string list
+  | Osig_value of Asttypes.metadata * string * out_type * string list
 and out_type_decl =
-  Asttypes.metadata list * string * (string * (bool * bool)) list * out_type * Asttypes.private_flag *
+  Asttypes.metadata * string * (string * (bool * bool)) list * out_type * Asttypes.private_flag *
   (out_type * out_type) list
 and out_rec_status =
   | Orec_not

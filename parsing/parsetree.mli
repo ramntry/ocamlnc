@@ -124,7 +124,7 @@ and expression_desc =
 and value_description =
   { pval_type: core_type;
     pval_prim: string list;
-    pval_metadata: metadata list;
+    pval_metadata: metadata;
    }
 
 (* Type declarations *)
@@ -137,7 +137,7 @@ and type_declaration =
     ptype_manifest: core_type option;
     ptype_variance: (bool * bool) list;
     ptype_loc: Location.t;
-    ptype_metadata: metadata list;
+    ptype_metadata: metadata;
    }
 
 and type_kind =

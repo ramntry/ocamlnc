@@ -86,7 +86,7 @@ module Vars  : Map.S with type key = string
 type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
-    val_metadata: metadata list;
+    val_metadata: metadata;
    }
 
 and value_kind =
@@ -142,9 +142,8 @@ type type_declaration =
     type_private: private_flag;
     type_manifest: type_expr option;
     type_variance: (bool * bool * bool) list; (* covariant, contravariant, weakly contravariant *)
-    type_metadata: metadata list;
+    type_metadata: metadata;
    }
-            
 
 and type_kind =
     Type_abstract
