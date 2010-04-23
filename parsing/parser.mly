@@ -25,7 +25,7 @@ let mktyp d =
 let mkpat d =
   { ppat_desc = d; ppat_loc = symbol_rloc(); ppat_metadata = [] }
 let mkexp d =
-  { pexp_desc = d; pexp_loc = symbol_rloc() }
+  { pexp_desc = d; pexp_loc = symbol_rloc(); pexp_metadata = []  }
 let mkmty d =
   { pmty_desc = d; pmty_loc = symbol_rloc() }
 let mksig d =
@@ -45,7 +45,7 @@ let reloc_pat x = { x with ppat_loc = symbol_rloc () };;
 let reloc_exp x = { x with pexp_loc = symbol_rloc () };;
 
 let mkoperator name pos =
-  { pexp_desc = Pexp_ident(Lident name); pexp_loc = rhs_loc pos }
+  { pexp_desc = Pexp_ident(Lident name); pexp_loc = rhs_loc pos; pexp_metadata = []  }
 
 (*
   Ghost expressions and patterns:
@@ -64,7 +64,7 @@ let mkoperator name pos =
   AST node, then the location must be real; in all other cases,
   it must be ghost.
 *)
-let ghexp d = { pexp_desc = d; pexp_loc = symbol_gloc () };;
+let ghexp d = { pexp_desc = d; pexp_loc = symbol_gloc (); pexp_metadata = [] };;
 let ghpat d = { ppat_desc = d; ppat_loc = symbol_gloc (); ppat_metadata = [] };;
 let ghtyp d = { ptyp_desc = d; ptyp_loc = symbol_gloc () };;
 
@@ -113,8 +113,8 @@ let rec mktailexp = function
                loc_end = exp_el.pexp_loc.loc_end;
                loc_ghost = true}
       in
-      let arg = {pexp_desc = Pexp_tuple [e1; exp_el]; pexp_loc = l} in
-      {pexp_desc = Pexp_construct(Lident "::", Some arg, false); pexp_loc = l}
+      let arg = {pexp_desc = Pexp_tuple [e1; exp_el]; pexp_loc = l; pexp_metadata = [] } in
+      {pexp_desc = Pexp_construct(Lident "::", Some arg, false); pexp_loc = l; pexp_metadata = [] }
 
 let rec mktailpat = function
     [] ->
@@ -1025,6 +1025,7 @@ simple_expr:
       { mkexp(Pexp_send($1, $3)) }
   | LPAREN MODULE module_expr COLON package_type RPAREN
       { mkexp (Pexp_pack ($3, $5)) }
+  | LPAREN BACKQUOTE STRING expr RPAREN { let p = $4 in {p with pexp_metadata = $3 :: p.pexp_metadata} }
 ;
 simple_labeled_expr_list:
     labeled_simple_expr
@@ -1236,7 +1237,6 @@ simple_pattern:
       { mkpat(Ppat_constraint($2, $4)) }
   | LPAREN pattern COLON core_type error
       { unclosed "(" 1 ")" 5 }
-/*  | LPAREN simple_pattern AMPERSAND metadata RPAREN { let p = $2 in {p with ppat_metadata = p.ppat_metadata @ $4 } } */
   | LPAREN BACKQUOTE STRING pattern RPAREN { let p = $4 in {p with ppat_metadata = $3 :: p.ppat_metadata} }
 ;
 

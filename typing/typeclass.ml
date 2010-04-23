@@ -323,7 +323,9 @@ let make_method cl_num expr =
                      [mkpat (Ppat_alias (mkpat(Ppat_var "self-*"),
                                          "self-" ^ cl_num)),
                       expr]);
-    pexp_loc = expr.pexp_loc }
+    pexp_loc = expr.pexp_loc;
+    pexp_metadata =[];
+   }
 
 (*******************************)
 
@@ -594,7 +596,9 @@ let rec class_field cl_num self_type meths vars
              let expr =
                Typecore.type_exp val_env
                  {pexp_desc = Pexp_ident (Longident.Lident (Ident.name id));
-                  pexp_loc = Location.none}
+                  pexp_loc = Location.none;
+                  pexp_metadata = [];
+                 }
              in
              let desc =
                {val_type = expr.exp_type;
@@ -792,7 +796,9 @@ and class_expr cl_num val_env met_env scl =
                          false);
           ppat_metadata = [];
          },
-         {pexp_loc = loc; pexp_desc = Pexp_ident(Longident.Lident"*sth*")};
+         {pexp_loc = loc; pexp_desc = Pexp_ident(Longident.Lident"*sth*");
+          pexp_metadata = [];
+         };
          {ppat_loc = loc;
           ppat_desc = Ppat_construct(Longident.Lident"None", None, false);
           ppat_metadata = [];
@@ -800,9 +806,12 @@ and class_expr cl_num val_env met_env scl =
          default] in
       let smatch =
         {pexp_loc = loc; pexp_desc =
-         Pexp_match({pexp_loc = loc; pexp_desc =
-                     Pexp_ident(Longident.Lident"*opt*")},
-                    scases)} in
+         Pexp_match({pexp_loc = loc; pexp_desc = Pexp_ident(Longident.Lident"*opt*");
+                     pexp_metadata = [];
+                    },
+                    scases);
+         pexp_metadata = [];
+        } in
       let sfun =
         {pcl_loc = scl.pcl_loc; pcl_desc =
          Pcl_fun(l, None, {ppat_loc = loc;
@@ -828,7 +837,9 @@ and class_expr cl_num val_env met_env scl =
             (id,
              Typecore.type_exp val_env'
                {pexp_desc = Pexp_ident (Longident.Lident (Ident.name id));
-                pexp_loc = Location.none}))
+                pexp_loc = Location.none;
+                pexp_metadata = [];
+               }))
           pv
       in
       let rec not_function = function
@@ -954,7 +965,9 @@ and class_expr cl_num val_env met_env scl =
              let expr =
                Typecore.type_exp val_env
                  {pexp_desc = Pexp_ident (Longident.Lident (Ident.name id));
-                  pexp_loc = Location.none}
+                  pexp_loc = Location.none;
+                  pexp_metadata = [];
+                 }
              in
              Ctype.end_def ();
              Ctype.generalize expr.exp_type;

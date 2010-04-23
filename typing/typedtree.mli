@@ -45,7 +45,8 @@ type expression =
   { exp_desc: expression_desc;
     exp_loc: Location.t;
     exp_type: type_expr;
-    exp_env: Env.t }
+    exp_env: Env.t;
+   }
 
 and expression_desc =
     Texp_ident of Path.t * value_description

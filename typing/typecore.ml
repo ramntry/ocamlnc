@@ -2049,7 +2049,9 @@ and type_expect ?in_function env sexp ty_expected =
           ppat_metadata = [];
          },
          {pexp_loc = default_loc;
-          pexp_desc = Pexp_ident(Longident.Lident "*sth*")};
+          pexp_desc = Pexp_ident(Longident.Lident "*sth*");
+          pexp_metadata = [];
+         };
          {ppat_loc = default_loc;
           ppat_desc = Ppat_construct(Longident.Lident "None", None, false);
           ppat_metadata = [];
@@ -2061,11 +2063,12 @@ and type_expect ?in_function env sexp ty_expected =
         pexp_desc =
           Pexp_match ({
             pexp_loc = loc;
-            pexp_desc =
-              Pexp_ident(Longident.Lident "*opt*")
+            pexp_desc = Pexp_ident(Longident.Lident "*opt*");
+            pexp_metadata = [];
             },
             scases
-          )
+          );
+        pexp_metadata = [];
       } in
       let sfun = {
         pexp_loc = loc;
@@ -2078,11 +2081,12 @@ and type_expect ?in_function env sexp ty_expected =
               ppat_metadata = [];
              },
              {pexp_loc = loc;
-              pexp_desc =
-                Pexp_let(Default, [spat, smatch], sbody);
+              pexp_desc = Pexp_let(Default, [spat, smatch], sbody);
+              pexp_metadata = [];
              }
            ]
-         )
+         );
+        pexp_metadata = [];
       } in
       type_expect ?in_function env sfun ty_expected
   | Pexp_function (l, _, caselist) ->

@@ -84,7 +84,9 @@ and pattern_desc =
 
 type expression =
   { pexp_desc: expression_desc;
-    pexp_loc: Location.t }
+    pexp_loc: Location.t;
+    pexp_metadata: metadata;
+   }
 
 and expression_desc =
     Pexp_ident of Longident.t
