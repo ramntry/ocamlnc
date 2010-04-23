@@ -316,7 +316,7 @@ let type_constraint val_env sty sty' loc =
   try Ctype.unify val_env ty ty' with Ctype.Unify trace ->
     raise(Error(loc, Unconsistent_constraint trace))
 
-let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
+let mkpat d = { ppat_desc = d; ppat_loc = Location.none; ppat_metadata = [] }
 let make_method cl_num expr =
   { pexp_desc =
       Pexp_function ("", None,
@@ -786,11 +786,17 @@ and class_expr cl_num val_env met_env scl =
       let scases =
         [{ppat_loc = loc; ppat_desc =
           Ppat_construct(Longident.Lident"Some",
-                         Some{ppat_loc = loc; ppat_desc = Ppat_var"*sth*"},
-                         false)},
+                         Some{ppat_loc = loc; ppat_desc = Ppat_var "*sth*";
+                              ppat_metadata = [];
+                             },
+                         false);
+          ppat_metadata = [];
+         },
          {pexp_loc = loc; pexp_desc = Pexp_ident(Longident.Lident"*sth*")};
-         {ppat_loc = loc; ppat_desc =
-          Ppat_construct(Longident.Lident"None", None, false)},
+         {ppat_loc = loc;
+          ppat_desc = Ppat_construct(Longident.Lident"None", None, false);
+          ppat_metadata = [];
+         },
          default] in
       let smatch =
         {pexp_loc = loc; pexp_desc =
@@ -799,7 +805,10 @@ and class_expr cl_num val_env met_env scl =
                     scases)} in
       let sfun =
         {pcl_loc = scl.pcl_loc; pcl_desc =
-         Pcl_fun(l, None, {ppat_loc = loc; ppat_desc = Ppat_var"*opt*"},
+         Pcl_fun(l, None, {ppat_loc = loc;
+                           ppat_desc = Ppat_var "*opt*";
+                           ppat_metadata = [];
+                          },
                  {pcl_loc = scl.pcl_loc; pcl_desc =
                   Pcl_let(Default, [spat, smatch], sbody)})}
       in

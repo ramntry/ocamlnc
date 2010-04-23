@@ -169,9 +169,15 @@ and core_field_type i ppf x =
       core_type i ppf ct;
   | Pfield_var -> line i ppf "Pfield_var\n";
 
+
+and metadata i ppf = function
+  | [] -> ()
+  | l -> List.iter (fun s -> line i ppf "`%S\n" s) l
+
 and pattern i ppf x =
   line i ppf "pattern %a\n" fmt_location x.ppat_loc;
   let i = i+1 in
+  metadata i ppf x.ppat_metadata;
   match x.ppat_desc with
   | Ppat_any -> line i ppf "Ppat_any\n";
   | Ppat_var (s) -> line i ppf "Ppat_var \"%s\"\n" s;

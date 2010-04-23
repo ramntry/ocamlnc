@@ -62,6 +62,7 @@ type error =
   | Not_a_variant_type of Longident.t
   | Incoherent_label_order
   | Less_general of string * (type_expr * type_expr) list
+  | Polymorphic_type_not_allowed
 
 exception Error of Location.t * error
 
@@ -199,7 +200,7 @@ let has_variants p =
 
 
 (* pattern environment *)
-let pattern_variables = ref ([]: (Ident.t * type_expr * Location.t) list)
+let pattern_variables = ref ([]: (Ident.t * type_expr * Location.t * metadata) list)
 let pattern_force = ref ([] : (unit -> unit) list)
 let pattern_scope = ref (None : Annot.ident option);;
 let reset_pattern scope =
@@ -208,11 +209,11 @@ let reset_pattern scope =
   pattern_scope := scope;
 ;;
 
-let enter_variable loc name ty =
-  if List.exists (fun (id, _, _) -> Ident.name id = name) !pattern_variables
+let enter_variable loc name ty metadata =
+  if List.exists (fun (id, _, _, _) -> Ident.name id = name) !pattern_variables
   then raise(Error(loc, Multiply_bound_variable name));
   let id = Ident.create name in
-  pattern_variables := (id, ty, loc) :: !pattern_variables;
+  pattern_variables := (id, ty, loc, metadata) :: !pattern_variables;
   begin match !pattern_scope with
   | None -> ()
   | Some s -> Stypes.record (Stypes.An_ident (loc, name, s));
@@ -221,7 +222,7 @@ let enter_variable loc name ty =
 
 let sort_pattern_variables vs =
   List.sort
-    (fun (x,_,_) (y,_,_) -> Pervasives.compare (Ident.name x) (Ident.name y))
+    (fun (x,_,_,_) (y,_,_,_) -> Pervasives.compare (Ident.name x) (Ident.name y))
     vs
 
 let enter_orpat_variables loc env  p1_vs p2_vs =
@@ -231,7 +232,7 @@ let enter_orpat_variables loc env  p1_vs p2_vs =
   and p2_vs = sort_pattern_variables p2_vs in
 
   let rec unify_vars p1_vs p2_vs = match p1_vs, p2_vs with
-      | (x1,t1,l1)::rem1, (x2,t2,l2)::rem2 when Ident.equal x1 x2 ->
+      | (x1,t1,l1,m1)::rem1, (x2,t2,l2,m2)::rem2 when Ident.equal x1 x2 ->
           if x1==x2 then
             unify_vars rem1 rem2
           else begin
@@ -244,9 +245,9 @@ let enter_orpat_variables loc env  p1_vs p2_vs =
           (x2,x1)::unify_vars rem1 rem2
           end
       | [],[] -> []
-      | (x,_,_)::_, [] -> raise (Error (loc, Orpat_vars x))
-      | [],(x,_,_)::_  -> raise (Error (loc, Orpat_vars x))
-      | (x,_,_)::_, (y,_,_)::_ ->
+      | (x,_,_,_)::_, [] -> raise (Error (loc, Orpat_vars x))
+      | [],(x,_,_,_)::_  -> raise (Error (loc, Orpat_vars x))
+      | (x,_,_,_)::_, (y,_,_,_)::_ ->
           let min_var =
             if Ident.name x < Ident.name y then x
             else y in
@@ -400,7 +401,7 @@ let check_recordpat_labels loc lbl_pat_list closed =
 
 (* Typing of patterns *)
 
-let rec type_pat env sp =
+let rec type_pat ?(allow_poly = false) env sp =
   let loc = sp.ppat_loc in
   match sp.ppat_desc with
     Ppat_any ->
@@ -411,12 +412,14 @@ let rec type_pat env sp =
         pat_env = env }
   | Ppat_var name ->
       let ty = newvar() in
-      let id = enter_variable loc name ty in
+      let id = enter_variable loc name ty sp.ppat_metadata in
       rp {
         pat_desc = Tpat_var id;
         pat_loc = loc;
         pat_type = ty;
         pat_env = env }
+  | Ppat_constraint(_, {ptyp_desc=Ptyp_poly _; ptyp_loc = loc}) when not allow_poly ->
+      raise (Error (loc, Polymorphic_type_not_allowed))
   | Ppat_constraint({ppat_desc=Ppat_var name; ppat_loc=loc},
                     ({ptyp_desc=Ptyp_poly _} as sty)) ->
       (* explicitly polymorphic type *)
@@ -428,7 +431,7 @@ let rec type_pat env sp =
           let _, ty' = instance_poly false tyl body in
           end_def ();
           generalize ty';
-          let id = enter_variable loc name ty' in
+          let id = enter_variable loc name ty' sp.ppat_metadata in
           rp { pat_desc = Tpat_var id;
                pat_loc = loc;
                pat_type = ty;
@@ -441,7 +444,7 @@ let rec type_pat env sp =
       let ty_var = build_as_type env q in
       end_def ();
       generalize ty_var;
-      let id = enter_variable loc name ty_var in
+      let id = enter_variable loc name ty_var sp.ppat_metadata in
       rp {
         pat_desc = Tpat_alias(q, id);
         pat_loc = loc;
@@ -559,7 +562,7 @@ let rec type_pat env sp =
       unify_pat env p2 p1.pat_type;
       let alpha_env =
         enter_orpat_variables loc env p1_variables p2_variables in
-      pattern_variables := p1_variables ;
+      pattern_variables := p1_variables ; (* todo: merge metadata from p2_variables *)
       rp {
         pat_desc = Tpat_or(p1, alpha_pat alpha_env p2, None);
         pat_loc = loc;
@@ -587,8 +590,8 @@ let get_ref r =
 let add_pattern_variables env =
   let pv = get_ref pattern_variables in
   List.fold_right
-    (fun (id, ty, loc) env ->
-       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg; val_metadata = []} env in
+    (fun (id, ty, loc, m) env ->
+       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg; val_metadata = m} env in
        Env.add_annot id (Annot.Iref_internal loc) e1;
     )
     pv env
@@ -601,7 +604,7 @@ let type_pattern env spat scope =
 
 let type_pattern_list env spatl scope =
   reset_pattern scope;
-  let patl = List.map (type_pat env) spatl in
+  let patl = List.map (type_pat ~allow_poly:true env) spatl in
   let new_env = add_pattern_variables env in
   (patl, new_env, get_ref pattern_force)
 
@@ -616,12 +619,12 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
   if is_optional l then unify_pat val_env pat (type_option (newvar ()));
   let (pv, met_env) =
     List.fold_right
-      (fun (id, ty, _loc) (pv, env) ->
+      (fun (id, ty, _loc, m) (pv, env) ->
          let id' = Ident.create (Ident.name id) in
          ((id', id, ty)::pv,
           Env.add_value id' {val_type = ty;
                              val_kind = Val_ivar (Immutable, cl_num);
-                             val_metadata = [];
+                             val_metadata = m;
                             }
             env))
       !pattern_variables ([], met_env)
@@ -629,12 +632,12 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
   let val_env = add_pattern_variables val_env in
   (pat, pv, val_env, met_env)
 
-let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
+let mkpat d = { ppat_desc = d; ppat_loc = Location.none; ppat_metadata = [] }
 
 let type_self_pattern cl_num privty val_env met_env par_env spat =
   let spat =
     mkpat (Ppat_alias (mkpat(Ppat_alias (spat, "selfpat-*")),
-                       "selfpat-" ^ cl_num))
+                       ("selfpat-" ^ cl_num)))
   in
   reset_pattern None;
   let pat = type_pat val_env spat in
@@ -645,19 +648,19 @@ let type_self_pattern cl_num privty val_env met_env par_env spat =
   pattern_variables := [];
   let (val_env, met_env, par_env) =
     List.fold_right
-      (fun (id, ty, _loc) (val_env, met_env, par_env) ->
+      (fun (id, ty, _loc, m) (val_env, met_env, par_env) ->
          (Env.add_value id {val_type = ty;
                             val_kind = Val_unbound;
-                            val_metadata = [];
+                            val_metadata = m;
                            } val_env,
           Env.add_value id {val_type = ty;
                             val_kind = Val_self (meths, vars, cl_num, privty);
-                            val_metadata = [];
+                            val_metadata = m;
                            }
             met_env,
           Env.add_value id {val_type = ty;
                             val_kind = Val_unbound;
-                            val_metadata = [];
+                            val_metadata = m;
                            } par_env))
       pv (val_env, met_env, par_env)
   in
@@ -1356,6 +1359,8 @@ let rec type_exp env sexp =
         exp_loc = loc;
         exp_type = instance Predef.type_unit;
         exp_env = env }
+  | Pexp_constraint(_, Some {ptyp_desc = Ptyp_poly _; ptyp_loc = loc}, _) ->
+      raise (Error (loc, Polymorphic_type_not_allowed))
   | Pexp_constraint(sarg, sty, sty') ->
       let (arg, ty') =
         match (sty, sty') with
@@ -2039,12 +2044,16 @@ and type_expect ?in_function env sexp ty_expected =
           ppat_desc =
             Ppat_construct
               (Longident.Lident "Some",
-               Some {ppat_loc = default_loc; ppat_desc = Ppat_var "*sth*"},
-               false)},
+               Some {ppat_loc = default_loc; ppat_desc = Ppat_var "*sth*"; ppat_metadata = []},
+               false);
+          ppat_metadata = [];
+         },
          {pexp_loc = default_loc;
           pexp_desc = Pexp_ident(Longident.Lident "*sth*")};
          {ppat_loc = default_loc;
-          ppat_desc = Ppat_construct(Longident.Lident "None", None, false)},
+          ppat_desc = Ppat_construct(Longident.Lident "None", None, false);
+          ppat_metadata = [];
+         },
          default;
       ] in
       let smatch = {
@@ -2065,7 +2074,9 @@ and type_expect ?in_function env sexp ty_expected =
            l,
            None,
            [ {ppat_loc = loc;
-              ppat_desc = Ppat_var "*opt*"},
+              ppat_desc = Ppat_var "*opt*";
+              ppat_metadata = [];
+             },
              {pexp_loc = loc;
               pexp_desc =
                 Pexp_let(Default, [spat, smatch], sbody);
@@ -2476,3 +2487,5 @@ let report_error ppf = function
       report_unification_error ppf trace
         (fun ppf -> fprintf ppf "This %s has type" kind)
         (fun ppf -> fprintf ppf "which is less general than")
+  | Polymorphic_type_not_allowed ->
+      fprintf ppf "A polymorphic type is not allowed here."

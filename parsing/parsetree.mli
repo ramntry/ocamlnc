@@ -63,7 +63,9 @@ type 'a class_infos =
 
 type pattern =
   { ppat_desc: pattern_desc;
-    ppat_loc: Location.t }
+    ppat_loc: Location.t;
+    ppat_metadata: metadata;
+   }
 
 and pattern_desc =
     Ppat_any
