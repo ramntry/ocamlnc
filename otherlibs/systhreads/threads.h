@@ -18,8 +18,8 @@
 
 CAMLextern void caml_enter_blocking_section (void);
 CAMLextern void caml_leave_blocking_section (void);
-#define caml_release_runtime_system caml_leave_blocking_section
-#define caml_acquire_runtime_system caml_enter_blocking_section
+#define caml_acquire_runtime_system caml_leave_blocking_section
+#define caml_release_runtime_system caml_enter_blocking_section
 
 /* Manage the master lock around the Caml run-time system.
    Only one thread at a time can execute Caml compiled code or

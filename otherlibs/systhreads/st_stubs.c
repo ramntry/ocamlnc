@@ -88,6 +88,9 @@ struct caml_thread_struct {
 
 typedef struct caml_thread_struct * caml_thread_t;
 
+/* The "head" of the circular list of thread descriptors */
+static caml_thread_t all_threads = NULL;
+
 /* The descriptor for the currently executing thread */
 static caml_thread_t curr_thread = NULL;
 
@@ -283,15 +286,46 @@ static uintnat caml_thread_stack_usage(void)
   return sz;
 }
 
+/* Create and setup a new thread info block.
+   This block has no associated thread descriptor and
+   is not inserted in the list of threads. */
 
-/* Set up a thread info block and insert it in list of threads. */
+static caml_thread_t caml_thread_new_info(void)
+{
+  caml_thread_t th;
 
-static caml_thread_t caml_thread_setup_info(value clos)
+  th = (caml_thread_t) malloc(sizeof(struct caml_thread_struct));
+  if (th == NULL) return NULL;
+  th->descr = Val_unit;         /* filled later */
+#ifdef NATIVE_CODE
+  th->bottom_of_stack = NULL;
+  th->top_of_stack = NULL;
+  th->last_retaddr = 1;
+  th->exception_pointer = NULL;
+  th->local_roots = NULL;
+  th->exit_buf = NULL;
+#else
+  /* Allocate the stacks */
+  th->stack_low = (value *) stat_alloc(Thread_stack_size);
+  th->stack_high = th->stack_low + Thread_stack_size / sizeof(value);
+  th->stack_threshold = th->stack_low + Stack_threshold / sizeof(value);
+  th->sp = th->stack_high;
+  th->trapsp = th->stack_high;
+  th->local_roots = NULL;
+  th->external_raise = NULL;
+#endif
+  th->backtrace_pos = 0;
+  th->backtrace_buffer = NULL;
+  th->backtrace_last_exn = Val_unit;
+  return th;
+}
+
+/* Allocate a thread descriptor block. */
+
+static value caml_thread_new_descriptor(value clos)
 {
   value mu = Val_unit;
   value descr;
-  caml_thread_t th;
-
   Begin_roots2 (clos, mu)
     /* Create and initialize the termination semaphore */
     mu = caml_threadstatus_new();
@@ -301,33 +335,8 @@ static caml_thread_t caml_thread_setup_info(value clos)
     Start_closure(descr) = clos;
     Terminated(descr) = mu;
     thread_next_ident++;
-    /* Create an info block for the current thread */
-    th = (caml_thread_t) stat_alloc(sizeof(struct caml_thread_struct));
-    th->descr = descr;
-#ifdef NATIVE_CODE
-    th->bottom_of_stack = NULL;
-    th->exception_pointer = NULL;
-    th->local_roots = NULL;
-#else
-    /* Allocate the stacks */
-    th->stack_low = (value *) stat_alloc(Thread_stack_size);
-    th->stack_high = th->stack_low + Thread_stack_size / sizeof(value);
-    th->stack_threshold = th->stack_low + Stack_threshold / sizeof(value);
-    th->sp = th->stack_high;
-    th->trapsp = th->stack_high;
-    th->local_roots = NULL;
-    th->external_raise = NULL;
-#endif
-    th->backtrace_pos = 0;
-    th->backtrace_buffer = NULL;
-    th->backtrace_last_exn = Val_unit;
-    /* Add thread info block to the list of threads */
-    th->next = curr_thread->next;
-    th->prev = curr_thread;
-    curr_thread->next->prev = th;
-    curr_thread->next = th;
   End_roots();
-  return th;
+  return descr;
 }
 
 /* Remove a thread info block from the list of threads.
@@ -335,6 +344,7 @@ static caml_thread_t caml_thread_setup_info(value clos)
 
 static void caml_thread_remove_info(caml_thread_t th)
 {
+  if (th->next == th) all_threads = NULL; /* last Caml thread exiting */
   th->next->prev = th->prev;
   th->prev->next = th->next;
 #ifndef NATIVE_CODE
@@ -361,6 +371,7 @@ static void caml_thread_reinitialize(void)
   }
   curr_thread->next = curr_thread;
   curr_thread->prev = curr_thread;
+  all_threads = curr_thread;
   /* Reinitialize the master lock machinery,
      just in case the fork happened while other threads were doing
      leave_blocking_section */
@@ -411,6 +422,7 @@ CAMLprim value caml_thread_initialize(value unit)   /* ML */
     curr_thread->descr = descr;
     curr_thread->next = curr_thread;
     curr_thread->prev = curr_thread;
+    all_threads = curr_thread;
     curr_thread->backtrace_last_exn = Val_unit;
 #ifdef NATIVE_CODE
     curr_thread->exit_buf = &caml_termination_jmpbuf;
@@ -502,8 +514,16 @@ CAMLprim value caml_thread_new(value clos)          /* ML */
   caml_thread_t th;
   st_retcode err;
 
-  /* Set up and register a thread info block */
-  th = caml_thread_setup_info(clos);
+  /* Create a thread info block */
+  th = caml_thread_new_info();
+  if (th == NULL) caml_raise_out_of_memory();
+  /* Equip it with a thread descriptor */
+  th->descr = caml_thread_new_descriptor(clos);
+  /* Add thread info block to the list of threads */
+  th->next = curr_thread->next;
+  th->prev = curr_thread;
+  curr_thread->next->prev = th;
+  curr_thread->next = th;
   /* Create the new thread */
   err = st_thread_create(NULL, caml_thread_start, (void *) th);
   if (err != 0) {
@@ -531,23 +551,39 @@ CAMLexport int caml_c_thread_register(void)
 
   /* Already registered? */
   if (st_tls_get(thread_descriptor_key) != NULL) return 0;
-  /* Wait until the runtime is available */
-  st_masterlock_acquire(&caml_master_lock);
-  /* Set up and register thread info block */
-  th = caml_thread_setup_info(Val_unit /*no closure*/);
+  /* Create a thread info block */
+  th = caml_thread_new_info();
+  if (th == NULL) return 0;
 #ifdef NATIVE_CODE
-  th->exit_buf = NULL;
   th->top_of_stack = (char *) &err;
 #endif
+  /* Take master lock to protect access to the chaining of threads */
+  st_masterlock_acquire(&caml_master_lock);
+  /* Add thread info block to the list of threads */
+  if (all_threads == NULL) {
+    th->next = th;
+    th->prev = th;
+    all_threads = th;
+  } else {
+    th->next = all_threads->next;
+    th->prev = all_threads;
+    all_threads->next->prev = th;
+    all_threads->next = th;
+  }
   /* Associate the thread descriptor with the thread */
   st_tls_set(thread_descriptor_key, (void *) th);
+  /* Release the master lock */
+  st_masterlock_release(&caml_master_lock);
+  /* Now we can re-enter the run-time system and heap-allocate the descriptor */
+  leave_blocking_section();
+  th->descr = caml_thread_new_descriptor(Val_unit);  /* no closure */
   /* Create the tick thread if not already done.  */
   if (! caml_tick_thread_running) {
     err = st_thread_create(&caml_tick_thread_id, caml_thread_tick, NULL);
     if (err == 0) caml_tick_thread_running = 1;
   }
-  /* Release the runtime */
-  st_masterlock_release(&caml_master_lock);
+  /* Exit the run-time system */
+  enter_blocking_section();
   return 1;
 }
 
@@ -561,6 +597,8 @@ CAMLexport int caml_c_thread_unregister(void)
   if (th == NULL) return 0;
   /* Wait until the runtime is available */
   st_masterlock_acquire(&caml_master_lock);
+  /* Forget the thread descriptor */
+  st_tls_set(thread_descriptor_key, NULL);
   /* Remove thread info block from list of threads, and free it */
   caml_thread_remove_info(th);
   /* Release the runtime */
