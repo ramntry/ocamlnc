@@ -394,62 +394,48 @@ static void caml_thread_reinitialize(void)
 
 CAMLprim value caml_thread_initialize(value unit)   /* ML */
 {
-  value mu = Val_unit;
-  value descr;
-
   /* Protect against repeated initialization (PR#1325) */
   if (curr_thread != NULL) return Val_unit;
   /* OS-specific initialization */
   st_initialize();
   /* Initialize and acquire the master lock */
   st_masterlock_init(&caml_master_lock);
+  /* Initialize the keys */
+  st_tls_newkey(&thread_descriptor_key);
+  st_tls_newkey(&last_channel_locked_key);
   /* Set up a thread info block for the current thread */
-  Begin_root (mu);
-    /* Initialize the keys */
-    st_tls_newkey(&thread_descriptor_key);
-    st_tls_newkey(&last_channel_locked_key);
-    /* Create and initialize the termination semaphore */
-    mu = caml_threadstatus_new();
-    /* Create a descriptor for the current thread */
-    descr = alloc_small(3, 0);
-    Ident(descr) = Val_long(thread_next_ident);
-    Start_closure(descr) = Val_unit;
-    Terminated(descr) = mu;
-    thread_next_ident++;
-    /* Create an info block for the current thread */
-    curr_thread =
-      (caml_thread_t) stat_alloc(sizeof(struct caml_thread_struct));
-    curr_thread->descr = descr;
-    curr_thread->next = curr_thread;
-    curr_thread->prev = curr_thread;
-    all_threads = curr_thread;
-    curr_thread->backtrace_last_exn = Val_unit;
+  curr_thread =
+    (caml_thread_t) stat_alloc(sizeof(struct caml_thread_struct));
+  curr_thread->descr = caml_thread_new_descriptor(Val_unit);
+  curr_thread->next = curr_thread;
+  curr_thread->prev = curr_thread;
+  all_threads = curr_thread;
+  curr_thread->backtrace_last_exn = Val_unit;
 #ifdef NATIVE_CODE
-    curr_thread->exit_buf = &caml_termination_jmpbuf;
+  curr_thread->exit_buf = &caml_termination_jmpbuf;
 #endif
-    /* The stack-related fields will be filled in at the next
-       enter_blocking_section */
-    /* Associate the thread descriptor with the thread */
-    st_tls_set(thread_descriptor_key, (void *) curr_thread);
-    /* Set up the hooks */
-    prev_scan_roots_hook = scan_roots_hook;
-    scan_roots_hook = caml_thread_scan_roots;
-    enter_blocking_section_hook = caml_thread_enter_blocking_section;
-    leave_blocking_section_hook = caml_thread_leave_blocking_section;
-    try_leave_blocking_section_hook = caml_thread_try_leave_blocking_section;
+  /* The stack-related fields will be filled in at the next
+     enter_blocking_section */
+  /* Associate the thread descriptor with the thread */
+  st_tls_set(thread_descriptor_key, (void *) curr_thread);
+  /* Set up the hooks */
+  prev_scan_roots_hook = scan_roots_hook;
+  scan_roots_hook = caml_thread_scan_roots;
+  enter_blocking_section_hook = caml_thread_enter_blocking_section;
+  leave_blocking_section_hook = caml_thread_leave_blocking_section;
+  try_leave_blocking_section_hook = caml_thread_try_leave_blocking_section;
 #ifdef NATIVE_CODE
-    caml_termination_hook = st_thread_exit;
+  caml_termination_hook = st_thread_exit;
 #endif
-    caml_channel_mutex_free = caml_io_mutex_free;
-    caml_channel_mutex_lock = caml_io_mutex_lock;
-    caml_channel_mutex_unlock = caml_io_mutex_unlock;
-    caml_channel_mutex_unlock_exn = caml_io_mutex_unlock_exn;
-    prev_stack_usage_hook = caml_stack_usage_hook;
-    caml_stack_usage_hook = caml_thread_stack_usage;
-    /* Set up fork() to reinitialize the thread machinery in the child
-       (PR#4577) */
-    st_atfork(caml_thread_reinitialize);
-  End_roots();
+  caml_channel_mutex_free = caml_io_mutex_free;
+  caml_channel_mutex_lock = caml_io_mutex_lock;
+  caml_channel_mutex_unlock = caml_io_mutex_unlock;
+  caml_channel_mutex_unlock_exn = caml_io_mutex_unlock_exn;
+  prev_stack_usage_hook = caml_stack_usage_hook;
+  caml_stack_usage_hook = caml_thread_stack_usage;
+  /* Set up fork() to reinitialize the thread machinery in the child
+     (PR#4577) */
+  st_atfork(caml_thread_reinitialize);
   return Val_unit;
 }
 
