@@ -450,7 +450,18 @@ module_expr:
       { unclosed "(" 1 ")" 3 }
   | LPAREN VAL expr COLON package_type RPAREN
       { mkmod(Pmod_unpack($3, $5)) }
+  | LPAREN VAL expr COLON package_type COLONGREATER package_type RPAREN
+      { mkmod(Pmod_unpack(
+              mkexp(Pexp_constraint($3, Some(ghtyp(Ptyp_package $5)),
+                                    Some(ghtyp(Ptyp_package $7)))),
+              $7)) }
+  | LPAREN VAL expr COLONGREATER package_type RPAREN
+      { mkmod(Pmod_unpack(
+              mkexp(Pexp_constraint($3, None, Some(ghtyp(Ptyp_package $5)))),
+              $5)) }
   | LPAREN VAL expr COLON error
+      { unclosed "(" 1 ")" 5 }
+  | LPAREN VAL expr COLONGREATER error
       { unclosed "(" 1 ")" 5 }
 ;
 structure:

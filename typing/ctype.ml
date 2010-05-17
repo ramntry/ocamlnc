@@ -2964,6 +2964,23 @@ let private_abbrev env path =
     decl.type_private = Private && decl.type_manifest <> None
   with Not_found -> false
 
+(* check list inclusion, assuming lists are ordered *)
+let rec included nl1 nl2 =
+  match nl1, nl2 with
+    (a::nl1', b::nl2') ->
+      if a = b then included nl1' nl2' else
+      a > b && included nl1 nl2'
+  | ([], _) -> true
+  | (_, []) -> false
+
+let rec extract_assoc nl1 nl2 tl2 =
+  match (nl1, nl2, tl2) with
+    (a::nl1', b::nl2, t::tl2) ->
+      if a = b then t :: extract_assoc nl1' nl2 tl2
+      else extract_assoc nl1 nl2 tl2
+  | ([], _, _) -> []
+  | _ -> assert false
+
 let rec subtype_rec env trace t1 t2 cstrs =
   let t1 = repr t1 in
   let t2 = repr t2 in
@@ -3034,6 +3051,11 @@ let rec subtype_rec env trace t1 t2 cstrs =
         with Unify _ ->
           (trace, t1, t2, !univar_pairs)::cstrs
         end
+    | (Tpackage (p1, nl1, tl1), Tpackage (p2, nl2, tl2))
+      when Path.same p1 p2 && included nl2 nl1 ->
+        List.map2 (fun t1 t2 -> (trace, t1, t2, !univar_pairs))
+          (extract_assoc nl2 nl1 tl1) tl2
+        @ cstrs
     | (_, _) ->
         (trace, t1, t2, !univar_pairs)::cstrs
   end
