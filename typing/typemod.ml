@@ -41,6 +41,9 @@ type error =
   | Interface_not_compiled of string
   | Not_allowed_in_functor_body
   | With_need_typeconstr
+  | Cannot_infer_signature
+  | Not_a_packed_module of type_expr
+  | Incomplete_packed_module of type_expr
 
 exception Error of Location.t * error
 
@@ -648,6 +651,28 @@ let check_recmodule_inclusion env bindings =
     end
   in check_incl true (List.length bindings) env Subst.identity
 
+(* Helper for unpack *)
+
+let modtype_of_package env loc p nl tl =
+  let sg =
+    try match Env.find_modtype p env with
+    | Tmodtype_abstract -> assert false
+    | Tmodtype_manifest mty -> extract_sig env loc mty
+    with Not_found ->
+      raise(Error(loc, Unbound_modtype (Ctype.lid_of_path p)))
+  in
+  let ntl = List.combine nl tl in
+  let sg' =
+    List.map
+      (function
+          Tsig_type (id, ({type_params=[]} as td), rs) 
+          when List.mem (Ident.name id) nl ->
+            let ty = List.assoc (Ident.name id) ntl in
+            Tsig_type (id, {td with type_manifest = Some ty}, rs)
+        | item -> item)
+      sg in
+  Tmty_signature sg'
+
 (* Type a module value expression *)
 
 let rec type_module funct_body anchor env smod =
@@ -714,11 +739,30 @@ let rec type_module funct_body anchor env smod =
            mod_env = env;
            mod_loc = smod.pmod_loc }
 
-  | Pmod_unpack (sexp, (p, l)) ->
-      if funct_body then raise (Error (smod.pmod_loc, Not_allowed_in_functor_body));
-      let l, mty = Typetexp.create_package_mty smod.pmod_loc env (p, l) in
-      let mty = transl_modtype env mty in
-      let exp = Typecore.type_expect env sexp (Typecore.create_package_type smod.pmod_loc env (p, l)) in
+  | Pmod_unpack sexp ->
+      if funct_body then
+        raise (Error (smod.pmod_loc, Not_allowed_in_functor_body));
+      if !Clflags.principal then Ctype.begin_def ();
+      let exp = Typecore.type_exp env sexp in
+      if !Clflags.principal then begin
+        Ctype.end_def ();
+        Ctype.generalize_structure exp.exp_type
+      end;
+      let mty =
+        match Ctype.expand_head env exp.exp_type with
+          {desc = Tpackage (p, nl, tl); level = lv} ->
+            if List.exists (fun t -> Ctype.free_variables t <> []) tl then
+              raise (Error (smod.pmod_loc,
+                            Incomplete_packed_module exp.exp_type));
+            if !Clflags.principal && lv <> Btype.generic_level then
+              Location.prerr_warning smod.pmod_loc
+                (Warnings.Not_principal "this module unpacking");
+            modtype_of_package env smod.pmod_loc p nl tl
+        | {desc = Tvar} ->
+            raise (Error (smod.pmod_loc, Cannot_infer_signature))
+        | _ ->
+            raise (Error (smod.pmod_loc, Not_a_packed_module exp.exp_type))
+      in
       rm { mod_desc = Tmod_unpack(exp, mty);
            mod_type = mty;
            mod_env = env;
@@ -1115,3 +1159,15 @@ let report_error ppf = function
   | With_need_typeconstr ->
       fprintf ppf
         "Only type constructors with identical parameters can be substituted."
+
+  | Cannot_infer_signature ->
+      fprintf ppf
+        "The signature for this packaged module couldn't be inferred."
+  | Not_a_packed_module ty ->
+      fprintf ppf
+        "This expression is not a packed module. It has type@ %a"
+        type_expr ty
+  | Incomplete_packed_module ty ->
+      fprintf ppf
+        "The type of this packed module contains variables:@ %a"
+        type_expr ty

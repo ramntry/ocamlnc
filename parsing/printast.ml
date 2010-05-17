@@ -593,9 +593,8 @@ and module_expr i ppf x =
       line i ppf "Pmod_constraint\n";
       module_expr i ppf me;
       module_type i ppf mt;
-  | Pmod_unpack (e, (p, l)) ->
-      line i ppf "Pmod_unpack %a\n" fmt_longident p;
-      list i package_with ppf l;
+  | Pmod_unpack (e) ->
+      line i ppf "Pmod_unpack\n";
       expression i ppf e;
 
 and structure i ppf x = list i structure_item ppf x

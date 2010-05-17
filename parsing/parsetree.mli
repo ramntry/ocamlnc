@@ -249,7 +249,7 @@ and module_expr_desc =
   | Pmod_functor of string * module_type * module_expr
   | Pmod_apply of module_expr * module_expr
   | Pmod_constraint of module_expr * module_type
-  | Pmod_unpack of expression * package_type
+  | Pmod_unpack of expression
 
 and structure = structure_item list
 

@@ -224,7 +224,7 @@ and module_expr ppf tbl me =
       module_expr ppf tbl me1;
       module_expr ppf tbl me2;
   | Pmod_constraint (me, _) -> module_expr ppf tbl me
-  | Pmod_unpack (e, _) -> expression ppf tbl e
+  | Pmod_unpack (e) -> expression ppf tbl e
 
 and class_declaration ppf tbl cd = class_expr ppf tbl cd.pci_expr
 
