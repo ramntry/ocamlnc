@@ -750,11 +750,13 @@ let rec type_module funct_body anchor env smod =
       end;
       let mty =
         match Ctype.expand_head env exp.exp_type with
-          {desc = Tpackage (p, nl, tl); level = lv} ->
+          {desc = Tpackage (p, nl, tl)} ->
             if List.exists (fun t -> Ctype.free_variables t <> []) tl then
               raise (Error (smod.pmod_loc,
                             Incomplete_packed_module exp.exp_type));
-            if !Clflags.principal && lv <> Btype.generic_level then
+            if !Clflags.principal &&
+              not (Typecore.generalizable (Btype.generic_level-1) exp.exp_type)
+            then
               Location.prerr_warning smod.pmod_loc
                 (Warnings.Not_principal "this module unpacking");
             modtype_of_package env smod.pmod_loc p nl tl

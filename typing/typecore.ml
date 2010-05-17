@@ -1159,7 +1159,12 @@ let rec type_exp env sexp =
         exp_type = ty_res;
         exp_env = env }
   | Pexp_match(sarg, caselist) ->
+      if !Clflags.principal then begin_def ();
       let arg = type_exp env sarg in
+      if !Clflags.principal then begin
+          end_def ();
+          generalize_structure arg.exp_type;
+      end;
       let ty_res = newvar() in
       let cases, partial =
         type_cases env arg.exp_type ty_res (Some loc) caselist
@@ -2174,7 +2179,8 @@ and type_statement env sexp =
 (* Typing of match cases *)
 
 and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
-  let ty_arg' = newvar () in
+  let closed = !Clflags.principal && free_variables ~env ty_arg = [] in
+  let ty_arg' = if closed then ty_arg else newvar () in
   let pattern_force = ref [] in
   let pat_env_list =
     List.map
@@ -2186,12 +2192,13 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
         pattern_force := force @ !pattern_force;
         let pat =
           if !Clflags.principal then begin
+            if closed then unify_pat env pat (instance ty_arg');
             end_def ();
             iter_pattern (fun {pat_type=t} -> generalize_structure t) pat;
             { pat with pat_type = instance pat.pat_type }
           end else pat
         in
-        unify_pat env pat ty_arg';
+        if not closed then unify_pat env pat ty_arg';
         (pat, ext_env))
       caselist in
   (* Check for polymorphic variants to close *)
@@ -2203,7 +2210,7 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
   (* `Contaminating' unifications start here *)
   List.iter (fun f -> f()) !pattern_force;
   begin match pat_env_list with [] -> ()
-  | (pat, _) :: _ -> unify_pat env pat ty_arg
+  | (pat, _) :: _ -> if not closed then unify_pat env pat ty_arg
   end;
   let in_function = if List.length caselist = 1 then in_function else None in
   let cases =

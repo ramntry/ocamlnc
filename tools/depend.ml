@@ -228,8 +228,7 @@ and add_module bv modl =
       add_module bv mod1; add_module bv mod2
   | Pmod_constraint(modl, mty) ->
       add_module bv modl; add_modtype bv mty
-  | Pmod_unpack(e, pt) ->
-      add_package_type bv pt;
+  | Pmod_unpack(e) ->
       add_expr bv e
 
 and add_structure bv item_list =
