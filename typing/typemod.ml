@@ -654,24 +654,25 @@ let check_recmodule_inclusion env bindings =
 (* Helper for unpack *)
 
 let modtype_of_package env loc p nl tl =
-  let sg =
-    try match Env.find_modtype p env with
-    | Tmodtype_abstract -> assert false
-    | Tmodtype_manifest mty -> extract_sig env loc mty
-    with Not_found ->
-      raise(Error(loc, Unbound_modtype (Ctype.lid_of_path p)))
-  in
-  let ntl = List.combine nl tl in
-  let sg' =
-    List.map
-      (function
-          Tsig_type (id, ({type_params=[]} as td), rs) 
-          when List.mem (Ident.name id) nl ->
-            let ty = List.assoc (Ident.name id) ntl in
-            Tsig_type (id, {td with type_manifest = Some ty}, rs)
-        | item -> item)
-      sg in
-  Tmty_signature sg'
+  try match Env.find_modtype p env with
+  | Tmodtype_manifest mty when nl <> [] ->
+      let sg = extract_sig env loc mty in
+      let ntl = List.combine nl tl in
+      let sg' =
+        List.map
+          (function
+              Tsig_type (id, ({type_params=[]} as td), rs) 
+              when List.mem (Ident.name id) nl ->
+                let ty = List.assoc (Ident.name id) ntl in
+                Tsig_type (id, {td with type_manifest = Some ty}, rs)
+            | item -> item)
+          sg in
+      Tmty_signature sg'
+  | _ ->
+      if nl = [] then Tmty_ident p
+      else raise(Error(loc, Signature_expected))
+  with Not_found ->
+    raise(Error(loc, Unbound_modtype (Ctype.lid_of_path p)))
 
 (* Type a module value expression *)
 
