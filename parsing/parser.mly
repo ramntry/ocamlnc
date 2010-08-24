@@ -1200,6 +1200,12 @@ simple_pattern:
       { mkpat(Ppat_constraint($2, $4)) }
   | LPAREN pattern COLON core_type error
       { unclosed "(" 1 ")" 5 }
+  | LPAREN MODULE UIDENT RPAREN
+      { mkpat(Ppat_unpack $3) }
+  | LPAREN MODULE UIDENT COLON package_type RPAREN
+      { mkpat(Ppat_constraint(mkpat(Ppat_unpack $3),ghtyp(Ptyp_package $5))) }
+  | LPAREN MODULE UIDENT COLON package_type error
+      { unclosed "(" 1 ")" 6 }
 ;
 
 pattern_comma_list:

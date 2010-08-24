@@ -103,6 +103,7 @@ type error =
   | Not_a_variant_type of Longident.t
   | Incoherent_label_order
   | Less_general of string * (type_expr * type_expr) list
+  | Modules_not_allowed
 
 exception Error of Location.t * error
 
@@ -116,5 +117,8 @@ val type_open: (Env.t -> Location.t -> Longident.t -> Env.t) ref
 val type_object:
   (Env.t -> Location.t -> Parsetree.class_structure ->
    Typedtree.class_structure * class_signature * string list) ref
+val modtype_of_package:
+  (Env.t -> Location.t -> Path.t -> string list -> type_expr list ->
+   module_type) ref
 
 val create_package_type: Location.t -> Env.t -> Parsetree.package_type -> type_expr

@@ -76,6 +76,7 @@ let rec get_vars ((vacc, asacc) as acc) p =
   | Ppat_lazy p -> get_vars acc p
   | Ppat_constraint (pp, _) -> get_vars acc pp
   | Ppat_type _ -> acc
+  | Ppat_unpack v -> ((v, p.ppat_loc, ref false) :: vacc, asacc)
 
 and get_vars_option acc po =
   match po with

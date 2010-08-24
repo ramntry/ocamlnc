@@ -62,6 +62,7 @@ type error =
   | Not_a_variant_type of Longident.t
   | Incoherent_label_order
   | Less_general of string * (type_expr * type_expr) list
+  | Modules_not_allowed
 
 exception Error of Location.t * error
 
@@ -202,10 +203,12 @@ let has_variants p =
 let pattern_variables = ref ([]: (Ident.t * type_expr * Location.t) list)
 let pattern_force = ref ([] : (unit -> unit) list)
 let pattern_scope = ref (None : Annot.ident option);;
-let reset_pattern scope =
+let allow_modules = ref false
+let reset_pattern scope allow =
   pattern_variables := [];
   pattern_force := [];
   pattern_scope := scope;
+  allow_modules := allow;
 ;;
 
 let enter_variable loc name ty =
@@ -461,6 +464,10 @@ let check_recordpat_labels loc lbl_pat_list closed =
         end
       end
 
+(* modules in patterns *)
+
+let modtype_of_package = ref (fun _ -> assert false)
+
 (* Typing of patterns *)
 
 let rec type_pat env sp =
@@ -473,6 +480,15 @@ let rec type_pat env sp =
         pat_type = newvar();
         pat_env = env }
   | Ppat_var name ->
+      let ty = newvar() in
+      let id = enter_variable loc name ty in
+      rp {
+        pat_desc = Tpat_var id;
+        pat_loc = loc;
+        pat_type = ty;
+        pat_env = env }
+  | Ppat_unpack name ->
+      if not !allow_modules then raise (Error (loc, Modules_not_allowed));
       let ty = newvar() in
       let id = enter_variable loc name ty in
       rp {
@@ -642,26 +658,33 @@ let get_ref r =
 let add_pattern_variables env =
   let pv = get_ref pattern_variables in
   List.fold_right
-    (fun (id, ty, loc) env ->
-       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg} env in
-       Env.add_annot id (Annot.Iref_internal loc) e1;
+    (fun (id, ty, loc) (env, unpacks) ->
+       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg} env
+       and unpacks =
+         let name = Ident.name id in
+         match (repr ty).desc with
+         | Tpackage (p, nl, tl) when 'A' <= name.[0] && name.[0] <= 'Z' ->
+             (name, loc) :: unpacks
+         | _ -> unpacks
+       in
+       (Env.add_annot id (Annot.Iref_internal loc) e1, unpacks)
     )
-    pv env
+    pv (env, [])
 
 let type_pattern env spat scope =
-  reset_pattern scope;
+  reset_pattern scope true;
   let pat = type_pat env spat in
-  let new_env = add_pattern_variables env in
-  (pat, new_env, get_ref pattern_force)
+  let new_env, unpacks = add_pattern_variables env in
+  (pat, new_env, get_ref pattern_force, unpacks)
 
 let type_pattern_list env spatl scope =
-  reset_pattern scope;
+  reset_pattern scope false;
   let patl = List.map (type_pat env) spatl in
-  let new_env = add_pattern_variables env in
+  let new_env, _ = add_pattern_variables env in
   (patl, new_env, get_ref pattern_force)
 
 let type_class_arg_pattern cl_num val_env met_env l spat =
-  reset_pattern None;
+  reset_pattern None false;
   let pat = type_pat val_env spat in
   if has_variants pat then begin
     Parmatch.pressure_variants val_env [pat];
@@ -679,7 +702,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
             env))
       !pattern_variables ([], met_env)
   in
-  let val_env = add_pattern_variables val_env in
+  let val_env, _ = add_pattern_variables val_env in
   (pat, pv, val_env, met_env)
 
 let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
@@ -689,7 +712,7 @@ let type_self_pattern cl_num privty val_env met_env par_env spat =
     mkpat (Ppat_alias (mkpat(Ppat_alias (spat, "selfpat-*")),
                        "selfpat-" ^ cl_num))
   in
-  reset_pattern None;
+  reset_pattern None false;
   let pat = type_pat val_env spat in
   List.iter (fun f -> f()) (get_ref pattern_force);
   let meths = ref Meths.empty in
@@ -2188,7 +2211,7 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
         let loc = sexp.pexp_loc in
         if !Clflags.principal then begin_def ();
         let scope = Some (Annot.Idef loc) in
-        let (pat, ext_env, force) = type_pattern env spat scope in
+        let (pat, ext_env, force, unpacks) = type_pattern env spat scope in
         pattern_force := force @ !pattern_force;
         let pat =
           if !Clflags.principal then begin
@@ -2199,7 +2222,7 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
           end else pat
         in
         if not closed then unify_pat env pat ty_arg';
-        (pat, ext_env))
+        (pat, (ext_env, unpacks)))
       caselist in
   (* Check for polymorphic variants to close *)
   let patl = List.map fst pat_env_list in
@@ -2215,7 +2238,16 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
   let in_function = if List.length caselist = 1 then in_function else None in
   let cases =
     List.map2
-      (fun (pat, ext_env) (spat, sexp) ->
+      (fun (pat, (ext_env, unpacks)) (spat, sexp) ->
+        let sexp =
+          List.fold_left
+            (fun sexp (name, loc) ->
+              {pexp_loc = sexp.pexp_loc; pexp_desc = Pexp_letmodule (
+               name,
+               {pmod_loc = loc; pmod_desc = Pmod_unpack
+                  {pexp_desc=Pexp_ident(Longident.Lident name); pexp_loc=loc}},
+               sexp)})
+            sexp unpacks in
         let exp = type_expect ?in_function ext_env sexp ty_res in
         (pat, exp))
       pat_env_list caselist
@@ -2475,3 +2507,5 @@ let report_error ppf = function
       report_unification_error ppf trace
         (fun ppf -> fprintf ppf "This %s has type" kind)
         (fun ppf -> fprintf ppf "which is less general than")
+  | Modules_not_allowed ->
+      fprintf ppf "Modules are not allowed in this pattern."

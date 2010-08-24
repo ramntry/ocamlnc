@@ -209,6 +209,8 @@ and pattern i ppf x =
   | Ppat_type li ->
       line i ppf "Ppat_type";
       longident i ppf li
+  | Ppat_unpack s ->
+      line i ppf "Ppat_unpack \"%s\"\n" s;
 
 and expression i ppf x =
   line i ppf "expression %a\n" fmt_location x.pexp_loc;

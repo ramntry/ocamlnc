@@ -79,6 +79,7 @@ and pattern_desc =
   | Ppat_constraint of pattern * core_type
   | Ppat_type of Longident.t
   | Ppat_lazy of pattern
+  | Ppat_unpack of string
 
 type expression =
   { pexp_desc: expression_desc;

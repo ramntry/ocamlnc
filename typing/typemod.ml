@@ -674,6 +674,8 @@ let modtype_of_package env loc p nl tl =
   with Not_found ->
     raise(Error(loc, Unbound_modtype (Ctype.lid_of_path p)))
 
+let () = Typecore.modtype_of_package := modtype_of_package
+
 (* Type a module value expression *)
 
 let rec type_module funct_body anchor env smod =
