@@ -1,3 +1,7 @@
+(* Implicit unpack allows to omit the signature in (val ...) expressions.
+   It also adds (module M : S) and (module M) patterns, relying on
+   implicit (val ...) for the implementation. *)
+
 module type S = sig type t val x : t end;;
 let f (module M : S with type t = int) = M.x;;
 let f (module M : S with type t = 'a) = M.x;; (* Error *)
@@ -10,6 +14,12 @@ let f (type a) ({s=(module M)} : a s) = M.x;;
 type s = {s: (module S with type t = int)};;
 let f {s=(module M)} = M.x;;
 let f {s=(module M)} {s=(module N)} = M.x + N.x;;
+
+module type S = sig val x : int end;;
+let f (module M : S) y (module N : S) = M.x + y + N.x;;
+
+(* GADTs from the manual *)
+(* the only modification is in to_string *)
 
 module TypEq : sig
   type ('a, 'b) t
