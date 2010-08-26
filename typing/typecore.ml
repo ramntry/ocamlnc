@@ -63,6 +63,8 @@ type error =
   | Incoherent_label_order
   | Less_general of string * (type_expr * type_expr) list
   | Modules_not_allowed
+  | Cannot_infer_signature
+  | Not_a_packed_module of type_expr
 
 exception Error of Location.t * error
 
@@ -77,9 +79,9 @@ let type_module =
 let type_open =
   ref (fun _ -> assert false)
 
-(* Forward declaration, to be filled in by Typemod.modtype_of_package *)
+(* Forward declaration, to be filled in by Typemod.type_package *)
 
-let modtype_of_package =
+let type_package =
   ref (fun _ -> assert false)
 
 (* Forward declaration, to be filled in by Typeclass.class_structure *)
@@ -1408,10 +1410,10 @@ let rec type_exp env sexp =
             if !Clflags.principal then begin
               end_def ();
               generalize_structure ty;
-              let ty1 = instance ty and ty2 = instance ty in
-              (type_expect env sarg ty1, ty2)
+              let ty2 = instance ty in
+              (type_argument env sarg ty, ty2)
             end else
-              (type_expect env sarg ty, ty)
+              (type_argument env sarg ty, ty)
         | (None, Some sty') ->
             let (ty', force) =
               Typetexp.transl_simple_type_delayed env sty'
@@ -1463,6 +1465,7 @@ let rec type_exp env sexp =
             end;
             (arg, ty')
         | (Some sty, Some sty') ->
+            if !Clflags.principal then begin_def ();
             let (ty, force) =
               Typetexp.transl_simple_type_delayed env sty
             and (ty', force') =
@@ -1474,7 +1477,13 @@ let rec type_exp env sexp =
             with Subtype (tr1, tr2) ->
               raise(Error(loc, Not_subtype(tr1, tr2)))
             end;
-            (type_expect env sarg ty, ty')
+            if !Clflags.principal then begin
+              end_def ();
+              generalize_structure ty;
+              generalize_structure ty';
+              (type_argument env sarg ty, instance ty')
+            end else
+              (type_argument env sarg ty, ty')
       in
       re {
         exp_desc = arg.exp_desc;
@@ -1734,18 +1743,8 @@ let rec type_exp env sexp =
       (* non-expansive if the body is non-expansive, so we don't introduce
          any new extra node in the typed AST. *)
       re { body with exp_loc = sexp.pexp_loc; exp_type = ety }
-  | Pexp_pack (m, (p, l)) ->
-      let loc = sexp.pexp_loc in
-      let l, mty = Typetexp.create_package_mty loc env (p, l) in
-      let m = {pmod_desc = Pmod_constraint (m, mty); pmod_loc = loc} in
-      let context = Typetexp.narrow () in
-      let modl = !type_module env m in
-      Typetexp.widen context;
-      re {
-        exp_desc = Texp_pack modl;
-        exp_loc = loc;
-        exp_type = create_package_type loc env (p, l);
-        exp_env = env }
+  | Pexp_pack m ->
+      raise (Error (loc, Cannot_infer_signature))
   | Pexp_open (lid, e) ->
       type_exp (!type_open env sexp.pexp_loc lid) e
 
@@ -1814,6 +1813,31 @@ and type_argument env sarg ty_expected' =
       re { texp with exp_type = ty_fun; exp_desc =
            Texp_let (Nonrecursive, [let_pat, texp], func let_var) }
       end
+  | _, {pexp_desc = Pexp_pack m; pexp_loc = loc} ->
+      let (p, nl, tl) =
+        match Ctype.expand_head env ty_expected with
+          {desc = Tpackage (p, nl, tl)} ->
+            if !Clflags.principal &&
+              (Ctype.expand_head env ty_expected').level < Btype.generic_level
+            then
+              Location.prerr_warning loc
+                (Warnings.Not_principal "this module packing");
+            (p, nl, tl)
+        | {desc = Tvar} ->
+            raise (Error (loc, Cannot_infer_signature))
+        | _ ->
+            raise (Error (loc, Not_a_packed_module ty_expected))
+      in
+      let context = Typetexp.narrow () in
+      let (modl, tl') = !type_package env m p nl tl in
+      Typetexp.widen context;
+      let exp = {
+        exp_desc = Texp_pack modl;
+        exp_loc = loc;
+        exp_type = newty (Tpackage (p, nl, tl'));
+        exp_env = env } in
+      unify_exp env exp ty_expected;
+      re {exp with exp_type = ty_expected}
   | _ ->
       type_expect env sarg ty_expected
 
@@ -2522,3 +2546,10 @@ let report_error ppf = function
         (fun ppf -> fprintf ppf "which is less general than")
   | Modules_not_allowed ->
       fprintf ppf "Modules are not allowed in this pattern."
+  | Cannot_infer_signature ->
+      fprintf ppf
+        "The signature for this packaged module couldn't be inferred."
+  | Not_a_packed_module ty ->
+      fprintf ppf
+        "This expression is packed module, but the expected type is@ %a"
+        type_expr ty

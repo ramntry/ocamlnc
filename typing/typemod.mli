@@ -53,7 +53,6 @@ type error =
   | Interface_not_compiled of string
   | Not_allowed_in_functor_body
   | With_need_typeconstr
-  | Cannot_infer_signature
   | Not_a_packed_module of type_expr
   | Incomplete_packed_module of type_expr
 

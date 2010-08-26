@@ -323,9 +323,8 @@ and expression i ppf x =
   | Pexp_newtype (s, e) ->
       line i ppf "Pexp_newtype \"%s\"\n" s;
       expression i ppf e
-  | Pexp_pack (me, (p,l)) ->
-      line i ppf "Pexp_pack %a" fmt_longident p;
-      list i package_with ppf l;
+  | Pexp_pack me ->
+      line i ppf "Pexp_pack";
       module_expr i ppf me
   | Pexp_open (m, e) ->
       line i ppf "Pexp_open \"%a\"\n" fmt_longident m;

@@ -1,14 +1,23 @@
-(* Implicit unpack allows to omit the signature in (val ...) expressions.
+(*
+   Implicit unpack allows to omit the signature in (val ...) expressions.
+
    It also adds (module M : S) and (module M) patterns, relying on
-   implicit (val ...) for the implementation. *)
+   implicit (val ...) for the implementation. Such patterns can only
+   be used in function definition, match clauses, and let ... in.
+
+   New: implicit pack is also supported, and you only need to be able
+   to infer the the module type path from the context.
+ *)
 (* ocaml -principal *)
 
 module type S = sig type t val x : t end;;
 let f (module M : S with type t = int) = M.x;;
 let f (module M : S with type t = 'a) = M.x;; (* Error *)
 let f (type a) (module M : S with type t = a) = M.x;;
+f (module struct type t = int let x = 1 end);;
 
 type 'a s = {s: (module S with type t = 'a)};;
+{s=(module struct type t = int let x = 1 end)};;
 let f {s=(module M)} = M.x;; (* Error *)
 let f (type a) ({s=(module M)} : a s) = M.x;;
 
@@ -18,13 +27,21 @@ let f {s=(module M)} {s=(module N)} = M.x + N.x;;
 
 module type S = sig val x : int end;;
 let f (module M : S) y (module N : S) = M.x + y + N.x;;
+let m = (module struct let x = 3 end);; (* Error *)
 let m = (module struct let x = 3 end : S);;
 f m 1 m;;
+f m 1 (module struct let x = 2 end);;
 
 let (module M) = m in M.x;;
 let (module M) = m;; (* Error: only allowed in [let .. in] *)
 class c = let (module M) = m in object end;; (* Error again *)
 module M = (val m);;
+
+module type S' = sig val f : int -> int end;;
+(* Even works with recursion, but must be fully explicit *)
+let rec (module M : S') =
+  (module struct let f n = if n <= 0 then 1 else n * M.f (n-1) end : S')
+in M.f 3;;
 
 (* GADTs from the manual *)
 (* the only modification is in to_string *)
