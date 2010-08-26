@@ -77,6 +77,10 @@ let type_module =
 let type_open =
   ref (fun _ -> assert false)
 
+(* Forward declaration, to be filled in by Typemod.modtype_of_package *)
+
+let modtype_of_package =
+  ref (fun _ -> assert false)
 
 (* Forward declaration, to be filled in by Typeclass.class_structure *)
 let type_object =
@@ -204,21 +208,28 @@ let pattern_variables = ref ([]: (Ident.t * type_expr * Location.t) list)
 let pattern_force = ref ([] : (unit -> unit) list)
 let pattern_scope = ref (None : Annot.ident option);;
 let allow_modules = ref false
+let module_variables = ref ([] : (string * Location.t) list)
 let reset_pattern scope allow =
   pattern_variables := [];
   pattern_force := [];
   pattern_scope := scope;
   allow_modules := allow;
+  module_variables := [];
 ;;
 
-let enter_variable loc name ty =
+let enter_variable ?(is_module=false) loc name ty =
   if List.exists (fun (id, _, _) -> Ident.name id = name) !pattern_variables
   then raise(Error(loc, Multiply_bound_variable name));
   let id = Ident.create name in
   pattern_variables := (id, ty, loc) :: !pattern_variables;
-  begin match !pattern_scope with
-  | None -> ()
-  | Some s -> Stypes.record (Stypes.An_ident (loc, name, s));
+  if is_module then begin
+    (* Note: unpack patterns enter a variable of the same name *)
+    if not !allow_modules then raise (Error (loc, Modules_not_allowed));
+    module_variables := (name, loc) :: !module_variables
+  end else begin
+    match !pattern_scope with
+    | None -> ()
+    | Some s -> Stypes.record (Stypes.An_ident (loc, name, s));
   end;
   id
 
@@ -464,10 +475,6 @@ let check_recordpat_labels loc lbl_pat_list closed =
         end
       end
 
-(* modules in patterns *)
-
-let modtype_of_package = ref (fun _ -> assert false)
-
 (* Typing of patterns *)
 
 let rec type_pat env sp =
@@ -488,9 +495,8 @@ let rec type_pat env sp =
         pat_type = ty;
         pat_env = env }
   | Ppat_unpack name ->
-      if not !allow_modules then raise (Error (loc, Modules_not_allowed));
       let ty = newvar() in
-      let id = enter_variable loc name ty in
+      let id = enter_variable loc name ty ~is_module:true in
       rp {
         pat_desc = Tpat_var id;
         pat_loc = loc;
@@ -657,19 +663,13 @@ let get_ref r =
 
 let add_pattern_variables env =
   let pv = get_ref pattern_variables in
-  List.fold_right
-    (fun (id, ty, loc) (env, unpacks) ->
-       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg} env
-       and unpacks =
-         let name = Ident.name id in
-         match (repr ty).desc with
-         | Tpackage (p, nl, tl) when 'A' <= name.[0] && name.[0] <= 'Z' ->
-             (name, loc) :: unpacks
-         | _ -> unpacks
-       in
-       (Env.add_annot id (Annot.Iref_internal loc) e1, unpacks)
+  (List.fold_right
+    (fun (id, ty, loc) env ->
+       let e1 = Env.add_value id {val_type = ty; val_kind = Val_reg} env in
+       Env.add_annot id (Annot.Iref_internal loc) e1
     )
-    pv (env, [])
+    pv env,
+   get_ref module_variables)
 
 let type_pattern env spat scope =
   reset_pattern scope true;
@@ -677,11 +677,11 @@ let type_pattern env spat scope =
   let new_env, unpacks = add_pattern_variables env in
   (pat, new_env, get_ref pattern_force, unpacks)
 
-let type_pattern_list env spatl scope =
-  reset_pattern scope false;
+let type_pattern_list env spatl scope allow =
+  reset_pattern scope allow;
   let patl = List.map (type_pat env) spatl in
-  let new_env, _ = add_pattern_variables env in
-  (patl, new_env, get_ref pattern_force)
+  let new_env, unpacks = add_pattern_variables env in
+  (patl, new_env, get_ref pattern_force, unpacks)
 
 let type_class_arg_pattern cl_num val_env met_env l spat =
   reset_pattern None false;
@@ -1080,6 +1080,16 @@ let create_package_type loc env (p, l) =
                    List.map fst l,
                    List.map (Typetexp.transl_simple_type env false) (List.map snd l)))
 
+let wrap_unpacks sexp unpacks =
+  List.fold_left
+    (fun sexp (name, loc) ->
+      {pexp_loc = sexp.pexp_loc; pexp_desc = Pexp_letmodule (
+       name,
+       {pmod_loc = loc; pmod_desc = Pmod_unpack
+          {pexp_desc=Pexp_ident(Longident.Lident name); pexp_loc=loc}},
+       sexp)})
+    sexp unpacks
+
 (* Typing of expressions *)
 
 let unify_exp env exp expected_ty =
@@ -1143,8 +1153,9 @@ let rec type_exp env sexp =
         | Nonrecursive -> Some (Annot.Idef sbody.pexp_loc)
         | Default -> None
       in
-      let (pat_exp_list, new_env) = type_let env rec_flag spat_sexp_list scp in
-      let body = type_exp new_env sbody in
+      let (pat_exp_list, new_env, unpacks) =
+        type_let env rec_flag spat_sexp_list scp true in
+      let body = type_exp new_env (wrap_unpacks sbody unpacks) in
       re {
         exp_desc = Texp_let(rec_flag, pat_exp_list, body);
         exp_loc = loc;
@@ -2033,8 +2044,10 @@ and type_expect ?in_function env sexp ty_expected =
   | Pexp_construct(lid, sarg, explicit_arity) ->
       type_construct env loc lid sarg explicit_arity ty_expected
   | Pexp_let(rec_flag, spat_sexp_list, sbody) ->
-      let (pat_exp_list, new_env) = type_let env rec_flag spat_sexp_list None in
-      let body = type_expect new_env sbody ty_expected in
+      let (pat_exp_list, new_env, unpacks) =
+        type_let env rec_flag spat_sexp_list None true in
+      let body =
+        type_expect new_env (wrap_unpacks sbody unpacks) ty_expected in
       re {
         exp_desc = Texp_let(rec_flag, pat_exp_list, body);
         exp_loc = loc;
@@ -2239,15 +2252,7 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
   let cases =
     List.map2
       (fun (pat, (ext_env, unpacks)) (spat, sexp) ->
-        let sexp =
-          List.fold_left
-            (fun sexp (name, loc) ->
-              {pexp_loc = sexp.pexp_loc; pexp_desc = Pexp_letmodule (
-               name,
-               {pmod_loc = loc; pmod_desc = Pmod_unpack
-                  {pexp_desc=Pexp_ident(Longident.Lident name); pexp_loc=loc}},
-               sexp)})
-            sexp unpacks in
+        let sexp = wrap_unpacks sexp unpacks in
         let exp = type_expect ?in_function ext_env sexp ty_res in
         (pat, exp))
       pat_env_list caselist
@@ -2262,11 +2267,12 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
 
 (* Typing of let bindings *)
 
-and type_let env rec_flag spat_sexp_list scope =
+and type_let env rec_flag spat_sexp_list scope allow =
   begin_def();
   if !Clflags.principal then begin_def ();
   let spatl = List.map (fun (spat, sexp) -> spat) spat_sexp_list in
-  let (pat_list, new_env, force) = type_pattern_list env spatl scope in
+  let (pat_list, new_env, force, unpacks) =
+    type_pattern_list env spatl scope allow in
   if rec_flag = Recursive then
     List.iter2
       (fun pat (_, sexp) ->
@@ -2301,6 +2307,8 @@ and type_let env rec_flag spat_sexp_list scope =
   let exp_list =
     List.map2
       (fun (spat, sexp) pat ->
+        let sexp =
+          if rec_flag = Recursive then wrap_unpacks sexp unpacks else sexp in
         match pat.pat_type.desc with
         | Tpoly (ty, tl) ->
             begin_def ();
@@ -2323,9 +2331,14 @@ and type_let env rec_flag spat_sexp_list scope =
   List.iter
     (fun pat -> iter_pattern (fun pat -> generalize pat.pat_type) pat)
     pat_list;
-  (List.combine pat_list exp_list, new_env)
+  (List.combine pat_list exp_list, new_env, unpacks)
 
 (* Typing of toplevel bindings *)
+
+let type_let env rec_flag spat_sexp_list scope =
+  let (pat_exp_list, new_env, unpacks) =
+    type_let env rec_flag spat_sexp_list scope false in
+  (pat_exp_list, new_env)
 
 let type_binding env rec_flag spat_sexp_list scope =
   Typetexp.reset_type_variables();
