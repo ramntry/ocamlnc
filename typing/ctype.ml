@@ -1920,9 +1920,9 @@ let rec filter_arrow env t l =
   let t = expand_head_unif env t in
   match t.desc with
     Tvar ->
-      let t1 = newvar () and t2 = newvar () in
-      let t' = newty (Tarrow (l, t1, t2, Cok)) in
-      update_level env t.level t';
+      let lv = t.level in
+      let t1 = newvar2 lv and t2 = newvar2 lv in
+      let t' = newty2 lv (Tarrow (l, t1, t2, Cok)) in
       link_type t t';
       (t1, t2)
   | Tarrow(l', t1, t2, _)
