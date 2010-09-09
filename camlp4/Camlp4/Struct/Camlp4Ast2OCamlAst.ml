@@ -204,6 +204,8 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | <:ctyp< '$s$ >> -> [s]
     | _ -> assert False ];
 
+  value mkwithc_forward = ref (fun _ -> assert False);
+
   value rec ctyp =
     fun
     [ TyId loc i ->
@@ -282,19 +284,10 @@ module Make (Ast : Sig.Camlp4Ast) = struct
         [mkfield loc (Pfield lab (mkpolytype (ctyp t))) :: acc]
     | _ -> assert False ]
 
-  and package_type_constraints wc acc =
-    match wc with
-    [ <:with_constr<>> -> acc
-    | <:with_constr< type $lid:id$ = $ct$ >> ->
-        [(id, ctyp ct) :: acc]
-    | <:with_constr< $wc1$ and $wc2$ >> ->
-        package_type_constraints wc1 (package_type_constraints wc2 acc)
-    | _ -> error (loc_of_with_constr wc) "unexpected `with constraint' for a package type" ]
-
   and package_type : module_type -> package_type =
     fun
     [ <:module_type< $id:i$ with $wc$ >> ->
-      (long_uident i, package_type_constraints wc [])
+      (long_uident i, mkwithc_forward.val wc [])
     | <:module_type< $id:i$ >> -> (long_uident i, [])
     | mt -> error (loc_of_module_type mt) "unexpected package type" ]
   ;
@@ -422,6 +415,8 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | <:with_constr< $wc1$ and $wc2$ >> -> mkwithc wc1 (mkwithc wc2 acc)
     | <:with_constr@loc< $anti:_$ >> ->
          error loc "bad with constraint (antiquotation)" ];
+
+  mkwithc_forward.val := mkwithc;
 
   value rec patt_fa al =
     fun

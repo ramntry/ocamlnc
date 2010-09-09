@@ -14483,7 +14483,7 @@ module Struct =
             and package_type : module_type -> package_type =
               function
               | Ast.MtWit (_, (Ast.MtId (_, i)), wc) ->
-                  ((long_uident i), (package_type_constraints wc []))
+                  assert false
               | Ast.MtId (_, i) -> ((long_uident i), [])
               | mt -> error (loc_of_module_type mt) "unexpected package type"
               
