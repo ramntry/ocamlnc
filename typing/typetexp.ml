@@ -133,7 +133,7 @@ let transl_package_type fake loc env (p, l) transl =
     List.map
       (fun (_, c) ->
         match c with
-        | Pwith_type {ptype_params = [];
+        | Pwith_type {ptype_params = params;
                       ptype_cstrs = [];
                       ptype_kind = Ptype_abstract;
                       ptype_private = Asttypes.Public;
@@ -141,6 +141,8 @@ let transl_package_type fake loc env (p, l) transl =
                       ptype_variance = variance;
                       ptype_loc = loc}
             when List.for_all (function (false, false) -> true | _ -> false) variance ->
+              let t = {ptyp_desc = Ptyp_poly(params, t);
+                       ptyp_loc = t.ptyp_loc} in
               transl t
         | Pwith_type {ptype_loc = loc}
         | Pwith_typesubst {ptype_loc = loc} ->
