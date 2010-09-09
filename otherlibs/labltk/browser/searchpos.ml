@@ -100,7 +100,28 @@ type skind = [`Type|`Class|`Module|`Modtype]
 let found_sig = ref ([] : ((skind * Longident.t) * Env.t * Location.t) list)
 let add_found_sig = add_found ~found:found_sig
 
-let rec search_pos_type t ~pos ~env =
+let rec search_pos_type_decl td ~pos ~env =
+  if in_loc ~pos td.ptype_loc then begin
+    begin match td.ptype_manifest with
+      Some t -> search_pos_type t ~pos ~env
+    | None -> ()
+    end;
+    let rec search_tkind = function
+      Ptype_abstract -> ()
+    | Ptype_variant dl ->
+        List.iter dl
+          ~f:(fun (_, tl, _) -> List.iter tl ~f:(search_pos_type ~pos ~env))
+    | Ptype_record dl ->
+        List.iter dl ~f:(fun (_, _, t, _) -> search_pos_type t ~pos ~env) in
+    search_tkind td.ptype_kind;
+    List.iter td.ptype_cstrs ~f:
+      begin fun (t1, t2, _) ->
+        search_pos_type t1 ~pos ~env;
+        search_pos_type t2 ~pos ~env
+      end
+  end
+
+and search_pos_type t ~pos ~env =
   if in_loc ~pos t.ptyp_loc then
   begin match t.ptyp_desc with
     Ptyp_any
@@ -130,8 +151,12 @@ let rec search_pos_type t ~pos ~env =
       add_found_sig (`Type, lid) ~env ~loc:t.ptyp_loc
   | Ptyp_alias (t, _)
   | Ptyp_poly (_, t) -> search_pos_type ~pos ~env t
-  | Ptyp_package (_, stl) ->
-     List.iter stl ~f:(fun (_, ty) -> search_pos_type ty ~pos ~env)
+  | Ptyp_package (_, l) ->
+      List.iter l ~f:
+        begin function
+            _, Pwith_type t -> search_pos_type_decl t ~pos ~env
+          | _ -> ()
+        end
   end
 
 let rec search_pos_class_type cl ~pos ~env =
@@ -159,27 +184,6 @@ let rec search_pos_class_type cl ~pos ~env =
         search_pos_type ty ~pos ~env;
         search_pos_class_type cty ~pos ~env
     end
-
-let search_pos_type_decl td ~pos ~env =
-  if in_loc ~pos td.ptype_loc then begin
-    begin match td.ptype_manifest with
-      Some t -> search_pos_type t ~pos ~env
-    | None -> ()
-    end;
-    let rec search_tkind = function
-      Ptype_abstract -> ()
-    | Ptype_variant dl ->
-        List.iter dl
-          ~f:(fun (_, tl, _) -> List.iter tl ~f:(search_pos_type ~pos ~env))
-    | Ptype_record dl ->
-        List.iter dl ~f:(fun (_, _, t, _) -> search_pos_type t ~pos ~env) in
-    search_tkind td.ptype_kind;
-    List.iter td.ptype_cstrs ~f:
-      begin fun (t1, t2, _) ->
-        search_pos_type t1 ~pos ~env;
-        search_pos_type t2 ~pos ~env
-      end
-  end
 
 let rec search_pos_signature l ~pos ~env =
   ignore (

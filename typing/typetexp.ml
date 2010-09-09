@@ -38,7 +38,7 @@ type error =
   | Variant_tags of string * string
   | Invalid_variable_name of string
   | Cannot_quantify of string * type_expr
-  | Multiple_constraints_on_type of string
+  | Multiple_constraints_on_type of Longident.t
   | Repeated_method_label of string
   | Unbound_value of Longident.t
   | Unbound_constructor of Longident.t
@@ -48,6 +48,7 @@ type error =
   | Unbound_modtype of Longident.t
   | Unbound_cltype of Longident.t
   | Ill_typed_functor_application of Longident.t
+  | Invalid_constraint_in_package_type
 
 exception Error of Location.t * error
 
@@ -101,7 +102,7 @@ let find_cltype = find_component Env.lookup_cltype (fun lid -> Unbound_cltype li
 let transl_modtype_longident = ref (fun _ -> assert false)
 let transl_modtype = ref (fun _ -> assert false)
 
-let create_package_mty fake loc env (p, l) =
+let transl_package_type fake loc env (p, l) transl =
   let l =
     List.sort
       (fun (s1, t1) (s2, t2) ->
@@ -109,20 +110,47 @@ let create_package_mty fake loc env (p, l) =
          compare s1 s2)
       l
   in
-  l,
-  List.fold_left
-    (fun mty (s, t) ->
-      let d = {ptype_params = [];
-               ptype_cstrs = [];
-               ptype_kind = Ptype_abstract;
-               ptype_private = Asttypes.Public;
-               ptype_manifest = if fake then None else Some t;
-               ptype_variance = [];
-               ptype_loc = loc} in
-      {pmty_desc=Pmty_with (mty, [ Longident.Lident s, Pwith_type d ]); pmty_loc=loc}
-    )
-    {pmty_desc=Pmty_ident p; pmty_loc=loc}
-    l
+  let l' =
+    if fake then
+      List.map
+        (function (s, Pwith_type d) -> (s, Pwith_type {d with ptype_manifest = None}) | x -> x)
+        l
+    else l
+  in
+  let mty =
+    {
+     pmty_desc = Pmty_with ({pmty_desc=Pmty_ident p; pmty_loc=loc}, l');
+     pmty_loc = loc;
+    }
+  in
+  let s = !transl_modtype_longident loc env p in
+  let ids =
+    List.map
+      (fun (lid, _) -> String.concat "." (Longident.flatten lid))
+      l
+  in
+  let tys =
+    List.map
+      (fun (_, c) ->
+        match c with
+        | Pwith_type {ptype_params = [];
+                      ptype_cstrs = [];
+                      ptype_kind = Ptype_abstract;
+                      ptype_private = Asttypes.Public;
+                      ptype_manifest = Some t;
+                      ptype_variance = variance;
+                      ptype_loc = loc}
+            when List.for_all (function (false, false) -> true | _ -> false) variance ->
+              transl t
+        | Pwith_type {ptype_loc = loc}
+        | Pwith_typesubst {ptype_loc = loc} ->
+            raise (Error (loc, Invalid_constraint_in_package_type))
+        | _ ->
+            raise (Error (loc, Invalid_constraint_in_package_type))
+      )
+      l
+  in
+  newty (Tpackage (s, ids, tys)), mty
 
 (* Translation of type expressions *)
 
@@ -454,13 +482,11 @@ let rec transl_type env policy styp =
       unify_var env (newvar()) ty';
       ty'
   | Ptyp_package (p, l) ->
-      let l, mty = create_package_mty true styp.ptyp_loc env (p, l) in
+      let ty, mty = transl_package_type true styp.ptyp_loc env (p, l) (transl_type env policy) in
       let z = narrow () in
       ignore (!transl_modtype env mty);
       widen z;
-      newty (Tpackage (!transl_modtype_longident styp.ptyp_loc env p,
-                       List.map fst l,
-                       List.map (transl_type env policy) (List.map snd l)))
+      ty
 
 and transl_fields env policy seen =
   function
@@ -500,7 +526,7 @@ let make_fixed_univars ty =
   make_fixed_univars ty;
   Btype.unmark_type ty
 
-let create_package_mty = create_package_mty false
+let transl_package_type = transl_package_type false
 
 let globalize_used_variables env fixed =
   let r = ref [] in
@@ -573,7 +599,6 @@ let transl_type_scheme env styp =
   generalize typ;
   typ
 
-
 (* Error report *)
 
 open Format
@@ -638,8 +663,8 @@ let report_error ppf = function
         (if v.desc = Tvar then "it escapes this scope" else
          if v.desc = Tunivar then "it is aliased to another variable"
          else "it is not a variable")
-  | Multiple_constraints_on_type s ->
-      fprintf ppf "Multiple constraints for type %s" s
+  | Multiple_constraints_on_type lid ->
+      fprintf ppf "Multiple constraints for type %a" longident lid
   | Repeated_method_label s ->
       fprintf ppf "@[This is the second method `%s' of this object type.@ %s@]"
         s "Multiple occurences are not allowed."
@@ -659,3 +684,5 @@ let report_error ppf = function
       fprintf ppf "Unbound class type %a" longident lid
   | Ill_typed_functor_application lid ->
       fprintf ppf "Ill-typed functor application %a" longident lid
+  | Invalid_constraint_in_package_type ->
+      fprintf ppf "This kind of constraint is not allowed in a package type"

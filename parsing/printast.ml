@@ -154,11 +154,7 @@ let rec core_type i ppf x =
       core_type i ppf ct;
   | Ptyp_package (s, l) ->
       line i ppf "Ptyp_package %a\n" fmt_longident s;
-      list i package_with ppf l
-
-and package_with i ppf (s, t) =
-  line i ppf "with type %s\n" s;
-  core_type i ppf t
+      list i longident_x_with_constraint ppf l
 
 and core_field_type i ppf x =
   line i ppf "core_field_type %a\n" fmt_location x.pfield_loc;
@@ -323,7 +319,7 @@ and expression i ppf x =
       expression i ppf e
   | Pexp_pack (me, (p,l)) ->
       line i ppf "Pexp_pack %a" fmt_longident p;
-      list i package_with ppf l;
+      list i longident_x_with_constraint ppf l;
       module_expr i ppf me
   | Pexp_open (m, e) ->
       line i ppf "Pexp_open \"%a\"\n" fmt_longident m;
@@ -595,7 +591,7 @@ and module_expr i ppf x =
       module_type i ppf mt;
   | Pmod_unpack (e, (p, l)) ->
       line i ppf "Pmod_unpack %a\n" fmt_longident p;
-      list i package_with ppf l;
+      list i longident_x_with_constraint ppf l;
       expression i ppf e;
 
 and structure i ppf x = list i structure_item ppf x

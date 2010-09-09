@@ -35,7 +35,7 @@ and core_type_desc =
   | Ptyp_poly of string list * core_type
   | Ptyp_package of package_type
 
-and package_type = Longident.t * (string * core_type) list
+and package_type = Longident.t * (Longident.t * with_constraint) list
 
 and core_field_type =
   { pfield_desc: core_field_desc;
@@ -51,7 +51,7 @@ and row_field =
 
 (* Type expressions for the class language *)
 
-type 'a class_infos =
+and 'a class_infos =
   { pci_virt: virtual_flag;
     pci_params: string list * Location.t;
     pci_name: string;
@@ -61,7 +61,7 @@ type 'a class_infos =
 
 (* Value expressions for the core language *)
 
-type pattern =
+and pattern =
   { ppat_desc: pattern_desc;
     ppat_loc: Location.t }
 
@@ -80,7 +80,7 @@ and pattern_desc =
   | Ppat_type of Longident.t
   | Ppat_lazy of pattern
 
-type expression =
+and expression =
   { pexp_desc: expression_desc;
     pexp_loc: Location.t }
 

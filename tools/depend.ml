@@ -23,6 +23,10 @@ module StringSet = Set.Make(struct type t = string let compare = compare end)
 
 let free_structure_names = ref StringSet.empty
 
+let add_opt add_fn bv = function
+    None -> ()
+  | Some x -> add_fn bv x
+
 let rec addmodule bv lid =
   match lid with
     Lident s ->
@@ -56,18 +60,14 @@ let rec add_type bv ty =
 
 and add_package_type bv (lid, l) =
   add bv lid;
-  List.iter (add_type bv) (List.map snd l)
+  add_modtype_constraints bv l
 
 and add_field_type bv ft =
   match ft.pfield_desc with
     Pfield(name, ty) -> add_type bv ty
   | Pfield_var -> ()
 
-let add_opt add_fn bv = function
-    None -> ()
-  | Some x -> add_fn bv x
-
-let add_type_declaration bv td =
+and add_type_declaration bv td =
   List.iter
     (fun (ty1, ty2, _) -> add_type bv ty1; add_type bv ty2)
     td.ptype_cstrs;
@@ -80,7 +80,7 @@ let add_type_declaration bv td =
       List.iter (fun (l, mut, ty, _) -> add_type bv ty) lbls in
   add_tkind td.ptype_kind
 
-let rec add_class_type bv cty =
+and add_class_type bv cty =
   match cty.pcty_desc with
     Pcty_constr(l, tyl) ->
       add bv l; List.iter (add_type bv) tyl
@@ -97,12 +97,12 @@ and add_class_type_field bv = function
   | Pctf_meth(_, _, ty, _) -> add_type bv ty
   | Pctf_cstr(ty1, ty2, _) -> add_type bv ty1; add_type bv ty2
 
-let add_class_description bv infos =
+and add_class_description bv infos =
   add_class_type bv infos.pci_expr
 
-let add_class_type_declaration = add_class_description
+and add_class_type_declaration bv c = add_class_description bv c
 
-let rec add_pattern bv pat =
+and add_pattern bv pat =
   match pat.ppat_desc with
     Ppat_any -> ()
   | Ppat_var _ -> ()
@@ -119,7 +119,7 @@ let rec add_pattern bv pat =
   | Ppat_type (li) -> add bv li
   | Ppat_lazy p -> add_pattern bv p
 
-let rec add_expr bv exp =
+and add_expr bv exp =
   match exp.pexp_desc with
     Pexp_ident l -> add bv l
   | Pexp_constant _ -> ()
@@ -175,14 +175,16 @@ and add_modtype bv mty =
   | Pmty_functor(id, mty1, mty2) ->
       add_modtype bv mty1; add_modtype (StringSet.add id bv) mty2
   | Pmty_with(mty, cstrl) ->
-      add_modtype bv mty;
-      List.iter
-        (function (_, Pwith_type td) -> add_type_declaration bv td
-                | (_, Pwith_module lid) -> addmodule bv lid
-                | (_, Pwith_typesubst td) -> add_type_declaration bv td
-                | (_, Pwith_modsubst lid) -> addmodule bv lid)
-        cstrl
+      add_modtype bv mty; add_modtype_constraints bv cstrl
   | Pmty_typeof m -> add_module bv m
+
+and add_modtype_constraints bv l =
+  List.iter
+    (function (_, Pwith_type td) -> add_type_declaration bv td
+      | (_, Pwith_module lid) -> addmodule bv lid
+      | (_, Pwith_typesubst td) -> add_type_declaration bv td
+      | (_, Pwith_modsubst lid) -> addmodule bv lid)
+    l
 
 and add_signature bv = function
     [] -> ()

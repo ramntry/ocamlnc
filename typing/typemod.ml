@@ -714,10 +714,9 @@ let rec type_module sttn funct_body anchor env smod =
   | Pmod_unpack (sexp, (p, l)) ->
       if funct_body then
         raise (Error (smod.pmod_loc, Not_allowed_in_functor_body));
-      let l, mty = Typetexp.create_package_mty smod.pmod_loc env (p, l) in
+      let ty, mty = Typetexp.transl_package_type smod.pmod_loc env (p, l) (Typetexp.transl_simple_type env false) in
       let mty = transl_modtype env mty in
-      let exp = Typecore.type_expect env sexp
-          (Typecore.create_package_type smod.pmod_loc env (p, l)) in
+      let exp = Typecore.type_expect env sexp ty in
       rm { mod_desc = Tmod_unpack(exp, mty);
            mod_type = mty;
            mod_env = env;
