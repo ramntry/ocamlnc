@@ -10,6 +10,18 @@
  *)
 (* ocaml -principal *)
 
+(* Use a module pattern *)
+let sort (type s) (module Set : Set.S with type elt = s) l =
+  Set.elements (List.fold_right Set.add l Set.empty)
+
+(* No real improvement here? *)
+let make_set (type s) cmp : (module Set.S with type elt = s) =
+  (module Set.Make (struct type t = s let compare = cmp end))
+
+(* No type annotation here *)
+let sort_cmp (type s) cmp =
+  sort (module Set.Make (struct type t = s let compare = cmp end))
+
 module type S = sig type t val x : t end;;
 let f (module M : S with type t = int) = M.x;;
 let f (module M : S with type t = 'a) = M.x;; (* Error *)
@@ -42,6 +54,12 @@ module type S' = sig val f : int -> int end;;
 let rec (module M : S') =
   (module struct let f n = if n <= 0 then 1 else n * M.f (n-1) end : S')
 in M.f 3;;
+
+(* Subtyping *)
+
+module type S = sig type t type u val x : t * u end
+let f (l : (module S with type t = int and type u = bool) list) =
+  (l :> (module S with type u = bool) list)
 
 (* GADTs from the manual *)
 (* the only modification is in to_string *)
@@ -85,8 +103,7 @@ let pair (type s1) (type s2) t1 t2 =
     let t1 = t1
     let t2 = t2
   end in
-  let pair = (module P : Typ.PAIR with type t = s1 * s2) in
-  Typ.Pair pair
+  Typ.Pair (module P)
 
 open Typ
 let rec to_string: 'a. 'a Typ.typ -> 'a -> string =
