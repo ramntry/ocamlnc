@@ -219,17 +219,18 @@ and print_simple_out_type ppf =
       List.iter2
         (fun s t ->
           let sep = if !first then (first := false; "with") else "and" in
-          match t with
-          | Otyp_poly (sl, t) ->
-              fprintf ppf " %s type " sep;
-              begin match sl with
-              | [] -> ()
-              | [x] -> fprintf ppf "'%s " x
-              | l -> fprintf ppf "(%a) " pr_vars l
-              end;
-              fprintf ppf "%s = %a" s print_out_type t
-          | _ ->
-              assert false
+          let sl, t =
+            match t with
+            | Otyp_poly (sl, t) -> sl, t
+            | _ -> [], t
+          in
+          fprintf ppf " %s type " sep;
+          begin match sl with
+          | [] -> ()
+          | [x] -> fprintf ppf "'%s " x
+          | l -> fprintf ppf "(%a) " pr_vars l
+          end;
+          fprintf ppf "%s = %a" s print_out_type t
         )
         n tyl;
       fprintf ppf ")@]"
