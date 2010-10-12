@@ -1213,8 +1213,7 @@ let rec type_exp env sexp =
   | Pexp_try(sbody, caselist) ->
       let body = type_exp env sbody in
       let cases, _ =
-        type_cases
-          env (instance Predef.type_exn) body.exp_type None caselist in
+        type_cases env Predef.type_exn body.exp_type None caselist in
       re {
         exp_desc = Texp_try(body, cases);
         exp_loc = loc;
@@ -2130,8 +2129,9 @@ and type_expect ?in_function env sexp ty_expected' =
         match in_function with Some p -> p
         | None -> (loc, ty_expected)
       in
+      if !Clflags.principal then begin_def ();
       let (ty_arg, ty_res) =
-        try filter_arrow env ty_expected' l
+        try filter_arrow env (instance ty_expected') l
         with Unify _ ->
           match expand_head env ty_expected with
             {desc = Tarrow _} as ty ->
@@ -2150,6 +2150,11 @@ and type_expect ?in_function env sexp ty_expected' =
           type_option tv
         else ty_arg
       in
+      if !Clflags.principal then begin
+        end_def ();
+        generalize_structure ty_arg;
+        generalize_structure ty_res
+      end;
       let cases, partial =
         type_cases ~in_function:(loc_fun,ty_fun) env ty_arg ty_res
           (Some loc) caselist in
@@ -2163,7 +2168,7 @@ and type_expect ?in_function env sexp ty_expected' =
       re {
         exp_desc = Texp_function(cases, partial);
         exp_loc = loc;
-        exp_type = newty (Tarrow(l, ty_arg, instance ty_res, Cok));
+        exp_type = instance (newgenty (Tarrow(l, ty_arg, ty_res, Cok)));
         exp_env = env }
   | Pexp_when(scond, sbody) ->
       let cond = type_expect env scond (instance Predef.type_bool) in
@@ -2261,26 +2266,25 @@ and type_statement env sexp =
 (* Typing of match cases *)
 
 and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
-  let closed = !Clflags.principal && free_variables ~env ty_arg = [] in
-  let ty_arg' = if closed then ty_arg else newvar () in
+  if !Clflags.principal then begin_def (); (* propagation of the argument *)
+  let ty_arg' = newvar () in
   let pattern_force = ref [] in
   let pat_env_list =
     List.map
       (fun (spat, sexp) ->
         let loc = sexp.pexp_loc in
-        if !Clflags.principal then begin_def ();
+        if !Clflags.principal then begin_def (); (* propagation of pattern *)
         let scope = Some (Annot.Idef loc) in
         let (pat, ext_env, force, unpacks) = type_pattern env spat scope in
         pattern_force := force @ !pattern_force;
         let pat =
           if !Clflags.principal then begin
-            if closed then unify_pat env pat (instance ty_arg');
             end_def ();
             iter_pattern (fun {pat_type=t} -> generalize_structure t) pat;
             { pat with pat_type = instance pat.pat_type }
           end else pat
         in
-        if not closed then unify_pat env pat ty_arg';
+        unify_pat env pat ty_arg';
         (pat, (ext_env, unpacks)))
       caselist in
   (* Check for polymorphic variants to close *)
@@ -2292,15 +2296,23 @@ and type_cases ?in_function env ty_arg ty_res partial_loc caselist =
   (* `Contaminating' unifications start here *)
   List.iter (fun f -> f()) !pattern_force;
   begin match pat_env_list with [] -> ()
-  | (pat, _) :: _ -> if not closed then unify_pat env pat (instance ty_arg)
+  | (pat, _) :: _ -> unify_pat env pat (instance ty_arg)
+  end;
+  if !Clflags.principal then begin
+    let patl = List.map fst pat_env_list in
+    List.iter (iter_pattern (fun {pat_type=t} -> unify_var env t (newvar())))
+      patl;
+    end_def ();
+    List.iter (iter_pattern (fun {pat_type=t} -> generalize_structure t)) patl
   end;
   let in_function = if List.length caselist = 1 then in_function else None in
+  let ty_arg' = instance ty_arg in
   let cases =
     List.map2
       (fun (pat, (ext_env, unpacks)) (spat, sexp) ->
         let sexp = wrap_unpacks sexp unpacks in
         let exp = type_expect ?in_function ext_env sexp ty_res in
-        (pat, exp))
+        ({pat with pat_type = ty_arg'}, exp))
       pat_env_list caselist
   in
   let partial =
