@@ -14255,9 +14255,13 @@ module Struct =
               
             let mkfield loc d = { pfield_desc = d; pfield_loc = mkloc loc; }
               
-            let mkcty loc d = { pcty_desc = d; pcty_loc = mkloc loc; }
-              
+        let mkcty loc d = { pcty_desc = d; pcty_loc = mkloc loc; }
+        let mkctf loc d = { pctf_loc = mkloc loc; pctf_desc = d }
+        let mkcsig loc d cil = { pcsig_loc = mkloc loc; 
+            pcsig_self = d; pcsig_fields = cil; }
+
             let mkpcl loc d = { pcl_desc = d; pcl_loc = mkloc loc; }
+            let mkpcf loc d = { pcf_desc = d; pcf_loc = mkloc loc; }
               
             let mkpolytype t =
               match t.ptyp_desc with
@@ -14580,7 +14584,11 @@ module Struct =
             let type_decl tl cl t =
               type_decl tl cl (loc_of_ctyp t) None false t
               
-            let mkvalue_desc t p = { pval_type = ctyp t; pval_prim = p; }
+        let mkvalue_desc t p loc = { 
+            pval_type = ctyp t; 
+            pval_prim = p; 
+            pval_loc = mkloc loc;
+            }
               
             let rec list_of_meta_list =
               function
@@ -15066,7 +15074,7 @@ module Struct =
                   let p =
                     (match po with | Ast.PaNil _ -> Ast.PaAny loc | p -> p) in
                   let cil = class_str_item cfl []
-                  in mkexp loc (Pexp_object (((patt p), cil)))
+                  in mkexp loc (Pexp_object { pcstr_pat = patt p; pcstr_fields = cil })
               | ExOlb (loc, _, _) ->
                   error loc "labeled expression not allowed here"
               | ExOvr (loc, iel) ->
@@ -15245,7 +15253,7 @@ module Struct =
               | SgExc (_, _) -> assert false
               | SgExt (loc, n, t, sl) ->
                   (mksig loc
-                     (Psig_value (n, (mkvalue_desc t (list_of_meta_list sl))))) ::
+                     (Psig_value (n, (mkvalue_desc t (list_of_meta_list sl) loc)))) ::
                     l
               | SgInc (loc, mt) ->
                   (mksig loc (Psig_include (module_type mt))) :: l
@@ -15265,7 +15273,7 @@ module Struct =
               | SgTyp (loc, tdl) ->
                   (mksig loc (Psig_type (mktype_decl tdl []))) :: l
               | SgVal (loc, n, t) ->
-                  (mksig loc (Psig_value (n, (mkvalue_desc t [])))) :: l
+                  (mksig loc (Psig_value (n, (mkvalue_desc t [] loc)))) :: l
               | Ast.SgAnt (loc, _) -> error loc "antiquotation in sig_item"
             and module_sig_binding x acc =
               match x with
@@ -15343,7 +15351,7 @@ module Struct =
               | StExt (loc, n, t, sl) ->
                   (mkstr loc
                      (Pstr_primitive (n,
-                        (mkvalue_desc t (list_of_meta_list sl))))) ::
+                        (mkvalue_desc t (list_of_meta_list sl) loc)))) ::
                     l
               | StInc (loc, me) ->
                   (mkstr loc (Pstr_include (module_expr me))) :: l
@@ -15382,7 +15390,8 @@ module Struct =
                   let t =
                     (match t_o with | Ast.TyNil _ -> Ast.TyAny loc | t -> t) in
                   let cil = class_sig_item ctfl []
-                  in mkcty loc (Pcty_signature (((ctyp t), cil)))
+              in mkcty loc (Pcty_signature 
+                (mkcsig loc (ctyp t) cil))
               | CtCon (loc, _, _, _) ->
                   error loc "invalid virtual class inside a class type"
               | CtAnt (_, _) | CtEq (_, _, _) | CtCol (_, _, _) |
@@ -15435,22 +15444,23 @@ module Struct =
               match c with
               | Ast.CgNil _ -> l
               | CgCtr (loc, t1, t2) ->
-                  (Pctf_cstr (((ctyp t1), (ctyp t2), (mkloc loc)))) :: l
+                  mkctf loc (Pctf_cstr (((ctyp t1), (ctyp t2)))) :: l
               | Ast.CgSem (_, csg1, csg2) ->
                   class_sig_item csg1 (class_sig_item csg2 l)
-              | CgInh (_, ct) -> (Pctf_inher (class_type ct)) :: l
+              | CgInh (loc, ct) -> 
+                  (mkctf loc (Pctf_inher (class_type ct))) :: l
               | CgMth (loc, s, pf, t) ->
-                  (Pctf_meth
-                     ((s, (mkprivate pf), (mkpolytype (ctyp t)), (mkloc loc)))) ::
+                  (mkctf loc (Pctf_meth
+                     ((s, (mkprivate pf), (mkpolytype (ctyp t)))))) ::
                     l
               | CgVal (loc, s, b, v, t) ->
-                  (Pctf_val
-                     ((s, (mkmutable b), (mkvirtual v), (ctyp t),
-                       (mkloc loc)))) ::
+                  (mkctf loc (Pctf_val
+                     ((s, (mkmutable b), (mkvirtual v), (ctyp t)
+                       )))) ::
                     l
               | CgVir (loc, s, b, t) ->
-                  (Pctf_virt
-                     ((s, (mkprivate b), (mkpolytype (ctyp t)), (mkloc loc)))) ::
+                  (mkctf loc (Pctf_virt
+                     ((s, (mkprivate b), (mkpolytype (ctyp t)))))) ::
                     l
               | CgAnt (_, _) -> assert false
             and class_expr =
@@ -15488,7 +15498,7 @@ module Struct =
                   let p =
                     (match po with | Ast.PaNil _ -> Ast.PaAny loc | p -> p) in
                   let cil = class_str_item cfl []
-                  in mkpcl loc (Pcl_structure (((patt p), cil)))
+                  in mkpcl loc (Pcl_structure { pcstr_pat = patt p; pcstr_fields = cil })
               | CeTyc (loc, ce, ct) ->
                   mkpcl loc
                     (Pcl_constraint ((class_expr ce), (class_type ct)))
@@ -15500,15 +15510,15 @@ module Struct =
               match c with
               | CrNil _ -> l
               | CrCtr (loc, t1, t2) ->
-                  (Pcf_cstr (((ctyp t1), (ctyp t2), (mkloc loc)))) :: l
+                  (mkpcf loc (Pcf_constr (((ctyp t1), (ctyp t2))))) :: l
               | Ast.CrSem (_, cst1, cst2) ->
                   class_str_item cst1 (class_str_item cst2 l)
               | CrInh (loc, ov, ce, pb) ->
                   let opb = if pb = "" then None else Some pb
                   in
-                    (Pcf_inher ((override_flag loc ov), (class_expr ce), opb)) ::
+                    mkpcf loc ((Pcf_inher ((override_flag loc ov), (class_expr ce), opb))) ::
                       l
-              | CrIni (_, e) -> (Pcf_init (expr e)) :: l
+              | CrIni (loc, e) -> (mkpcf loc (Pcf_init (expr e))) :: l
               | CrMth (loc, s, ov, pf, e, t) ->
                   let t =
                     (match t with
@@ -15516,21 +15526,19 @@ module Struct =
                      | t -> Some (mkpolytype (ctyp t))) in
                   let e = mkexp loc (Pexp_poly ((expr e), t))
                   in
-                    (Pcf_meth
-                       ((s, (mkprivate pf), (override_flag loc ov), e,
-                         (mkloc loc)))) ::
+                    (mkpcf loc (Pcf_meth
+                       ((s, (mkprivate pf), (override_flag loc ov), e)))) ::
                       l
               | CrVal (loc, s, ov, mf, e) ->
-                  (Pcf_val
-                     ((s, (mkmutable mf), (override_flag loc ov), (expr e),
-                       (mkloc loc)))) ::
+                  (mkpcf loc (Pcf_val
+                     (s, (mkmutable mf), (override_flag loc ov), (expr e)))) ::
                     l
               | CrVir (loc, s, pf, t) ->
-                  (Pcf_virt
-                     ((s, (mkprivate pf), (mkpolytype (ctyp t)), (mkloc loc)))) ::
+                  (mkpcf loc (Pcf_virt
+                     ((s, (mkprivate pf), (mkpolytype (ctyp t)))))) ::
                     l
               | CrVvr (loc, s, mf, t) ->
-                  (Pcf_valvirt ((s, (mkmutable mf), (ctyp t), (mkloc loc)))) ::
+                  (mkpcf loc (Pcf_valvirt ((s, (mkmutable mf), (ctyp t))))) ::
                     l
               | CrAnt (_, _) -> assert false
               
