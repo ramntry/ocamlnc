@@ -346,6 +346,26 @@ and 'a class_infos =
     ci_variance: (bool * bool) list;
     ci_loc: Location.t }
 
+  
+  
+  
+  
+type saved_type =
+| Saved_implementation of structure
+| Saved_structure of structure
+| Saved_structure_item of structure_item
+| Saved_signature of signature
+| Saved_signature_item of signature_item
+| Saved_expression of expression
+| Saved_module_type of module_type
+| Saved_pattern of pattern
+| Saved_class_expr of class_expr
+  
+let saved_types = ref []
+let get_saved_types () = !saved_types
+let set_saved_types list = saved_types := list
+let add_saved_type s = saved_types := s :: !saved_types
+  
 (* Auxiliary functions over the a.s.t. *)
 
 let iter_pattern_desc f = function

@@ -368,3 +368,20 @@ val untype_structure : structure -> Parsetree.structure
 val untype_signature : signature -> Parsetree.signature
 
 val print_structure : Format.formatter -> Parsetree.structure -> unit
+
+  
+type saved_type =
+| Saved_implementation of structure
+| Saved_structure of structure
+| Saved_structure_item of structure_item
+| Saved_signature of signature
+| Saved_signature_item of signature_item
+| Saved_expression of expression
+| Saved_module_type of module_type
+| Saved_pattern of pattern
+| Saved_class_expr of class_expr
+  
+val get_saved_types : unit -> saved_type list 
+val set_saved_types : saved_type list -> unit
+val add_saved_type : saved_type -> unit
+  

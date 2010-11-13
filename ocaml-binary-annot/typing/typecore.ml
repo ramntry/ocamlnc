@@ -91,10 +91,12 @@ let type_object =
   or [Typedtree.pattern] that will end up in the typed AST.
 *)
 let re node =
+  Typedtree.add_saved_type (Saved_expression node);
   Stypes.record (Stypes.Ti_expr node);
   node
 ;;
 let rp node =
+  Typedtree.add_saved_type (Saved_pattern node);
   Stypes.record (Stypes.Ti_pat node);
   node
 ;;
@@ -1721,8 +1723,7 @@ let rec type_exp env sexp =
       let (path, newenv) = !type_open env sexp.pexp_loc lid in
       let exp = type_exp newenv e in
       re { exp with exp_desc = Texp_open (path, exp); }
-
-
+  
 and type_label_exp create env loc ty (lid, sarg) =
   let (path, label) = Typetexp.find_label env sarg.pexp_loc lid in
   begin_def ();

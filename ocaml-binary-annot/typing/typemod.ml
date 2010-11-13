@@ -358,13 +358,19 @@ let transl_modtype_longident loc env lid =
   let (path, info) = Typetexp.find_modtype env loc lid in
   path
 
-let mty desc typ loc = {
+let mkmty desc typ loc = 
+  let mty = {
     mty_desc = desc;
     mty_type = typ;
     mty_loc = loc;
-  }
+    } in
+  Typedtree.add_saved_type (Saved_module_type mty);
+  mty
 
-let mksig desc loc = { sig_desc = desc; sig_loc = loc }
+let mksig desc loc = 
+  let sg = { sig_desc = desc; sig_loc = loc } in
+  Typedtree.add_saved_type (Saved_signature_item sg);
+  sg
 
 (* let signature sg = List.map (fun item -> item.sig_type) sg *)
 
@@ -373,15 +379,15 @@ let rec transl_modtype env smty =
   match smty.pmty_desc with
     Pmty_ident lid ->
       let path = transl_modtype_longident loc env lid in
-      mty (Tmty_ident path) (Mty_ident path) loc
+      mkmty (Tmty_ident path) (Mty_ident path) loc
   | Pmty_signature ssg ->
       let sg = transl_signature env ssg in
-      mty (Tmty_signature sg) (Mty_signature sg.sig_type) loc
+      mkmty (Tmty_signature sg) (Mty_signature sg.sig_type) loc
   | Pmty_functor(param, sarg, sres) ->
       let arg = transl_modtype env sarg in
       let (id, newenv) = Env.enter_module param arg.mty_type env in
       let res = transl_modtype newenv sres in
-      mty (Tmty_functor (id, arg, res))
+      mkmty (Tmty_functor (id, arg, res))
       (Mty_functor(id, arg.mty_type, res.mty_type)) loc
   | Pmty_with(sbody, constraints) ->
       let body = transl_modtype env sbody in
@@ -394,11 +400,11 @@ let rec transl_modtype env smty =
             (tcstr :: tcstrs, sg)
         )
         ([],init_sg) constraints in
-      mty (Tmty_with ( body, tcstrs))
+      mkmty (Tmty_with ( body, tcstrs))
       (Mtype.freshen (Mty_signature final_sg)) loc 
   | Pmty_typeof smod ->
       let tmod = !type_module_type_of_fwd env smod in
-      mty (Tmty_typeof tmod) tmod.mod_type loc
+      mkmty (Tmty_typeof tmod) tmod.mod_type loc
 
 
 and transl_signature env sg =
@@ -515,9 +521,12 @@ and transl_signature env sg =
                      Sig_type(i', d', rs);
                      Sig_type(i'', d'', rs)])
                  classes [rem])
-    in
+  in
+  let previous_saved_types = Typedtree.get_saved_types () in
   let (trem, rem) = transl_sig env sg in
-  { sig_items = trem; sig_type =  rem }
+  let sg = { sig_items = trem; sig_type =  rem } in
+  Typedtree.set_saved_types ( (Saved_signature sg) :: previous_saved_types );
+  sg
 
 and transl_modtype_info env sinfo =
   match sinfo with
@@ -747,7 +756,10 @@ let wrap_constraint env arg mty explicit =
 
 (* Type a module value expression *)
 
-let mkstr desc loc = { str_desc = desc; str_loc = loc }
+let mkstr desc loc =
+  let str = { str_desc = desc; str_loc = loc } in
+  Typedtree.add_saved_type (Saved_structure_item str);
+  str
 
 let rec type_module sttn funct_body anchor env smod =
   match smod.pmod_desc with
@@ -1024,8 +1036,11 @@ and type_structure funct_body anchor env sstr scope =
   in
   if !Clflags.annotations
   then List.iter (function {pstr_loc = l} -> Stypes.record_phrase l) sstr;
-    let (items, sg, finalenv) = type_struct env sstr in
-      { str_items = items; str_type = sg }, sg, finalenv
+  let previous_saved_types = Typedtree.get_saved_types () in
+  let (items, sg, finalenv) = type_struct env sstr in
+  let str = { str_items = items; str_type = sg } in
+  Typedtree.set_saved_types (( Saved_structure str) :: previous_saved_types);
+  str, sg, finalenv
 
 let type_module = type_module true false None
 let type_structure = type_structure false None
@@ -1157,28 +1172,39 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
   end
 
 let type_implementation sourcefile outputprefix modulename initial_env ast =
-  let (str, coercion) = type_implementation sourcefile outputprefix modulename initial_env ast in
-  if !Clflags.annotations then begin
-      let oc = open_out (outputprefix ^ ".types") in
-      output_value oc str;
-      close_out oc;
-
-      let oc = open_out (outputprefix ^ "_ast2src.ml") in
-      let ppf = Format.formatter_of_out_channel oc in
-      Typedtree.print_structure ppf ast;
-      Format.pp_print_flush ppf ();
-      close_out oc;
-
+  try
+    Typedtree.set_saved_types [];
+    let (str, coercion) = type_implementation sourcefile outputprefix modulename initial_env ast in
+    if !Clflags.annotations then begin
+        Typedtree.set_saved_types [];
+        let oc = open_out (outputprefix ^ ".types") in
+        output_value oc [| Saved_implementation str |];
+        close_out oc;
+        
+        let oc = open_out (outputprefix ^ "_ast2src.ml") in
+        let ppf = Format.formatter_of_out_channel oc in
+        Typedtree.print_structure ppf ast;
+        Format.pp_print_flush ppf ();
+        close_out oc;
+        
+        
+        let oc = open_out (outputprefix ^ "_typ2src.ml") in
+        let ppf = Format.formatter_of_out_channel oc in
+        Typedtree.print_structure ppf (Typedtree.untype_structure str);
+        Format.pp_print_flush ppf ();
+        close_out oc;
       
-      let oc = open_out (outputprefix ^ "_typ2src.ml") in
-      let ppf = Format.formatter_of_out_channel oc in
-      Typedtree.print_structure ppf (Typedtree.untype_structure str);
-      Format.pp_print_flush ppf ();
-      close_out oc;
-      
-    end;
-  (str, coercion)
-
+      end;
+    (str, coercion)
+  with e ->
+      if !Clflags.annotations then begin
+          let oc = open_out (outputprefix ^ ".types") in
+          output_value oc (Array.of_list (Typedtree.get_saved_types ()));
+          close_out oc;
+        end;      
+      Typedtree.set_saved_types  [];
+      raise e
+    
 (* "Packaging" of several compilation units into one unit
    having them as sub-modules.  *)
 

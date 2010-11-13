@@ -1,0 +1,10 @@
+2010-11-13:
+ * Introduced new type to save partial typedtrees in case of error:
+    * [| Saved_implementation str |] if no error
+    * An array of Typedtree.Saved_... otherwise
+
+2010-11-11: first version
+ * Applied previous patch from 3.12.0 on trunk release r10789
+ * Fixed two bugs 
+ * Improved pretty-printing of parsetree
+ * Pass the testsuite with same results as trunk/, except modified locations

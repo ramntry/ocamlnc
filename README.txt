@@ -2,10 +2,12 @@ Binary Annotations
 ==================
 
 Author: Fabrice LE FESSANT (INRIA/OCamlPro)
-Date: 2010/11/03-2010/11/11
+Date: 2010/11/03 - 2010/11/13
 
 The goal of this branch is to replace textual .annot files by binary .types
-files, containing the Typedtree of the compiled file.
+files, containing the Typedtree of the compiled file. If compilation
+succeeded, the file contains a [| Saved_implementation str |], and otherwise,
+it contains an array of all the typed nodes that were correctly typed.
 
 - Typedtree has been extended to become a superset of Parsetree
 - It is possible to revert from Typedtree to Parsetree
@@ -33,4 +35,4 @@ val print_structure : Format.formatter -> Parsetree.structure -> unit
 
 Contributions:
   The first version of the parsetree pretty-printer was contributed
-by BER-metaocaml and fixed.
+by BER-metaocaml and improved.
