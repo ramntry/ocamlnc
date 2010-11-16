@@ -29,15 +29,15 @@ type pattern =
     pat_type: type_expr;
     pat_env: Env.t }
 
-(* Instead of adding two new constructs (Tpat_constraint and Tpat_type), 
+(* Instead of adding two new constructs (Tpat_constraint and Tpat_type),
 we chose to change Tpat_alias, so that we don't have to modify too much
 the pattern matching engine, and don't introduce bugs. *)
-  
+
 and alias_kind =
   TPat_alias of Ident.t
 | TPat_constraint of core_type
 | TPat_type of Path.t
-  
+
 and pattern_desc =
     Tpat_any
   | Tpat_var of Ident.t
@@ -92,7 +92,7 @@ and expression_desc =
   | Texp_poly of expression * core_type option
   | Texp_object of class_structure * string list
   | Texp_newtype of string * expression
-  | Texp_pack of module_expr 
+  | Texp_pack of module_expr
   | Texp_open of Path.t * expression
 
 and meth =
@@ -133,7 +133,7 @@ and class_field =
 and class_field_kind =
   Tcfk_virtual of core_type
 | Tcfk_concrete of expression
-  
+
 and class_field_desc =
   Tcf_inher of override_flag * class_expr * string option * (string * Ident.t) list * (string * Ident.t) list
     (* Inherited instance variables and concrete methods *)
@@ -156,7 +156,7 @@ and module_expr =
 and module_type_constraint =
   Tmodtype_implicit
 | Tmodtype_explicit of module_type
-  
+
 and module_expr_desc =
     Tmod_ident of Path.t
   | Tmod_structure of structure
@@ -242,7 +242,7 @@ and module_coercion =
 
 and core_type =
 (* mutable because of [Typeclass.declare_method] *)
-  { mutable ctyp_desc : core_type_desc; 
+  { mutable ctyp_desc : core_type_desc;
     mutable ctyp_type : type_expr;
     ctyp_loc : Location.t }
 
@@ -364,12 +364,8 @@ val rev_let_bound_idents: (pattern * expression) list -> Ident.t list
 (* Alpha conversion of patterns *)
 val alpha_pat : (Ident.t * Ident.t) list -> pattern -> pattern
 
-val untype_structure : structure -> Parsetree.structure
-val untype_signature : signature -> Parsetree.signature
 
-val print_structure : Format.formatter -> Parsetree.structure -> unit
 
-  
 type saved_type =
 | Saved_implementation of structure
 | Saved_structure of structure
@@ -380,8 +376,7 @@ type saved_type =
 | Saved_module_type of module_type
 | Saved_pattern of pattern
 | Saved_class_expr of class_expr
-  
-val get_saved_types : unit -> saved_type list 
+
+val get_saved_types : unit -> saved_type list
 val set_saved_types : saved_type list -> unit
 val add_saved_type : saved_type -> unit
-  

@@ -48,7 +48,7 @@ let rec path_concat head p =
     Pident tail -> Pdot (Pident head, Ident.name tail, 0)
   | Pdot (pre, s, pos) -> Pdot (path_concat head pre, s, pos)
   | Papply _ -> assert false
-  
+
 (* Extract a signature from a module type *)
 
 let extract_sig env loc mty =
@@ -358,7 +358,7 @@ let transl_modtype_longident loc env lid =
   let (path, info) = Typetexp.find_modtype env loc lid in
   path
 
-let mkmty desc typ loc = 
+let mkmty desc typ loc =
   let mty = {
     mty_desc = desc;
     mty_type = typ;
@@ -367,7 +367,7 @@ let mkmty desc typ loc =
   Typedtree.add_saved_type (Saved_module_type mty);
   mty
 
-let mksig desc loc = 
+let mksig desc loc =
   let sg = { sig_desc = desc; sig_loc = loc } in
   Typedtree.add_saved_type (Saved_signature_item sg);
   sg
@@ -401,7 +401,7 @@ let rec transl_modtype env smty =
         )
         ([],init_sg) constraints in
       mkmty (Tmty_with ( body, tcstrs))
-      (Mtype.freshen (Mty_signature final_sg)) loc 
+      (Mtype.freshen (Mty_signature final_sg)) loc
   | Pmty_typeof smod ->
       let tmod = !type_module_type_of_fwd env smod in
       mkmty (Tmty_typeof tmod) tmod.mod_type loc
@@ -710,7 +710,7 @@ let check_recmodule_inclusion env bindings =
           with Includemod.Error msg ->
             raise(Error(modl.mod_loc, Not_included msg)) in
         let modl' =
-            { mod_desc = Tmod_constraint(modl, mty_decl.mty_type, 
+            { mod_desc = Tmod_constraint(modl, mty_decl.mty_type,
                 Tmodtype_explicit mty_decl, coercion);
             mod_type = mty_decl.mty_type;
             mod_env = env;
@@ -730,7 +730,7 @@ let modtype_of_package env loc p nl tl =
       let sg' =
         List.map
           (function
-              Sig_type (id, ({type_params=[]} as td), rs) 
+              Sig_type (id, ({type_params=[]} as td), rs)
               when List.mem (Ident.name id) nl ->
                 let ty = List.assoc (Ident.name id) ntl in
                 Sig_type (id, {td with type_manifest = Some ty}, rs)
@@ -1180,20 +1180,20 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
         let oc = open_out (outputprefix ^ ".types") in
         output_value oc [| Saved_implementation str |];
         close_out oc;
-        
+
         let oc = open_out (outputprefix ^ "_ast2src.ml") in
         let ppf = Format.formatter_of_out_channel oc in
-        Typedtree.print_structure ppf ast;
+        Pprintast.print_structure ppf ast;
         Format.pp_print_flush ppf ();
         close_out oc;
-        
-        
+
+
         let oc = open_out (outputprefix ^ "_typ2src.ml") in
         let ppf = Format.formatter_of_out_channel oc in
-        Typedtree.print_structure ppf (Typedtree.untype_structure str);
+        Pprintast.print_structure ppf (Untypeast.untype_structure str);
         Format.pp_print_flush ppf ();
         close_out oc;
-      
+
       end;
     (str, coercion)
   with e ->
@@ -1201,10 +1201,10 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
           let oc = open_out (outputprefix ^ ".types") in
           output_value oc (Array.of_list (Typedtree.get_saved_types ()));
           close_out oc;
-        end;      
+        end;
       Typedtree.set_saved_types  [];
       raise e
-    
+
 (* "Packaging" of several compilation units into one unit
    having them as sub-modules.  *)
 

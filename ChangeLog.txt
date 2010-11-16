@@ -1,3 +1,11 @@
+2010-11-16:
+ * Moved code from typedtree.ml to:
+   * new file parsing/pprintast.ml for pretty-printing of parsetree
+   * new file typing/untypeast.ml for converting Typedtree to Parsetree
+ * Some bug fixes in pretty-printing:
+   * removed spurious colon in first class modules
+   * removed duplicated "object" keyword
+
 2010-11-13:
  * Introduced new type to save partial typedtrees in case of error:
     * [| Saved_implementation str |] if no error
@@ -5,6 +13,6 @@
 
 2010-11-11: first version
  * Applied previous patch from 3.12.0 on trunk release r10789
- * Fixed two bugs 
+ * Fixed two bugs
  * Improved pretty-printing of parsetree
  * Pass the testsuite with same results as trunk/, except modified locations
