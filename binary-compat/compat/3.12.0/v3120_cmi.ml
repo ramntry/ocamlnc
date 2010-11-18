@@ -2,6 +2,61 @@ module Current_cmi_format = Cmi_format
 
 exception TODO
 
+module Asttypes = struct
+
+    open Asttypes
+    module T = V3120_types.Asttypes
+
+    let virtual_flag vf =
+      match vf with
+        T.Virtual -> Virtual
+      | T.Concrete -> Concrete
+      
+    let private_flag pf =
+      match pf with
+        T.Private -> Private
+      | T.Public -> Public
+
+    let rec_flag r =
+      match r with
+        T.Nonrecursive -> Nonrecursive
+      | T.Recursive -> Recursive
+      | T.Default -> Default
+
+    let mutable_flag mf = 
+      match mf with
+        T.Immutable -> Immutable
+      | T.Mutable -> Mutable
+          
+end
+
+module Lexing = struct
+    
+    open Lexing
+    module T = V3120_types.Lexing
+      
+    let position p =
+      { pos_fname = p.T.pos_fname;
+        pos_lnum = p.T.pos_lnum;
+        pos_bol = p.T.pos_bol;
+        pos_cnum = p.T.pos_cnum;
+      }
+    
+  end
+  
+module Location = struct
+    
+    open Location
+    module T = V3120_types.Location
+    
+    let t loc = 
+      { loc_start = Lexing.position loc.T.loc_start;
+        loc_end = Lexing.position loc.T.loc_end;
+        loc_ghost = loc.T.loc_ghost;
+      }
+      
+  end
+  
 module Ident : sig 
   
   val reset : unit -> unit
@@ -48,70 +103,81 @@ module Primitive : sig
 
 end = struct
 
-  let description prim = raise TODO
-
+    module T = V3120_types.Primitive
+    open Primitive
+    
+    let description p = 
+      { prim_name = p.T.prim_name;
+        prim_arity = p.T.prim_arity;
+        prim_alloc = p.T.prim_alloc;
+        prim_native_name = p.T.prim_native_name;
+        prim_native_float = p.T.prim_native_float;
+      }
+      
 end
 
 module Types : sig
-
-  val reset : unit -> unit
-
-  val signature_item : 
-    V3120_types.Types.signature_item -> Types.signature_item 
-
-end = struct
-
-  module T = V3120_types.Types
-  open Types
-
-  let tbl = Hashtbl.create 113
-  let reset () = 
-    Hashtbl.clear tbl
-
-  let label l = l
-      
-  let rec commutable c =
-    match c with
-	T.Cok -> Cok
+    
+    val reset : unit -> unit
+    
+    val signature_item : 
+      V3120_types.Types.signature_item -> Types.signature_item 
+  
+  end = struct
+    
+    open Asttypes
+    
+    module T = V3120_types.Types
+    open Types
+    
+    let tbl = Hashtbl.create 113
+    let reset () = 
+      Hashtbl.clear tbl
+    
+    let label l = l
+    
+    let rec commutable c =
+      match c with
+        T.Cok -> Cok
       | T.Cunknown -> Cunknown
       | T.Clink r -> Clink (ref (commutable !r))
-
-
-  let rec type_expr ty = 
-    let list = 
-      try 
-	Hashtbl.find tbl ty.T.id
-      with Not_found ->
-	let list = ref [] in
-	  Hashtbl.add tbl ty.T.id list;
-	  list
-    in
+    
+    
+    let rec type_expr ty = 
+      let list = 
+        try 
+          Hashtbl.find tbl ty.T.id
+        with Not_found ->
+            let list = ref [] in
+            Hashtbl.add tbl ty.T.id list;
+            list
+      in
       try
-	List.assq ty !list
+        List.assq ty !list
       with Not_found ->
-	let t = {
-	  desc = Tvar;
-	  level = ty.T.level;
-	  id = ty.T.id;
-	} in
-	list := (ty, t) :: !list;
-	  t.desc <- type_desc ty.T.desc;
-	  t
-
-  and type_desc desc =
-    match desc with
-	T.Tvar -> Tvar
+          let t = {
+              desc = Tvar;
+              level = ty.T.level;
+              id = ty.T.id;
+            } in
+          list := (ty, t) :: !list;
+          t.desc <- type_desc ty.T.desc;
+          t
+    
+    and type_desc desc =
+      match desc with
+        T.Tvar -> Tvar
       | T.Tarrow (l, t1, t2, c) ->
-	  Tarrow (label l, type_expr t1, type_expr t2, commutable c)
+          Tarrow (label l, type_expr t1, type_expr t2, commutable c)
       | T.Ttuple list -> Ttuple (List.map type_expr list)
       | T.Tconstr (p, list, ab) ->
-	  Tconstr (Path.t p, List.map type_expr list, ref (abbrev_memo ab))
+          Tconstr (Path.t p, List.map type_expr list, ref (abbrev_memo !ab))
       | T.Tobject (t, { contents = None }) ->
-	  Tobject (type_expr t, ref None)
+          Tobject (type_expr t, ref None)
       | T.Tobject (t, { contents = Some (p, list) }) ->
-	  Tobject (type_expr t, ref (Some (Path.t p, List.map type_expr list)))
+          Tobject (type_expr t, ref (Some (Path.t p, List.map type_expr list)))
       | T.Tfield (s, f, t1, t2) ->
-	  Tfield (s, field_kind f, type_expr t1, type_expr t2)
+          Tfield (s, field_kind f, type_expr t1, type_expr t2)
       | T.Tnil -> Tnil
       | T.Tlink t -> Tlink (type_expr t)
       | T.Tsubst t ->  Tsubst (type_expr t)
@@ -119,66 +185,182 @@ end = struct
       | T.Tunivar -> Tunivar
       | T.Tpoly (t, list) -> Tpoly (type_expr t, List.map type_expr list)
       | T.Tpackage (p, sl, tl) ->
-	  Tpackage (Path.t p, sl, List.map type_expr tl)
-
-  and abbrev_memo ab = raise TODO
-  and field_kind d = raise TODO
-  and row_desc r = raise TODO
-
-  let ident = Ident.t
-
-
-
-  let rec signature list = List.map signature_item list
-
-  and signature_item item =
-    match item with
-	T.Tsig_value (id, v) ->
-	  Tsig_value (ident id, value_description v)
+          Tpackage (Path.t p, sl, List.map type_expr tl)
+    
+    and abbrev_memo ab = 
+      match ab with
+        T.Mnil -> Mnil
+      | T.Mcons (pf, p, t1, t2, ab) ->
+          Mcons(private_flag pf, Path.t p, type_expr t1, type_expr t2, 
+            abbrev_memo ab)
+      | T.Mlink ab -> Mlink (ref (abbrev_memo !ab))
+    
+    and field_kind fk = 
+      match fk with
+        T.Fvar r -> begin
+            match !r with
+              None -> Fvar (ref None)
+            | Some fk -> Fvar (ref (Some (field_kind fk)))
+          end
+      | T.Fpresent -> Fpresent
+      | T.Fabsent -> Fabsent
+    
+    and row_desc r = 
+      { row_fields = List.map (fun (l, rf) ->
+            (label l, row_field rf)) r.T.row_fields;
+        row_more = type_expr r.T.row_more;
+        row_bound = r.T.row_bound;
+        row_closed = r.T.row_closed;
+        row_fixed = r.T.row_fixed;
+        row_name = (match r.T.row_name with
+            None -> None
+          | Some (p, list) ->
+              Some (Path.t p, List.map type_expr list));
+      }
+    
+    and row_field rf =
+      match rf with
+        T.Rabsent -> Rabsent
+      | T.Rpresent None -> Rpresent None
+      | T.Rpresent (Some t) -> Rpresent (Some (type_expr t))
+      | T.Reither (b1, list, b2, rbf) ->
+          Reither (b1, List.map type_expr list, b2,
+            (match !rbf with
+                None -> ref None
+              | Some rf -> ref (Some (row_field rf))))
+    
+    
+    
+    
+    let rec signature list = List.map signature_item list
+    
+    and signature_item item =
+      match item with
+        T.Tsig_value (id, v) ->
+          Tsig_value (Ident.t id, value_description v)
       | T.Tsig_type (id, t, r) ->
-	  Tsig_type (ident id, type_declaration t, rec_status r)
+          Tsig_type (Ident.t id, type_declaration t, rec_status r)
       | T.Tsig_exception (id, decl) ->
-	  Tsig_exception (ident id, exception_declaration decl)
+          Tsig_exception (Ident.t id, exception_declaration decl)
       | T.Tsig_module (id, m, r) ->
-	  Tsig_module (ident id,  module_type m, rec_status r)
+          Tsig_module (Ident.t id,  module_type m, rec_status r)
       | T.Tsig_modtype (id, m) ->
-	  Tsig_modtype (ident id, modtype_declaration m)
+          Tsig_modtype (Ident.t id, modtype_declaration m)
       | T.Tsig_class (id, cl, r) ->
-	  Tsig_class (ident id, class_declaration cl, rec_status r)
+          Tsig_class (Ident.t id, class_declaration cl, rec_status r)
       | T.Tsig_cltype (id, cl, r) ->
-	  Tsig_cltype (ident id, cltype_declaration cl, rec_status r)
-
-  and value_description v =
-    { val_type = type_expr v.T.val_type;
-      val_kind = value_kind v.T.val_kind; }
-
-  and value_kind v =
-    match v with
-	T.Val_reg -> Val_reg
+          Tsig_cltype (Ident.t id, cltype_declaration cl, rec_status r)
+    
+    and value_description v =
+      { val_type = type_expr v.T.val_type;
+        val_kind = value_kind v.T.val_kind; }
+    
+    and value_kind v =
+      match v with
+        T.Val_reg -> Val_reg
       | T.Val_prim prim -> Val_prim (Primitive.description prim)
       | T.Val_ivar (m,s) ->
-	  Val_ivar (mutable_flag m, s)
-      | T.Val_self (meths, vars, s, t) ->
-	  (*
-	    of (Ident.t * type_expr) Meths.t ref *
-                (Ident.t * Asttypes.mutable_flag *
-                 Asttypes.virtual_flag * type_expr) Vars.t ref *
-                string * type_expr
-	  *)
-	  raise TODO
-                                        (* Self *)
-      | T.Val_anc _ -> raise TODO
-(* of (string * Ident.t) list * string *)
-      | T.Val_unbound -> Val_unbound
+          Val_ivar (mutable_flag m, s)
+      | T.Val_self (meths2, vars2, s, t) ->
+          let meths = ref Meths.empty in
+          let vars = ref Vars.empty in
+          T.Meths.iter (fun s (id,t) ->
+              meths := Meths.add s (Ident.t id, type_expr t) !meths) !meths2;
+          T.Vars.iter (fun s (id, mf, vf, t) ->
+              vars := Vars.add s (Ident.t id,
+                mutable_flag mf, virtual_flag vf, type_expr t) !vars) !vars2;
+          Val_self(meths, vars, s, type_expr t)
+      | T.Val_anc (list, s) ->
+          Val_anc (List.map (fun (s,id) -> (s, Ident.t id)) list, s)
+          | T.Val_unbound -> Val_unbound
 
-  and type_declaration decl = raise TODO
-  and rec_status r = raise TODO
-  and exception_declaration decl = raise TODO
-  and module_type decl = raise TODO
-  and modtype_declaration decl = raise TODO
-  and class_declaration decl = raise TODO
-  and cltype_declaration decl = raise TODO
-  and mutable_flag v = raise TODO
+    and rec_status r = match r with
+        T.Trec_next -> Trec_next
+      | T.Trec_first -> Trec_first
+      | T.Trec_not -> Trec_not
+          
+    and type_declaration decl = 
+      { type_params = List.map type_expr decl.T.type_params;
+        type_arity = decl.T.type_arity;
+        type_kind = type_kind decl.T.type_kind;
+        type_private = private_flag decl.T.type_private;
+        type_manifest = (match decl.T.type_manifest with
+            None -> None | Some t -> Some (type_expr t));
+        type_variance = decl.T.type_variance;
+      }
+
+    and type_kind t =
+      match t with
+        T.Type_abstract -> Type_abstract
+      | T.Type_variant list -> Type_variant (List.map (fun (s, tlist) ->
+                (s, List.map type_expr tlist)) list)
+      | T.Type_record (list, rr) ->
+          Type_record (List.map (fun (s, mf, t) ->
+                (s, mutable_flag mf, type_expr t)) list,
+            record_representation rr)
+          
+    and record_representation rr =
+      match rr with
+        T.Record_regular -> Record_regular
+      | T.Record_float -> Record_float
+      
+    and exception_declaration list = 
+      List.map type_expr list
+      
+    and module_type decl = 
+      match decl with
+        T.Tmty_ident p -> Tmty_ident (Path.t p)
+      | T.Tmty_signature s ->
+          Tmty_signature (signature s)
+      | T.Tmty_functor (id, m1, m2) ->
+          Tmty_functor (Ident.t id, module_type m1, module_type m2)
+                  
+    and modtype_declaration decl = 
+      match decl with
+        T.Tmodtype_abstract -> Tmodtype_abstract
+      | T.Tmodtype_manifest mt ->
+          Tmodtype_manifest (module_type mt)
+          
+    and class_declaration d = 
+      { cty_params = List.map type_expr d.T.cty_params;
+        cty_type = class_type d.T.cty_type;
+        cty_path = Path.t d.T.cty_path;
+        cty_new = (match d.T.cty_new with
+            None -> None | Some t -> Some (type_expr t));
+        cty_variance = d.T.cty_variance;
+      }
+      
+    and class_type cl = 
+      match cl with
+        T.Tcty_constr (p, list, ct) ->
+          Tcty_constr (Path.t p, List.map type_expr list, class_type ct)
+      | T.Tcty_signature cl ->
+          Tcty_signature (class_signature cl)
+      | T.Tcty_fun (l, t, ct) ->
+          Tcty_fun (label l, type_expr t, class_type ct)
+
+    and class_signature c =
+      let cty_vars = ref Vars.empty in
+      T.Vars.iter (fun s (mf, vf, ty) ->
+          cty_vars := Vars.add s (mutable_flag mf, virtual_flag vf, 
+            type_expr ty) !cty_vars
+      ) c.T.cty_vars;
+      let cty_concr = ref Concr.empty in
+      T.Concr.iter (fun s -> 
+          cty_concr := Concr.add s !cty_concr) c.T.cty_concr;
+      { cty_self = type_expr c.T.cty_self;
+        cty_vars = !cty_vars;
+        cty_concr = !cty_concr;
+        cty_inher = List.map (fun (p, l) ->
+            (Path.t p, List.map type_expr l)) c.T.cty_inher;
+      }
+          
+  and cltype_declaration c = 
+      { clty_params = List.map type_expr c.T.clty_params;
+        clty_type = class_type c.T.clty_type;
+        clty_path = Path.t c.T.clty_path;
+        clty_variance = c.T.clty_variance;
+      }
 
 
 end

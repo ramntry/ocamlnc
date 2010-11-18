@@ -578,3 +578,305 @@ module Cmi_format = struct
   type pers_flags = Rectypes
 
 end
+
+module Lambda = struct
+    
+    open Asttypes
+    
+    type structured_constant =
+      Const_base of constant
+    | Const_pointer of int
+    | Const_block of int * structured_constant list
+    | Const_float_array of string list
+    | Const_immstring of string
+
+      
+type primitive =
+    Pidentity
+  | Pignore
+    (* Globals *)
+  | Pgetglobal of Ident.t
+  | Psetglobal of Ident.t
+  (* Operations on heap blocks *)
+  | Pmakeblock of int * mutable_flag
+  | Pfield of int
+  | Psetfield of int * bool
+  | Pfloatfield of int
+  | Psetfloatfield of int
+  | Pduprecord of Types.record_representation * int
+  (* Force lazy values *)
+  | Plazyforce
+  (* External call *)
+  | Pccall of Primitive.description
+  (* Exceptions *)
+  | Praise
+  (* Boolean operations *)
+  | Psequand | Psequor | Pnot
+  (* Integer operations *)
+  | Pnegint | Paddint | Psubint | Pmulint | Pdivint | Pmodint
+  | Pandint | Porint | Pxorint
+  | Plslint | Plsrint | Pasrint
+  | Pintcomp of comparison
+  | Poffsetint of int
+  | Poffsetref of int
+  (* Float operations *)
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat | Pdivfloat
+  | Pfloatcomp of comparison
+  (* String operations *)
+  | Pstringlength | Pstringrefu | Pstringsetu | Pstringrefs | Pstringsets
+  (* Array operations *)
+  | Pmakearray of array_kind
+  | Parraylength of array_kind
+  | Parrayrefu of array_kind
+  | Parraysetu of array_kind
+  | Parrayrefs of array_kind
+  | Parraysets of array_kind
+  (* Test if the argument is a block or an immediate integer *)
+  | Pisint
+  (* Test if the (integer) argument is outside an interval *)
+  | Pisout
+  (* Bitvect operations *)
+  | Pbittest
+  (* Operations on boxed integers (Nativeint.t, Int32.t, Int64.t) *)
+  | Pbintofint of boxed_integer
+  | Pintofbint of boxed_integer
+  | Pcvtbint of boxed_integer (*source*) * boxed_integer (*destination*)
+  | Pnegbint of boxed_integer
+  | Paddbint of boxed_integer
+  | Psubbint of boxed_integer
+  | Pmulbint of boxed_integer
+  | Pdivbint of boxed_integer
+  | Pmodbint of boxed_integer
+  | Pandbint of boxed_integer
+  | Porbint of boxed_integer
+  | Pxorbint of boxed_integer
+  | Plslbint of boxed_integer
+  | Plsrbint of boxed_integer
+  | Pasrbint of boxed_integer
+  | Pbintcomp of boxed_integer * comparison
+  (* Operations on big arrays: (unsafe, #dimensions, kind, layout) *)
+  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout
+  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout
+
+and comparison =
+    Ceq | Cneq | Clt | Cgt | Cle | Cge
+
+and array_kind =
+    Pgenarray | Paddrarray | Pintarray | Pfloatarray
+
+and boxed_integer =
+    Pnativeint | Pint32 | Pint64
+
+and bigarray_kind =
+    Pbigarray_unknown
+  | Pbigarray_float32 | Pbigarray_float64
+  | Pbigarray_sint8 | Pbigarray_uint8
+  | Pbigarray_sint16 | Pbigarray_uint16
+  | Pbigarray_int32 | Pbigarray_int64
+  | Pbigarray_caml_int | Pbigarray_native_int
+  | Pbigarray_complex32 | Pbigarray_complex64
+
+and bigarray_layout =
+    Pbigarray_unknown_layout
+  | Pbigarray_c_layout
+  | Pbigarray_fortran_layout
+
+type function_kind = Curried | Tupled
+
+type let_kind = Strict | Alias | StrictOpt | Variable
+(* Meaning of kinds for let x = e in e':
+    Strict: e may have side-effets; always evaluate e first
+      (If e is a simple expression, e.g. a variable or constant,
+       we may still substitute e'[x/e].)
+    Alias: e is pure, we can substitute e'[x/e] if x has 0 or 1 occurrences
+      in e'
+    StrictOpt: e does not have side-effects, but depend on the store;
+      we can discard e if x does not appear in e'
+    Variable: the variable x is assigned later in e' *)
+
+type meth_kind = Self | Public | Cached
+
+type shared_code = (int * int) list     (* stack size -> code label *)
+
+      
+  end
+  
+module Cmo_format = struct 
+
+(* Symbol table information for .cmo and .cma files *)
+
+(* Relocation information *)
+    
+    type reloc_info =
+      Reloc_literal of Lambda.structured_constant    (* structured constant *)
+    | Reloc_getglobal of Ident.t              (* reference to a global *)
+    | Reloc_setglobal of Ident.t              (* definition of a global *)
+    | Reloc_primitive of string               (* C primitive number *)
+
+(* Descriptor for compilation units *)
+    
+    type compilation_unit =
+      { cu_name: string;                    (* Name of compilation unit *)
+        mutable cu_pos: int;                (* Absolute position in file *)
+        cu_codesize: int;                   (* Size of code block *)
+        cu_reloc: (reloc_info * int) list;  (* Relocation information *)
+        cu_imports: (string * Digest.t) list; (* Names and CRC of intfs imported *)
+        cu_primitives: string list;         (* Primitives declared inside *)
+        mutable cu_force_link: bool;        (* Must be linked even if unref'ed *)
+        mutable cu_debug: int;              (* Position of debugging info, or 0 *)
+        cu_debugsize: int }                 (* Length of debugging info *)
+
+(* Format of a .cmo file:
+     magic number (Config.cmo_magic_number)
+     absolute offset of compilation unit descriptor
+     block of relocatable bytecode
+     debugging information if any
+     compilation unit descriptor *)
+
+(* Descriptor for libraries *)
+
+type library =
+  { lib_units: compilation_unit list;   (* List of compilation units *)
+    lib_custom: bool;                   (* Requires custom mode linking? *)
+    lib_ccobjs: string list;            (* C object files needed for -custom *)
+    lib_ccopts: string list;            (* Extra opts to C compiler *)
+    lib_dllibs: string list }           (* DLLs needed *)
+
+(* Format of a .cma file:
+     magic number (Config.cma_magic_number)
+     absolute offset of library descriptor
+     object code for first library member
+     ...
+     object code for last library member
+     library descriptor *)
+
+end
+
+module Debuginfo = struct
+
+type kind = Dinfo_call | Dinfo_raise
+
+type t = {
+  dinfo_kind: kind;
+  dinfo_file: string;
+  dinfo_line: int;
+  dinfo_char_start: int;
+  dinfo_char_end: int
+}
+
+  end
+
+module Clambda = struct
+
+(* A variant of the "lambda" code with direct / indirect calls explicit
+   and closures explicit too *)
+
+open Asttypes
+open Lambda
+
+type function_label = string
+
+type ulambda =
+    Uvar of Ident.t
+  | Uconst of structured_constant
+  | Udirect_apply of function_label * ulambda list * Debuginfo.t
+  | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
+  | Uclosure of (function_label * int * Ident.t list * ulambda) list
+              * ulambda list
+  | Uoffset of ulambda * int
+  | Ulet of Ident.t * ulambda * ulambda
+  | Uletrec of (Ident.t * ulambda) list * ulambda
+  | Uprim of primitive * ulambda list * Debuginfo.t
+  | Uswitch of ulambda * ulambda_switch
+  | Ustaticfail of int * ulambda list
+  | Ucatch of int * Ident.t list * ulambda * ulambda
+  | Utrywith of ulambda * Ident.t * ulambda
+  | Uifthenelse of ulambda * ulambda * ulambda
+  | Usequence of ulambda * ulambda
+  | Uwhile of ulambda * ulambda
+  | Ufor of Ident.t * ulambda * ulambda * direction_flag * ulambda
+  | Uassign of Ident.t * ulambda
+  | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
+
+and ulambda_switch =
+  { us_index_consts: int array;
+    us_actions_consts: ulambda array;
+    us_index_blocks: int array;
+    us_actions_blocks: ulambda array}
+
+(* Description of known functions *)
+
+type function_description =
+  { fun_label: function_label;          (* Label of direct entry point *)
+    fun_arity: int;                     (* Number of arguments *)
+    mutable fun_closed: bool;           (* True if environment not used *)
+    mutable fun_inline: (Ident.t list * ulambda) option }
+
+(* Approximation of values *)
+
+type value_approximation =
+    Value_closure of function_description * value_approximation
+  | Value_tuple of value_approximation array
+  | Value_unknown
+  | Value_integer of int
+  | Value_constptr of int
+
+    
+  end
+
+module Cmx_format = struct
+
+(* Format of .cmx, .cmxa and .cmxs files *)
+
+(* Each .o file has a matching .cmx file that provides the following infos
+   on the compilation unit:
+     - list of other units imported, with CRCs of their .cmx files
+     - approximation of the structure implemented
+       (includes descriptions of known functions: arity and direct entry
+        points)
+     - list of currying functions and application functions needed
+   The .cmx file contains these infos (as an externed record) plus a CRC
+   of these infos *)
+
+type unit_infos =
+  { mutable ui_name: string;                    (* Name of unit implemented *)
+    mutable ui_symbol: string;            (* Prefix for symbols *)
+    mutable ui_defines: string list;      (* Unit and sub-units implemented *)
+    mutable ui_imports_cmi: (string * Digest.t) list; (* Interfaces imported *)
+    mutable ui_imports_cmx: (string * Digest.t) list; (* Infos imported *)
+    mutable ui_approx: Clambda.value_approximation; (* Approx of the structure *)
+    mutable ui_curry_fun: int list;             (* Currying functions needed *)
+    mutable ui_apply_fun: int list;             (* Apply functions needed *)
+    mutable ui_send_fun: int list;              (* Send functions needed *)
+    mutable ui_force_link: bool }               (* Always linked *)
+
+(* Each .a library has a matching .cmxa file that provides the following
+   infos on the library: *)
+
+type library_infos =
+  { lib_units: (unit_infos * Digest.t) list;  (* List of unit infos w/ CRCs *)
+    lib_ccobjs: string list;            (* C object files needed *)
+    lib_ccopts: string list }           (* Extra opts to C compiler *)
+
+(* Each .cmxs dynamically-loaded plugin contains a symbol
+   "caml_plugin_header" containing the following info
+   (as an externed record) *)
+
+type dynunit = {
+  dynu_name: string;
+  dynu_crc: Digest.t;
+  dynu_imports_cmi: (string * Digest.t) list;
+  dynu_imports_cmx: (string * Digest.t) list;
+  dynu_defines: string list;
+}
+
+type dynheader = {
+  dynu_magic: string;
+  dynu_units: dynunit list;
+}
+
+
+    
+  end

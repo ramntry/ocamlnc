@@ -55,6 +55,12 @@ let add_ccobjs l =
     lib_dllibs := !lib_dllibs @ l.lib_dllibs
   end
 
+let input_cmi_file ic magic =
+  if buffer = cmo_magic_number then
+    Compunit (input_value ic : compilation_unit)
+  else
+    Library (input_value ic : library)
+    
 let copy_object_file oc name =
   let file_name =
     try

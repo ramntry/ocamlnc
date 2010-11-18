@@ -58,3 +58,8 @@ type library =
      ...
      object code for last library member
      library descriptor *)
+
+type unit =
+  Compunit of compilation_unit
+| Library of library
+  
