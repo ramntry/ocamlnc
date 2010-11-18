@@ -136,7 +136,7 @@ let current_unit = ref ""
 
 (* Persistent structure descriptions *)
 
-type pers_flags = Rectypes
+open Cmi_format
 
 type pers_struct =
   { ps_name: string;
@@ -163,29 +163,42 @@ let check_consistency filename crcs =
 
 (* Reading persistent structures from .cmi files *)
 
-let read_pers_struct modname filename =
+let input_cmi_file ic magic =
+    if magic = cmi_magic_number then 
+      Cmi_format.input_cmi_file ic magic
+    else
+      V3120_cmi.input_cmi_file ic magic
+
+let read_cmi_file filename = 
   let ic = open_in_bin filename in
   try
     let buffer = String.create (String.length cmi_magic_number) in
     really_input ic buffer 0 (String.length cmi_magic_number);
-    if buffer <> cmi_magic_number then begin
+    let cmi = input_cmi_file ic buffer in
       close_in ic;
-      raise(Error(Not_an_interface filename))
-    end;
-    let (name, sign) = input_value ic in
-    let crcs = input_value ic in
-    let flags = input_value ic in
+      cmi
+  with End_of_file | Failure _ ->
     close_in ic;
+    raise(Error(Corrupted_interface(filename)))
+    | No_such_magic -> 
+	raise (Error(Not_an_interface(filename)))
+    | e -> 
+	close_in ic;
+	raise e
+      
+
+let read_pers_struct modname filename =
+  let cmi = read_cmi_file filename in
     let comps =
       !components_of_module' empty Subst.identity
-                             (Pident(Ident.create_persistent name))
-                             (Tmty_signature sign) in
-    let ps = { ps_name = name;
-               ps_sig = sign;
+                             (Pident(Ident.create_persistent cmi.cmi_name))
+                             (Tmty_signature cmi.cmi_sign) in
+    let ps = { ps_name = cmi.cmi_name;
+               ps_sig = cmi.cmi_sign;
                ps_comps = comps;
-               ps_crcs = crcs;
+               ps_crcs = cmi.cmi_crcs;
                ps_filename = filename;
-               ps_flags = flags } in
+               ps_flags = cmi.cmi_flags } in
     if ps.ps_name <> modname then
       raise(Error(Illegal_renaming(ps.ps_name, filename)));
     check_consistency filename ps.ps_crcs;
@@ -196,9 +209,6 @@ let read_pers_struct modname filename =
       ps.ps_flags;
     Hashtbl.add persistent_structures modname ps;
     ps
-  with End_of_file | Failure _ ->
-    close_in ic;
-    raise(Error(Corrupted_interface(filename)))
 
 let find_pers_struct name =
   try
