@@ -250,4 +250,4 @@ let input_cmo_file ic magic =
     let v = (input_value ic : V3120_types.Cmo_format.library) in
     Library (CMO.Cmo_format.library v)    
   else
-    raise Cmi_format.No_such_magic
+    V3112_cmo.input_cmo_file ic magic

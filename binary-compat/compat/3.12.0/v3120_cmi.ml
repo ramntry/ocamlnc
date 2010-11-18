@@ -408,15 +408,17 @@ end
   
 let input_cmi_file ic magic =
   if magic <> V3120_types.cmi_magic_number then
-    raise Cmi_format.No_such_magic;
-  
-  CMI.Ident.reset ();
-  CMI.Types.reset ();
-  
-  let (cmi_name, cmi_sign) = (input_value ic : string *  V3120_types.Types.signature_item list) in
-  let cmi_crcs = (input_value ic : (string * Digest.t) list) in
-  let cmi_flags = (input_value ic : V3120_types.Cmi_format.pers_flags list) in
-  
-  let cmi_sign = List.map CMI.Types.signature_item cmi_sign in
-  let cmi_flags = List.map CMI.Cmi_format.pers_flags cmi_flags in
-  { Cmi_format.cmi_name ; cmi_sign; cmi_crcs; cmi_flags }
+    V3112_cmi.input_cmi_file ic magic  
+  else begin
+      
+      CMI.Ident.reset ();
+      CMI.Types.reset ();
+      
+      let (cmi_name, cmi_sign) = (input_value ic : string *  V3120_types.Types.signature_item list) in
+      let cmi_crcs = (input_value ic : (string * Digest.t) list) in
+      let cmi_flags = (input_value ic : V3120_types.Cmi_format.pers_flags list) in
+      
+      let cmi_sign = List.map CMI.Types.signature_item cmi_sign in
+      let cmi_flags = List.map CMI.Cmi_format.pers_flags cmi_flags in
+      { Cmi_format.cmi_name ; cmi_sign; cmi_crcs; cmi_flags }
+    end

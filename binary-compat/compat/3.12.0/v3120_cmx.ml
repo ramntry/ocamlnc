@@ -159,11 +159,12 @@ let input_cmx_file ic magic =
     let ui = (input_value ic : V3120_types.Cmx_format.unit_infos) in
     CMX.Cmx_format.unit_infos ui
   else
-    raise Cmi_format.No_such_magic
+    V3112_cmx.input_cmx_file ic magic
 
 let input_cmxa_file ic magic = 
   if magic = V3120_types.cmxa_magic_number then
     let infos = (input_value ic : V3120_types.Cmx_format.library_infos) in
     CMX.Cmx_format.library_infos infos
   else
-    raise Cmi_format.No_such_magic
+    V3112_cmx.input_cmxa_file ic magic
+

@@ -164,9 +164,9 @@ let check_consistency filename crcs =
 (* Reading persistent structures from .cmi files *)
 
 let input_cmi_file ic magic =
-(*    if magic = cmi_magic_number then 
+    if magic = cmi_magic_number then 
       Cmi_format.input_cmi_file ic magic
-    else *)
+  else 
       V3120_cmi.input_cmi_file ic magic
 
 let read_cmi_file filename = 

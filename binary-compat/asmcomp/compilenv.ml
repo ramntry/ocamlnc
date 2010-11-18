@@ -82,15 +82,15 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
 
       
 let input_cmx_file ic magic =
-(*  if magic = cmx_magic_number then
+  if magic = cmx_magic_number then
     (input_value ic : unit_infos)
-  else *)
+  else 
     V3120_cmx.input_cmx_file ic magic
 
 let input_cmxa_file ic magic = 
-(*    if magic = cmxa_magic_number then
+  if magic = cmxa_magic_number then
     (input_value ic : library_infos)
-  else *)
+  else 
     V3120_cmx.input_cmxa_file ic magic
 
 let read_unit_info filename =

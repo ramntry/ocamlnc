@@ -110,14 +110,12 @@ let remove_required (rel, pos) =
 let input_cmo_file ic magic =
   let unit_pos = input_binary_int ic in
   seek_in ic unit_pos;
-(*
   if magic = cmo_magic_number then
     Compunit (input_value ic : compilation_unit)
-  else
+    else
   if magic = cma_magic_number then
     Library (input_value ic : library)
 else
-  *)
     V3120_cmo.input_cmo_file ic magic
 
 let scan_file obj_name tolink =
