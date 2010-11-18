@@ -61,3 +61,8 @@ type dynheader = {
   dynu_units: dynunit list;
 }
 
+
+type cmx_unit =
+  Compunit of unit_infos
+| Library of library_infos
+  

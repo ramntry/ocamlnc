@@ -34,3 +34,6 @@ exception Error of error
 open Format
 
 val report_error: formatter -> error -> unit
+
+val input_cmo_file : in_channel -> string -> Cmo_format.cmo_unit
+  

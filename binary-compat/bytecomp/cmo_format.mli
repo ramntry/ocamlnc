@@ -59,7 +59,7 @@ type library =
      object code for last library member
      library descriptor *)
 
-type unit =
+type cmo_unit =
   Compunit of compilation_unit
 | Library of library
   

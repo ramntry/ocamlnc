@@ -54,12 +54,6 @@ let add_ccobjs l =
     lib_ccopts := !lib_ccopts @ l.lib_ccopts;
     lib_dllibs := !lib_dllibs @ l.lib_dllibs
   end
-
-let input_cmi_file ic magic =
-  if buffer = cmo_magic_number then
-    Compunit (input_value ic : compilation_unit)
-  else
-    Library (input_value ic : library)
     
 let copy_object_file oc name =
   let file_name =
@@ -71,28 +65,24 @@ let copy_object_file oc name =
   try
     let buffer = String.create (String.length cmo_magic_number) in
     really_input ic buffer 0 (String.length cmo_magic_number);
-    if buffer = cmo_magic_number then begin
-      let compunit_pos = input_binary_int ic in
-      seek_in ic compunit_pos;
-      let compunit = (input_value ic : compilation_unit) in
-      Bytelink.check_consistency file_name compunit;
-      copy_compunit ic oc compunit;
-      close_in ic;
-      [compunit]
-    end else
-    if buffer = cma_magic_number then begin
-      let toc_pos = input_binary_int ic in
-      seek_in ic toc_pos;
-      let toc = (input_value ic : library) in
-      List.iter (Bytelink.check_consistency file_name) toc.lib_units;
-      add_ccobjs toc;
-      List.iter (copy_compunit ic oc) toc.lib_units;
-      close_in ic;
-      toc.lib_units
-    end else
-      raise(Error(Not_an_object_file file_name))
+    let unit = Bytelink.input_cmo_file ic buffer in
+    match unit with
+      Compunit compunit ->
+        Bytelink.check_consistency file_name compunit;
+        copy_compunit ic oc compunit;
+        close_in ic;
+        [compunit]
+    | Library toc ->
+        List.iter (Bytelink.check_consistency file_name) toc.lib_units;
+        add_ccobjs toc;
+        List.iter (copy_compunit ic oc) toc.lib_units;
+        close_in ic;
+        toc.lib_units
   with
     End_of_file -> close_in ic; raise(Error(Not_an_object_file file_name))
+  | Cmi_format.No_such_magic ->
+      close_in ic;
+      raise(Error(Not_an_object_file file_name))      
   | x -> close_in ic; raise x
 
 let create_archive file_list lib_name =

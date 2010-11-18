@@ -106,6 +106,19 @@ let remove_required (rel, pos) =
     Reloc_setglobal id ->
       missing_globals := IdentSet.remove id !missing_globals
   | _ -> ()
+      
+let input_cmo_file ic magic =
+  let unit_pos = input_binary_int ic in
+  seek_in ic unit_pos;
+(*
+  if magic = cmo_magic_number then
+    Compunit (input_value ic : compilation_unit)
+  else
+  if magic = cma_magic_number then
+    Library (input_value ic : library)
+else
+  *)
+    V3120_cmo.input_cmo_file ic magic
 
 let scan_file obj_name tolink =
   let file_name =
@@ -117,24 +130,14 @@ let scan_file obj_name tolink =
   try
     let buffer = String.create (String.length cmo_magic_number) in
     really_input ic buffer 0 (String.length cmo_magic_number);
-    if buffer = cmo_magic_number then begin
-      (* This is a .cmo file. It must be linked in any case.
-         Read the relocation information to see which modules it
-         requires. *)
-      let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
-      seek_in ic compunit_pos;
-      let compunit = (input_value ic : compilation_unit) in
-      close_in ic;
-      List.iter add_required compunit.cu_reloc;
-      Link_object(file_name, compunit) :: tolink
-    end
-    else if buffer = cma_magic_number then begin
-      (* This is an archive file. Each unit contained in it will be linked
-         in only if needed. *)
-      let pos_toc = input_binary_int ic in    (* Go to table of contents *)
-      seek_in ic pos_toc;
-      let toc = (input_value ic : library) in
-      close_in ic;
+    let unit = input_cmo_file ic buffer in
+    match unit with
+      Compunit compunit ->
+        close_in ic;
+        List.iter add_required compunit.cu_reloc;
+        Link_object(file_name, compunit) :: tolink
+    | Library toc ->
+        close_in ic;
       add_ccobjs toc;
       let required =
         List.fold_right
@@ -150,10 +153,12 @@ let scan_file obj_name tolink =
               reqd)
           toc.lib_units [] in
       Link_archive(file_name, required) :: tolink
-    end
-    else raise(Error(Not_an_object_file file_name))
+
   with
     End_of_file -> close_in ic; raise(Error(Not_an_object_file file_name))
+  | Cmi_format.No_such_magic ->
+      close_in ic;
+      raise(Error(Not_an_object_file file_name))
   | x -> close_in ic; raise x
 
 (* Second pass: link in the required units *)

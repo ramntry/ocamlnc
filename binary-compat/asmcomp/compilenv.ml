@@ -80,33 +80,48 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
   | None -> prefix
   | Some id -> prefix ^ "__" ^ id
 
+      
+let input_cmx_file ic magic =
+(*  if magic = cmx_magic_number then
+    (input_value ic : unit_infos)
+  else *)
+    V3120_cmx.input_cmx_file ic magic
+
+let input_cmxa_file ic magic = 
+(*    if magic = cmxa_magic_number then
+    (input_value ic : library_infos)
+  else *)
+    V3120_cmx.input_cmxa_file ic magic
+
 let read_unit_info filename =
   let ic = open_in_bin filename in
   try
     let buffer = String.create (String.length cmx_magic_number) in
     really_input ic buffer 0 (String.length cmx_magic_number);
-    if buffer <> cmx_magic_number then begin
-      close_in ic;
-      raise(Error(Not_a_unit_info filename))
-    end;
-    let ui = (input_value ic : unit_infos) in
+    let ui = input_cmx_file ic buffer in
     let crc = Digest.input ic in
     close_in ic;
     (ui, crc)
   with End_of_file | Failure _ ->
     close_in ic;
-    raise(Error(Corrupted_unit_info(filename)))
-
+      raise(Error(Corrupted_unit_info(filename)))
+  | Cmi_format.No_such_magic ->
+      close_in ic;
+      raise(Error(Not_a_unit_info filename))
+      
 let read_library_info filename =
   let ic = open_in_bin filename in
-  let buffer = String.create (String.length cmxa_magic_number) in
-  really_input ic buffer 0 (String.length cmxa_magic_number);
-  if buffer <> cmxa_magic_number then
-    raise(Error(Not_a_unit_info filename));
-  let infos = (input_value ic : library_infos) in
-  close_in ic;
-  infos
-
+  try
+    let buffer = String.create (String.length cmxa_magic_number) in
+    really_input ic buffer 0 (String.length cmxa_magic_number);
+    let infos = input_cmxa_file ic buffer in
+    close_in ic;
+    infos
+  with
+    | Cmi_format.No_such_magic ->
+      close_in ic;
+      raise(Error(Not_a_unit_info filename))
+      
 
 (* Read and cache info on global identifiers *)
 

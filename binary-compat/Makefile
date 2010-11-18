@@ -33,7 +33,7 @@ MKDIR=mkdir -p
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
 	 -I toplevel \
-	 -I compat/3.12.0
+	 -I compat/3.11.2 -I compat/3.12.0
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
@@ -42,8 +42,18 @@ UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
 OPTUTILS=$(UTILS)
 
 COMPAT_CMI=\
+  compat/3.11.2/v3112_types.cmo \
+  compat/3.11.2/v3112_cmi.cmo \
   compat/3.12.0/v3120_types.cmo \
-  compat/3.12.0/v3120_cmi.cmo
+  compat/3.12.0/v3120_cmi.cmo \
+
+COMPAT_CMO=\
+  compat/3.11.2/v3112_cmo.cmo \
+  compat/3.12.0/v3120_cmo.cmo
+
+COMPAT_CMX=\
+  compat/3.11.2/v3112_cmx.cmo \
+  compat/3.12.0/v3120_cmx.cmo
 
 
 PARSING=parsing/linenum.cmo parsing/location.cmo parsing/longident.cmo \
@@ -69,17 +79,20 @@ COMP=bytecomp/lambda.cmo bytecomp/printlambda.cmo \
   bytecomp/typeopt.cmo bytecomp/switch.cmo bytecomp/matching.cmo \
   bytecomp/translobj.cmo bytecomp/translcore.cmo \
   bytecomp/translclass.cmo bytecomp/translmod.cmo \
-  bytecomp/simplif.cmo bytecomp/runtimedef.cmo
+  bytecomp/simplif.cmo bytecomp/runtimedef.cmo \
+  $(COMPAT_CMO)
 
 BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/printinstr.cmo bytecomp/opcodes.cmo bytecomp/emitcode.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
-  bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo
+  bytecomp/bytelink.cmo \
+  bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/clambda.cmo asmcomp/compilenv.cmo \
+  asmcomp/clambda.cmo \
+   $(COMPAT_CMX) asmcomp/compilenv.cmo \
   asmcomp/closure.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo asmcomp/liveness.cmo \
@@ -756,7 +769,7 @@ partialclean::
 	rm -f *~
 
 depend: beforedepend
-	(for d in utils parsing typing bytecomp asmcomp driver toplevel; \
+	(for d in utils parsing typing bytecomp asmcomp driver toplevel compat/3.*; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
 

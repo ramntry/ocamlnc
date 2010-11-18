@@ -329,21 +329,21 @@ bytecomp/bytegen.cmx: typing/types.cmx bytecomp/switch.cmx typing/subst.cmx \
     bytecomp/instruct.cmx typing/ident.cmx utils/config.cmx \
     parsing/asttypes.cmi typing/annot.cmi bytecomp/bytegen.cmi
 bytecomp/bytelibrarian.cmo: utils/misc.cmi utils/config.cmi \
-    bytecomp/cmo_format.cmi utils/clflags.cmi bytecomp/bytelink.cmi \
-    bytecomp/bytelibrarian.cmi
+    bytecomp/cmo_format.cmi typing/cmi_format.cmo utils/clflags.cmi \
+    bytecomp/bytelink.cmi bytecomp/bytelibrarian.cmi
 bytecomp/bytelibrarian.cmx: utils/misc.cmx utils/config.cmx \
-    bytecomp/cmo_format.cmi utils/clflags.cmx bytecomp/bytelink.cmx \
-    bytecomp/bytelibrarian.cmi
-bytecomp/bytelink.cmo: bytecomp/symtable.cmi bytecomp/opcodes.cmo \
-    utils/misc.cmi bytecomp/instruct.cmi typing/ident.cmi bytecomp/dll.cmi \
-    utils/consistbl.cmi utils/config.cmi bytecomp/cmo_format.cmi \
-    utils/clflags.cmi utils/ccomp.cmi bytecomp/bytesections.cmi \
-    bytecomp/bytelink.cmi
-bytecomp/bytelink.cmx: bytecomp/symtable.cmx bytecomp/opcodes.cmx \
-    utils/misc.cmx bytecomp/instruct.cmx typing/ident.cmx bytecomp/dll.cmx \
-    utils/consistbl.cmx utils/config.cmx bytecomp/cmo_format.cmi \
-    utils/clflags.cmx utils/ccomp.cmx bytecomp/bytesections.cmx \
-    bytecomp/bytelink.cmi
+    bytecomp/cmo_format.cmi typing/cmi_format.cmx utils/clflags.cmx \
+    bytecomp/bytelink.cmx bytecomp/bytelibrarian.cmi
+bytecomp/bytelink.cmo: compat/3.12.0/v3120_cmo.cmo bytecomp/symtable.cmi \
+    bytecomp/opcodes.cmo utils/misc.cmi bytecomp/instruct.cmi \
+    typing/ident.cmi bytecomp/dll.cmi utils/consistbl.cmi utils/config.cmi \
+    bytecomp/cmo_format.cmi typing/cmi_format.cmo utils/clflags.cmi \
+    utils/ccomp.cmi bytecomp/bytesections.cmi bytecomp/bytelink.cmi
+bytecomp/bytelink.cmx: compat/3.12.0/v3120_cmo.cmx bytecomp/symtable.cmx \
+    bytecomp/opcodes.cmx utils/misc.cmx bytecomp/instruct.cmx \
+    typing/ident.cmx bytecomp/dll.cmx utils/consistbl.cmx utils/config.cmx \
+    bytecomp/cmo_format.cmi typing/cmi_format.cmx utils/clflags.cmx \
+    utils/ccomp.cmx bytecomp/bytesections.cmx bytecomp/bytelink.cmi
 bytecomp/bytepackager.cmo: typing/typemod.cmi bytecomp/translmod.cmi \
     typing/subst.cmi typing/path.cmi utils/misc.cmi bytecomp/instruct.cmi \
     typing/ident.cmi typing/env.cmi bytecomp/emitcode.cmi utils/config.cmi \
@@ -608,12 +608,12 @@ asmcomp/comballoc.cmo: asmcomp/reg.cmi asmcomp/mach.cmi utils/config.cmi \
     asmcomp/comballoc.cmi
 asmcomp/comballoc.cmx: asmcomp/reg.cmx asmcomp/mach.cmx utils/config.cmx \
     asmcomp/comballoc.cmi
-asmcomp/compilenv.cmo: utils/misc.cmi typing/ident.cmi typing/env.cmi \
-    utils/config.cmi asmcomp/cmx_format.cmi asmcomp/clambda.cmi \
-    asmcomp/compilenv.cmi
-asmcomp/compilenv.cmx: utils/misc.cmx typing/ident.cmx typing/env.cmx \
-    utils/config.cmx asmcomp/cmx_format.cmi asmcomp/clambda.cmx \
-    asmcomp/compilenv.cmi
+asmcomp/compilenv.cmo: compat/3.12.0/v3120_cmx.cmo utils/misc.cmi \
+    typing/ident.cmi typing/env.cmi utils/config.cmi asmcomp/cmx_format.cmi \
+    typing/cmi_format.cmo asmcomp/clambda.cmi asmcomp/compilenv.cmi
+asmcomp/compilenv.cmx: compat/3.12.0/v3120_cmx.cmx utils/misc.cmx \
+    typing/ident.cmx typing/env.cmx utils/config.cmx asmcomp/cmx_format.cmi \
+    typing/cmi_format.cmx asmcomp/clambda.cmx asmcomp/compilenv.cmi
 asmcomp/debuginfo.cmo: parsing/location.cmi bytecomp/lambda.cmi \
     asmcomp/debuginfo.cmi
 asmcomp/debuginfo.cmx: parsing/location.cmx bytecomp/lambda.cmx \
@@ -918,3 +918,55 @@ toplevel/trace.cmo: typing/types.cmi toplevel/toploop.cmi typing/printtyp.cmi \
 toplevel/trace.cmx: typing/types.cmx toplevel/toploop.cmx typing/printtyp.cmx \
     typing/predef.cmx typing/path.cmx utils/misc.cmx bytecomp/meta.cmx \
     parsing/longident.cmx typing/ctype.cmx toplevel/trace.cmi
+compat/3.11.2/v3112_cmi.cmo: compat/3.11.2/v3112_types.cmo typing/types.cmi \
+    typing/primitive.cmi typing/path.cmi parsing/location.cmi \
+    typing/ident.cmi typing/cmi_format.cmo parsing/asttypes.cmi
+compat/3.11.2/v3112_cmi.cmx: compat/3.11.2/v3112_types.cmx typing/types.cmx \
+    typing/primitive.cmx typing/path.cmx parsing/location.cmx \
+    typing/ident.cmx typing/cmi_format.cmx parsing/asttypes.cmi
+compat/3.11.2/v3112_cmo.cmo: compat/3.11.2/v3112_types.cmo \
+    compat/3.11.2/v3112_cmi.cmo typing/types.cmi typing/primitive.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi bytecomp/cmo_format.cmi \
+    typing/cmi_format.cmo parsing/asttypes.cmi
+compat/3.11.2/v3112_cmo.cmx: compat/3.11.2/v3112_types.cmx \
+    compat/3.11.2/v3112_cmi.cmx typing/types.cmx typing/primitive.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx bytecomp/cmo_format.cmi \
+    typing/cmi_format.cmx parsing/asttypes.cmi
+compat/3.11.2/v3112_cmx.cmo: compat/3.11.2/v3112_types.cmo \
+    compat/3.11.2/v3112_cmo.cmo compat/3.11.2/v3112_cmi.cmo \
+    bytecomp/lambda.cmi typing/ident.cmi asmcomp/debuginfo.cmi \
+    asmcomp/cmx_format.cmi typing/cmi_format.cmo asmcomp/clambda.cmi \
+    parsing/asttypes.cmi
+compat/3.11.2/v3112_cmx.cmx: compat/3.11.2/v3112_types.cmx \
+    compat/3.11.2/v3112_cmo.cmx compat/3.11.2/v3112_cmi.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx asmcomp/debuginfo.cmx \
+    asmcomp/cmx_format.cmi typing/cmi_format.cmx asmcomp/clambda.cmx \
+    parsing/asttypes.cmi
+compat/3.11.2/v3112_types.cmo:
+compat/3.11.2/v3112_types.cmx:
+compat/3.12.0/v3120_cmi.cmo: compat/3.12.0/v3120_types.cmo typing/types.cmi \
+    typing/primitive.cmi typing/path.cmi parsing/location.cmi \
+    typing/ident.cmi typing/cmi_format.cmo parsing/asttypes.cmi
+compat/3.12.0/v3120_cmi.cmx: compat/3.12.0/v3120_types.cmx typing/types.cmx \
+    typing/primitive.cmx typing/path.cmx parsing/location.cmx \
+    typing/ident.cmx typing/cmi_format.cmx parsing/asttypes.cmi
+compat/3.12.0/v3120_cmo.cmo: compat/3.12.0/v3120_types.cmo \
+    compat/3.12.0/v3120_cmi.cmo typing/types.cmi typing/primitive.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi bytecomp/cmo_format.cmi \
+    typing/cmi_format.cmo parsing/asttypes.cmi
+compat/3.12.0/v3120_cmo.cmx: compat/3.12.0/v3120_types.cmx \
+    compat/3.12.0/v3120_cmi.cmx typing/types.cmx typing/primitive.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx bytecomp/cmo_format.cmi \
+    typing/cmi_format.cmx parsing/asttypes.cmi
+compat/3.12.0/v3120_cmx.cmo: compat/3.12.0/v3120_types.cmo \
+    compat/3.12.0/v3120_cmo.cmo compat/3.12.0/v3120_cmi.cmo \
+    bytecomp/lambda.cmi typing/ident.cmi asmcomp/debuginfo.cmi \
+    asmcomp/cmx_format.cmi typing/cmi_format.cmo asmcomp/clambda.cmi \
+    parsing/asttypes.cmi
+compat/3.12.0/v3120_cmx.cmx: compat/3.12.0/v3120_types.cmx \
+    compat/3.12.0/v3120_cmo.cmx compat/3.12.0/v3120_cmi.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx asmcomp/debuginfo.cmx \
+    asmcomp/cmx_format.cmi typing/cmi_format.cmx asmcomp/clambda.cmx \
+    parsing/asttypes.cmi
+compat/3.12.0/v3120_types.cmo:
+compat/3.12.0/v3120_types.cmx:
