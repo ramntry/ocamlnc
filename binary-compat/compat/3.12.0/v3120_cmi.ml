@@ -5,7 +5,7 @@ exception TODO
 module Ident : sig 
   
   val reset : unit -> unit
-  val ident : V3120_types.Ident.t -> Ident.t
+  val t : V3120_types.Ident.t -> Ident.t
 
 end = struct
 
@@ -14,7 +14,7 @@ end = struct
     
   let reset () = Hashtbl.clear tbl
 
-  let ident id = 
+  let t id = 
     let key =  (id.T.name, id.T.stamp) in
     try
       Hashtbl.find tbl key
@@ -22,6 +22,23 @@ end = struct
     let t = Ident.magic id.T.stamp id.T.name id.T.flags in
       Hashtbl.add tbl key t;
       t
+
+end
+
+module Path : sig
+
+  val t : V3120_types.Path.t -> Path.t
+
+end = struct
+
+  module T = V3120_types.Path
+  open Path
+
+  let rec t p =
+    match p with
+	T.Pident id -> Pident (Ident.t id)
+      | T.Pdot(p, s, pos) -> Pdot (t p, s, pos)
+      | T.Papply (p1, p2) -> Papply (t p1, t p2)
 
 end
 
@@ -47,11 +64,68 @@ end = struct
   module T = V3120_types.Types
   open Types
 
-  let reset () = raise TODO
+  let tbl = Hashtbl.create 113
+  let reset () = 
+    Hashtbl.clear tbl
 
-  let rec type_expr ty = raise TODO
+  let label l = l
+      
+  let rec commutable c =
+    match c with
+	T.Cok -> Cok
+      | T.Cunknown -> Cunknown
+      | T.Clink r -> Clink (ref (commutable !r))
 
-  let ident = Ident.ident
+
+  let rec type_expr ty = 
+    let list = 
+      try 
+	Hashtbl.find tbl ty.T.id
+      with Not_found ->
+	let list = ref [] in
+	  Hashtbl.add tbl ty.T.id list;
+	  list
+    in
+      try
+	List.assq ty !list
+      with Not_found ->
+	let t = {
+	  desc = Tvar;
+	  level = ty.T.level;
+	  id = ty.T.id;
+	} in
+	list := (ty, t) :: !list;
+	  t.desc <- type_desc ty.T.desc;
+	  t
+
+  and type_desc desc =
+    match desc with
+	T.Tvar -> Tvar
+      | T.Tarrow (l, t1, t2, c) ->
+	  Tarrow (label l, type_expr t1, type_expr t2, commutable c)
+      | T.Ttuple list -> Ttuple (List.map type_expr list)
+      | T.Tconstr (p, list, ab) ->
+	  Tconstr (Path.t p, List.map type_expr list, ref (abbrev_memo ab))
+      | T.Tobject (t, { contents = None }) ->
+	  Tobject (type_expr t, ref None)
+      | T.Tobject (t, { contents = Some (p, list) }) ->
+	  Tobject (type_expr t, ref (Some (Path.t p, List.map type_expr list)))
+      | T.Tfield (s, f, t1, t2) ->
+	  Tfield (s, field_kind f, type_expr t1, type_expr t2)
+      | T.Tnil -> Tnil
+      | T.Tlink t -> Tlink (type_expr t)
+      | T.Tsubst t ->  Tsubst (type_expr t)
+      | T.Tvariant r -> Tvariant (row_desc r)
+      | T.Tunivar -> Tunivar
+      | T.Tpoly (t, list) -> Tpoly (type_expr t, List.map type_expr list)
+      | T.Tpackage (p, sl, tl) ->
+	  Tpackage (Path.t p, sl, List.map type_expr tl)
+
+  and abbrev_memo ab = raise TODO
+  and field_kind d = raise TODO
+  and row_desc r = raise TODO
+
+  let ident = Ident.t
 
 
 
