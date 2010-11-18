@@ -1,12 +1,25 @@
-module Current_cmi_format = Cmi_format
 
 exception TODO
 
+module CMI = struct
+    
 module Asttypes = struct
-
+    
     open Asttypes
     module T = V3120_types.Asttypes
-
+    
+    
+    let constant c =
+      match c with
+        T.Const_int int ->  Const_int int
+      | T.Const_char char -> Const_char char
+      | T.Const_string  string -> Const_string string
+      | T.Const_float string -> Const_float string
+      | T.Const_int32 int32 -> Const_int32 int32
+      | T.Const_int64 int64 -> Const_int64 int64
+      | T.Const_nativeint nativeint -> Const_nativeint nativeint
+  
+      
     let virtual_flag vf =
       match vf with
         T.Virtual -> Virtual
@@ -27,6 +40,11 @@ module Asttypes = struct
       match mf with
         T.Immutable -> Immutable
       | T.Mutable -> Mutable
+
+    let direction_flag d =
+      match d with
+        T.Upto -> Upto
+      | T.Downto -> Downto
           
 end
 
@@ -122,7 +140,11 @@ module Types : sig
     
     val signature_item : 
       V3120_types.Types.signature_item -> Types.signature_item 
-  
+
+    val record_representation : 
+      V3120_types.Types.record_representation ->
+      Types.record_representation
+      
   end = struct
     
     open Asttypes
@@ -367,32 +389,34 @@ end
 ;;
 
 module Cmi_format : sig
-
-  val pers_flags : 
-    V3120_types.Cmi_format.pers_flags -> Cmi_format.pers_flags
-  ;;
-
-  end = struct
+    
+    val pers_flags : 
+      V3120_types.Cmi_format.pers_flags -> Cmi_format.pers_flags
+    ;;
   
-  module T = V3120_types.Cmi_format
-  open Cmi_format
+  end = struct
+    
+    module T = V3120_types.Cmi_format
+    open Cmi_format
+    
+    let pers_flags flag =
+      match flag with
+        T.Rectypes -> Rectypes
+  end
 
-  let pers_flags flag =
-    match flag with
-	T.Rectypes -> Rectypes
 end
-
+  
 let input_cmi_file ic magic =
-    if magic <> V3120_types.cmi_magic_number then
-      raise Current_cmi_format.No_such_magic;
-
-  Ident.reset ();
-  Types.reset ();
-
-    let (cmi_name, cmi_sign) = (input_value ic : string *  V3120_types.Types.signature_item list) in
-    let cmi_crcs = (input_value ic : (string * Digest.t) list) in
-    let cmi_flags = (input_value ic : V3120_types.Cmi_format.pers_flags list) in
-
-    let cmi_sign = List.map Types.signature_item cmi_sign in
-    let cmi_flags = List.map Cmi_format.pers_flags cmi_flags in
-      { Current_cmi_format.cmi_name ; cmi_sign; cmi_crcs; cmi_flags }
+  if magic <> V3120_types.cmi_magic_number then
+    raise Cmi_format.No_such_magic;
+  
+  CMI.Ident.reset ();
+  CMI.Types.reset ();
+  
+  let (cmi_name, cmi_sign) = (input_value ic : string *  V3120_types.Types.signature_item list) in
+  let cmi_crcs = (input_value ic : (string * Digest.t) list) in
+  let cmi_flags = (input_value ic : V3120_types.Cmi_format.pers_flags list) in
+  
+  let cmi_sign = List.map CMI.Types.signature_item cmi_sign in
+  let cmi_flags = List.map CMI.Cmi_format.pers_flags cmi_flags in
+  { Cmi_format.cmi_name ; cmi_sign; cmi_crcs; cmi_flags }
