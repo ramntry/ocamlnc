@@ -19,4 +19,8 @@ exception Error
 val preprocess : string -> string
 val remove_preprocessed : string -> unit
 val remove_preprocessed_if_ast : string -> unit
-val file : formatter -> string -> (Lexing.lexbuf -> 'a) -> string -> 'a
+val file : formatter -> string ->
+  (Lexing.lexbuf -> 'a) -> (in_channel -> string -> 'a) -> string -> 'a
+
+val input_intf_file : in_channel -> string -> Parsetree.signature
+val input_impl_file : in_channel -> string -> Parsetree.structure

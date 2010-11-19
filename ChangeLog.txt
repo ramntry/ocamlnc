@@ -1,4 +1,7 @@
-2010/11/18: 
+2010/11/19:
+ * Started implementing AST input (for camlp4)
+
+2010/11/18:
  * Able to load .cmi/.cmo/.cmx/.cma/.cmxa from versions 3.12.0 and 3.11.2
 
 2010/11/18: created branch from trunk r10817

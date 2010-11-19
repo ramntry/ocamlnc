@@ -81,7 +81,7 @@ let interface ppf sourcefile outputprefix =
   let inputfile = Pparse.preprocess sourcefile in
   try
     let ast =
-      Pparse.file ppf inputfile Parse.interface ast_intf_magic_number in
+      Pparse.file ppf inputfile Parse.interface Pparse.input_intf_file ast_intf_magic_number in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
     let sg = Typemod.transl_signature (initial_env()) ast in
     if !Clflags.print_types then
@@ -114,7 +114,7 @@ let implementation ppf sourcefile outputprefix =
   let env = initial_env() in
   if !Clflags.print_types then begin
     try ignore(
-      Pparse.file ppf inputfile Parse.implementation ast_impl_magic_number
+      Pparse.file ppf inputfile Parse.implementation Pparse.input_impl_file ast_impl_magic_number
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ Typemod.type_implementation sourcefile outputprefix modulename env)
     with x ->
@@ -124,7 +124,7 @@ let implementation ppf sourcefile outputprefix =
     let objfile = outputprefix ^ ".cmo" in
     let oc = open_out_bin objfile in
     try
-      Pparse.file ppf inputfile Parse.implementation ast_impl_magic_number
+      Pparse.file ppf inputfile Parse.implementation Pparse.input_impl_file ast_impl_magic_number
       ++ print_if ppf Clflags.dump_parsetree Printast.implementation
       ++ Unused_var.warn ppf
       ++ Typemod.type_implementation sourcefile outputprefix modulename env

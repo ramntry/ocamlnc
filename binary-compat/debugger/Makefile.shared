@@ -32,10 +32,15 @@ OTHEROBJS=\
   ../utils/misc.cmo ../utils/config.cmo \
   ../utils/tbl.cmo ../utils/clflags.cmo ../utils/consistbl.cmo \
   ../parsing/longident.cmo \
+  ../compat/3.11.2/v3112_types.cmo \
+  ../compat/3.12.0/v3120_types.cmo \
   ../typing/ident.cmo ../typing/path.cmo ../typing/types.cmo \
   ../typing/btype.cmo ../typing/primitive.cmo ../typing/typedtree.cmo \
   ../typing/subst.cmo ../typing/predef.cmo \
-  ../typing/datarepr.cmo ../typing/env.cmo ../typing/oprint.cmo \
+  ../typing/datarepr.cmo ../typing/cmi_format.cmo \
+  ../compat/3.11.2/v3112_cmi.cmo \
+  ../compat/3.12.0/v3120_cmi.cmo \
+  ../typing/env.cmo ../typing/oprint.cmo \
   ../typing/ctype.cmo ../typing/printtyp.cmo ../typing/mtype.cmo \
   ../bytecomp/runtimedef.cmo ../bytecomp/bytesections.cmo \
   ../bytecomp/dll.cmo ../bytecomp/meta.cmo ../bytecomp/symtable.cmo \

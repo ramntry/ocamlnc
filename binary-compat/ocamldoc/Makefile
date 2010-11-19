@@ -146,6 +146,8 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/utils/warnings.cmo \
 	$(OCAMLSRCDIR)/utils/ccomp.cmo \
 	$(OCAMLSRCDIR)/utils/consistbl.cmo \
+	$(OCAMLSRCDIR)/compat/3.11.2/v3112_types.cmo \
+	$(OCAMLSRCDIR)/compat/3.12.0/v3120_types.cmo \
 	$(OCAMLSRCDIR)/parsing/linenum.cmo\
 	$(OCAMLSRCDIR)/parsing/location.cmo\
 	$(OCAMLSRCDIR)/parsing/longident.cmo \
@@ -159,6 +161,9 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/typing/predef.cmo \
 	$(OCAMLSRCDIR)/typing/datarepr.cmo \
 	$(OCAMLSRCDIR)/typing/subst.cmo \
+	$(OCAMLSRCDIR)/typing/cmi_format.cmo \
+	$(OCAMLSRCDIR)/compat/3.11.2/v3112_cmi.cmo \
+	$(OCAMLSRCDIR)/compat/3.12.0/v3120_cmi.cmo \
 	$(OCAMLSRCDIR)/typing/env.cmo \
 	$(OCAMLSRCDIR)/typing/ctype.cmo \
 	$(OCAMLSRCDIR)/typing/primitive.cmo \

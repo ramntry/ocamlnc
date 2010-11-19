@@ -2,30 +2,32 @@
 exception TODO
 
 module CMO = struct
-    
+
+  open V3120_ast.AST
+  open V3120_cmi.CMI
+
     module Lambda : sig
-        
-        val structured_constant : 
+
+        val structured_constant :
           V3120_types.Lambda.structured_constant ->
           Lambda.structured_constant
 
-        val primitive : 
-          V3120_types.Lambda.primitive -> 
+        val primitive :
+          V3120_types.Lambda.primitive ->
           Lambda.primitive
 
-        val meth_kind : 
-          V3120_types.Lambda.meth_kind -> 
+        val meth_kind :
+          V3120_types.Lambda.meth_kind ->
           Lambda.meth_kind
-          
+
       end = struct
 
-        open V3120_cmi.CMI
         open Asttypes
-          
+
         open Lambda
         module T = V3120_types.Lambda
-        
-        let rec structured_constant sc = 
+
+        let rec structured_constant sc =
           match sc with
             T.Const_base c -> Const_base (Asttypes.constant c)
           | T.Const_pointer int -> Const_pointer int
@@ -35,10 +37,10 @@ module CMO = struct
           | T.Const_immstring string -> Const_immstring string
 
         let rec primitive p =
-          match p with            
+          match p with
             T.Pidentity -> Pidentity
           | T.Pignore -> Pignore
-              
+
           | T.Pgetglobal id -> Pgetglobal (Ident.t id)
           | T.Psetglobal id ->  Psetglobal (Ident.t id)
 
@@ -81,14 +83,14 @@ module CMO = struct
 
           | T.Pnegfloat -> Pnegfloat
           | T.Pabsfloat -> Pabsfloat
-              
+
           | T.Paddfloat -> Paddfloat
           | T.Psubfloat -> Psubfloat
           | T.Pmulfloat -> Pmulfloat
           | T.Pdivfloat -> Pdivfloat
-              
+
           | T.Pfloatcomp c -> Pfloatcomp (comparison c)
-              
+
           | T.Pstringlength -> Pstringlength
           | T.Pstringrefu -> Pstringrefu
           | T.Pstringsetu -> Pstringsetu
@@ -127,10 +129,10 @@ module CMO = struct
           | T.Pbintcomp (b,c) -> Pbintcomp (boxed_integer b, comparison c)
 
           | T.Pbigarrayref (bool, int, kind, layout) ->
-              Pbigarrayref (bool, int,  
+              Pbigarrayref (bool, int,
                 bigarray_kind kind, bigarray_layout layout)
           | T.Pbigarrayset (bool, int, kind, layout) ->
-              Pbigarrayset (bool, int, 
+              Pbigarrayset (bool, int,
                 bigarray_kind kind, bigarray_layout layout)
 
         and comparison c =
@@ -148,7 +150,7 @@ module CMO = struct
           | T.Paddrarray -> Paddrarray
           | T.Pintarray -> Pintarray
           | T.Pfloatarray -> Pfloatarray
-              
+
         and boxed_integer b =
           match b with
             T.Pnativeint -> Pnativeint
@@ -177,27 +179,27 @@ module CMO = struct
           | T.Pbigarray_c_layout -> Pbigarray_c_layout
           | T.Pbigarray_fortran_layout -> Pbigarray_fortran_layout
 
-              
-        let meth_kind k = 
+
+        let meth_kind k =
           match k with
             T.Self -> Self
           | T.Public -> Public
           | T.Cached -> Cached
       end
-    
-    
+
+
 module Cmo_format : sig
-    
-    
-    val compilation_unit : 
-      V3120_types.Cmo_format.compilation_unit -> 
+
+
+    val compilation_unit :
+      V3120_types.Cmo_format.compilation_unit ->
       Cmo_format.compilation_unit
     val library : V3120_types.Cmo_format.library -> Cmo_format.library
-  
+
   end = struct
 
     open V3120_cmi.CMI
-    
+
     open Cmo_format
     module T = V3120_types.Cmo_format
 
@@ -210,10 +212,10 @@ module Cmo_format : sig
       | T.Reloc_setglobal id -> Reloc_setglobal (Ident.t id)
       | T.Reloc_primitive s -> Reloc_primitive s
 
-      
-    let compilation_unit v = 
-      { 
-        cu_name = v.T.cu_name;  
+
+    let compilation_unit v =
+      {
+        cu_name = v.T.cu_name;
         cu_pos = v.T.cu_pos;
         cu_codesize = v.T.cu_codesize;
         cu_reloc = List.map (fun (r,i) ->
@@ -223,24 +225,24 @@ module Cmo_format : sig
         cu_force_link = v.T.cu_force_link;
         cu_debug = v.T.cu_debug;
         cu_debugsize = v.T.cu_debugsize;
-      }  
-      
-    let library v = 
+      }
+
+    let library v =
       {
         lib_units = List.map compilation_unit v.T.lib_units;
         lib_custom = v.T.lib_custom;
         lib_ccobjs = v.T.lib_ccobjs;
         lib_ccopts = v.T.lib_ccopts;
         lib_dllibs = v.T.lib_dllibs;
-      }           
+      }
 
-    
+
   end
 
 end
 
 open Cmo_format
-  
+
 let input_cmo_file ic magic =
   if magic = V3120_types.cmo_magic_number then
     let v = (input_value ic : V3120_types.Cmo_format.compilation_unit) in
@@ -248,6 +250,6 @@ let input_cmo_file ic magic =
   else
   if magic = V3120_types.cma_magic_number then
     let v = (input_value ic : V3120_types.Cmo_format.library) in
-    Library (CMO.Cmo_format.library v)    
+    Library (CMO.Cmo_format.library v)
   else
     V3112_cmo.input_cmo_file ic magic

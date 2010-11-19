@@ -34,8 +34,10 @@ COMPILEROBJS=\
   ../../typing/primitive.cmo ../../typing/types.cmo \
   ../../typing/btype.cmo ../../typing/subst.cmo ../../typing/predef.cmo \
   ../../typing/datarepr.cmo \
+   ../../compat/3.11.2/v3112_types.cmo \
    ../../compat/3.12.0/v3120_types.cmo \
    ../../typing/cmi_format.cmo \
+   ../../compat/3.11.2/v3112_cmi.cmo \
    ../../compat/3.12.0/v3120_cmi.cmo \
    ../../typing/env.cmo \
   ../../bytecomp/lambda.cmo ../../bytecomp/instruct.cmo \
