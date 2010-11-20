@@ -1,4 +1,7 @@
 2010/11/20:
+ * New module parsing/bincompat.ml
+ * Implemented ast, cmi, cmo, cma output to versions 3.11.2 and 3.12.0
+    * Unimplemented features raise Bincompat.No_Such_Feature (version, feature)
  * Implemented ast input from camlp4 for 3.12.0 and 3.11.2. Not yet tested.
  * Added interface files
 
@@ -6,6 +9,8 @@
  * Started implementing AST input (for camlp4)
 
 2010/11/18:
+ * New subdirectory compat/ with subdirectories 3.12.0 and 3.11.2
+ * New module typing/cmi_format.ml
  * Able to load .cmi/.cmo/.cmx/.cma/.cmxa from versions 3.12.0 and 3.11.2
 
 2010/11/18: created branch from trunk r10817

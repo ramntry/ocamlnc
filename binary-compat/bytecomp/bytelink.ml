@@ -116,7 +116,7 @@ let input_cmo_file ic magic =
   if magic = cma_magic_number then
     Library (input_value ic : library)
 else
-    V3120_cmo.input_cmo_file ic magic
+    V3120_input_cmo.input_cmo_file ic magic
 
 let scan_file obj_name tolink =
   let file_name =
@@ -154,7 +154,7 @@ let scan_file obj_name tolink =
 
   with
     End_of_file -> close_in ic; raise(Error(Not_an_object_file file_name))
-  | Cmi_format.No_such_magic ->
+  | Bincompat.No_Such_Magic ->
       close_in ic;
       raise(Error(Not_an_object_file file_name))
   | x -> close_in ic; raise x

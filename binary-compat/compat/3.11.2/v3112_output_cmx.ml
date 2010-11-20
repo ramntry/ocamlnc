@@ -1,5 +1,6 @@
 
-exception TODO
+(*
+open Bincompat
 
 module CMX = struct
 
@@ -30,8 +31,9 @@ module CMX = struct
         
       end = struct
 
-        open V3112_cmi.CMI
-        open V3112_cmo.CMO        
+        open V3112_output_ast.AST
+        open V3112_output_cmi.CMI
+        open V3112_output_cmo.CMO        
 
         open Asttypes
           
@@ -167,3 +169,4 @@ let input_cmxa_file ic magic =
     CMX.Cmx_format.library_infos infos
   else
     raise Cmi_format.No_such_magic
+*)

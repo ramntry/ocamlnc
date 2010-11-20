@@ -1,9 +1,9 @@
-exception TODO
+open Bincompat
 
 let ghost_loc loc =
   { loc with Location.loc_ghost = true }
 
-  let string s = s
+let string s = s
   
 module AST = struct
 
@@ -509,9 +509,12 @@ end
 
 end
 
+
+
+
 let input_intf_file ic magic =
   if magic <> V3120_types.ast_intf_magic_number then
-    V3112_ast.input_intf_file ic magic
+    V3112_input_ast.input_intf_file ic magic
   else begin
     let v = (input_value ic : V3120_types.Parsetree.signature) in
       AST.Parsetree.signature v
@@ -519,7 +522,7 @@ let input_intf_file ic magic =
 
 let input_impl_file ic magic =
   if magic <> V3120_types.ast_impl_magic_number then
-    V3112_ast.input_impl_file ic magic
+    V3112_input_ast.input_impl_file ic magic
   else begin
       let v = (input_value ic : V3120_types.Parsetree.structure) in
       AST.Parsetree.structure v

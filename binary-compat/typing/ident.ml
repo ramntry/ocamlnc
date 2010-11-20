@@ -184,3 +184,4 @@ let rec keys_aux stack accu = function
 let keys tbl = keys_aux [] [] tbl
 
 let magic stamp name flags = { stamp; name; flags }
+let flags i = i.flags

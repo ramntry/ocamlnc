@@ -1,11 +1,11 @@
 
-exception TODO
+open Bincompat
 
 module CMO = struct
 
 
-  open V3112_ast.AST
-  open V3112_cmi.CMI
+  open V3112_input_ast.AST
+  open V3112_input_cmi.CMI
 
     module Lambda : sig
 
@@ -199,7 +199,7 @@ module Cmo_format : sig
 
   end = struct
 
-    open V3112_cmi.CMI
+    open V3112_input_cmi.CMI
 
     open Cmo_format
     module T = V3112_types.Cmo_format
@@ -253,4 +253,4 @@ let input_cmo_file ic magic =
     let v = (input_value ic : V3112_types.Cmo_format.library) in
     Library (CMO.Cmo_format.library v)
   else
-    raise Cmi_format.No_such_magic
+    raise Bincompat.No_Such_Magic

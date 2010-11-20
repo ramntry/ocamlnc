@@ -58,4 +58,8 @@ val find_same: t -> 'a tbl -> 'a
 val find_name: string -> 'a tbl -> 'a
 val keys: 'a tbl -> t list
 
+  
+(* Do not use *)
 val magic : int -> string -> int -> t
+val stamp : t -> int
+val flags : t -> int

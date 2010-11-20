@@ -167,7 +167,7 @@ let input_cmi_file ic magic =
     if magic = cmi_magic_number then 
       Cmi_format.input_cmi_file ic magic
   else 
-      V3120_cmi.input_cmi_file ic magic
+      V3120_input_cmi.input_cmi_file ic magic
 
 let read_cmi_file filename = 
   let ic = open_in_bin filename in
@@ -178,13 +178,13 @@ let read_cmi_file filename =
       close_in ic;
       cmi
   with End_of_file | Failure _ ->
-    close_in ic;
-    raise(Error(Corrupted_interface(filename)))
-    | No_such_magic -> 
-	raise (Error(Not_an_interface(filename)))
-    | e -> 
-	close_in ic;
-	raise e
+      close_in ic;
+      raise(Error(Corrupted_interface(filename)))
+  | Bincompat.No_Such_Magic -> 
+      raise (Error(Not_an_interface(filename)))
+  | e -> 
+      close_in ic;
+      raise e
       
 
 let read_pers_struct modname filename =

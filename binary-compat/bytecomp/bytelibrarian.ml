@@ -80,7 +80,7 @@ let copy_object_file oc name =
         toc.lib_units
   with
     End_of_file -> close_in ic; raise(Error(Not_an_object_file file_name))
-  | Cmi_format.No_such_magic ->
+  | Bincompat.No_Such_Magic ->
       close_in ic;
       raise(Error(Not_an_object_file file_name))      
   | x -> close_in ic; raise x

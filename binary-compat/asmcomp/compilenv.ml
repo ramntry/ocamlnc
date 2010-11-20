@@ -85,13 +85,13 @@ let input_cmx_file ic magic =
   if magic = cmx_magic_number then
     (input_value ic : unit_infos)
   else 
-    V3120_cmx.input_cmx_file ic magic
+    V3120_input_cmx.input_cmx_file ic magic
 
 let input_cmxa_file ic magic = 
   if magic = cmxa_magic_number then
     (input_value ic : library_infos)
   else 
-    V3120_cmx.input_cmxa_file ic magic
+    V3120_input_cmx.input_cmxa_file ic magic
 
 let read_unit_info filename =
   let ic = open_in_bin filename in
@@ -105,7 +105,7 @@ let read_unit_info filename =
   with End_of_file | Failure _ ->
     close_in ic;
       raise(Error(Corrupted_unit_info(filename)))
-  | Cmi_format.No_such_magic ->
+  | Bincompat.No_Such_Magic ->
       close_in ic;
       raise(Error(Not_a_unit_info filename))
       
@@ -118,7 +118,7 @@ let read_library_info filename =
     close_in ic;
     infos
   with
-    | Cmi_format.No_such_magic ->
+    | Bincompat.No_Such_Magic ->
       close_in ic;
       raise(Error(Not_a_unit_info filename))
       

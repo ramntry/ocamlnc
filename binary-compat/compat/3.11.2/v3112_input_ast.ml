@@ -1,4 +1,4 @@
-exception TODO
+open Bincompat
 
 let ghost_loc loc =
   { loc with Location.loc_ghost = true }
@@ -489,7 +489,7 @@ end
 
 let input_intf_file ic magic =
   if magic <> V3112_types.ast_intf_magic_number then
-    raise Cmi_format.No_such_magic
+    raise No_Such_Magic
   else begin
     let v = (input_value ic : V3112_types.Parsetree.signature) in
       AST.Parsetree.signature v
@@ -498,7 +498,7 @@ let input_intf_file ic magic =
     
 let input_impl_file ic magic =
   if magic <> V3112_types.ast_impl_magic_number then
-    raise Cmi_format.No_such_magic
+    raise No_Such_Magic
   else begin
       let v = (input_value ic : V3112_types.Parsetree.structure) in
       AST.Parsetree.structure v

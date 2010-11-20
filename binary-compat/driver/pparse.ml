@@ -51,13 +51,13 @@ let input_intf_file ic magic =
   if magic = Config.ast_intf_magic_number then
     (input_value ic : Parsetree.signature)
   else
-    V3120_ast.input_intf_file ic magic
+    V3120_input_ast.input_intf_file ic magic
 
 let input_impl_file ic magic =
   if magic = Config.ast_impl_magic_number then
     (input_value ic : Parsetree.structure)
   else
-    V3120_ast.input_impl_file ic magic
+    V3120_input_ast.input_impl_file ic magic
 
 let file ppf inputfile parse_fun input_fun ast_magic =
   let ic = open_in_bin inputfile in
@@ -87,7 +87,7 @@ let file ppf inputfile parse_fun input_fun ast_magic =
               Location.init lexbuf inputfile;
               parse_fun lexbuf
     with
-      | Cmi_format.No_such_magic -> (* replace Outdated_version *)
+      | Bincompat.No_Such_Magic -> (* replace Outdated_version *)
 	  close_in ic;
           Misc.fatal_error "Ocaml and preprocessor have incompatible versions"
       | x -> close_in ic; raise x

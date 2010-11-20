@@ -1,18 +1,17 @@
-
-exception TODO
+open Bincompat
 
 module CMI = struct
 
-  open V3112_ast.AST
+  open V3120_input_ast.AST
 
 module Ident : sig
 
   val reset : unit -> unit
-  val t : V3112_types.Ident.t -> Ident.t
+  val t : V3120_types.Ident.t -> Ident.t
 
 end = struct
 
-  module T = V3112_types.Ident
+  module T = V3120_types.Ident
   let tbl = Hashtbl.create 13
 
   let reset () = Hashtbl.clear tbl
@@ -30,11 +29,11 @@ end
 
 module Path : sig
 
-  val t : V3112_types.Path.t -> Path.t
+  val t : V3120_types.Path.t -> Path.t
 
 end = struct
 
-  module T = V3112_types.Path
+  module T = V3120_types.Path
   open Path
 
   let rec t p =
@@ -47,11 +46,11 @@ end
 
 module Primitive : sig
 
-  val description : V3112_types.Primitive.description -> Primitive.description
+  val description : V3120_types.Primitive.description -> Primitive.description
 
 end = struct
 
-    module T = V3112_types.Primitive
+    module T = V3120_types.Primitive
     open Primitive
 
     let description p =
@@ -69,17 +68,17 @@ module Types : sig
     val reset : unit -> unit
 
     val signature_item :
-      V3112_types.Types.signature_item -> Types.signature_item
+      V3120_types.Types.signature_item -> Types.signature_item
 
     val record_representation :
-      V3112_types.Types.record_representation ->
+      V3120_types.Types.record_representation ->
       Types.record_representation
 
   end = struct
 
     open Asttypes
 
-    module T = V3112_types.Types
+    module T = V3120_types.Types
     open Types
 
     let tbl = Hashtbl.create 113
@@ -136,7 +135,8 @@ module Types : sig
       | T.Tvariant r -> Tvariant (row_desc r)
       | T.Tunivar -> Tunivar
       | T.Tpoly (t, list) -> Tpoly (type_expr t, List.map type_expr list)
-
+      | T.Tpackage (p, sl, tl) ->
+          Tpackage (Path.t p, sl, List.map type_expr tl)
 
     and abbrev_memo ab =
       match ab with
@@ -320,12 +320,12 @@ end
 module Cmi_format : sig
 
     val pers_flags :
-      V3112_types.Cmi_format.pers_flags -> Cmi_format.pers_flags
+      V3120_types.Cmi_format.pers_flags -> Cmi_format.pers_flags
     ;;
 
   end = struct
 
-    module T = V3112_types.Cmi_format
+    module T = V3120_types.Cmi_format
     open Cmi_format
 
     let pers_flags flag =
@@ -336,16 +336,18 @@ module Cmi_format : sig
 end
 
 let input_cmi_file ic magic =
-  if magic <> V3112_types.cmi_magic_number then
-    raise Cmi_format.No_such_magic;
+  if magic <> V3120_types.cmi_magic_number then
+    V3112_input_cmi.input_cmi_file ic magic
+  else begin
 
-  CMI.Ident.reset ();
-  CMI.Types.reset ();
+      CMI.Ident.reset ();
+      CMI.Types.reset ();
 
-  let (cmi_name, cmi_sign) = (input_value ic : string *  V3112_types.Types.signature_item list) in
-  let cmi_crcs = (input_value ic : (string * Digest.t) list) in
-  let cmi_flags = (input_value ic : V3112_types.Cmi_format.pers_flags list) in
+      let (cmi_name, cmi_sign) = (input_value ic : string *  V3120_types.Types.signature_item list) in
+      let cmi_crcs = (input_value ic : (string * Digest.t) list) in
+      let cmi_flags = (input_value ic : V3120_types.Cmi_format.pers_flags list) in
 
-  let cmi_sign = List.map CMI.Types.signature_item cmi_sign in
-  let cmi_flags = List.map CMI.Cmi_format.pers_flags cmi_flags in
-  { Cmi_format.cmi_name ; cmi_sign; cmi_crcs; cmi_flags }
+      let cmi_sign = List.map CMI.Types.signature_item cmi_sign in
+      let cmi_flags = List.map CMI.Cmi_format.pers_flags cmi_flags in
+      { Cmi_format.cmi_name ; cmi_sign; cmi_crcs; cmi_flags }
+    end

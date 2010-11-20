@@ -1,5 +1,4 @@
-
-exception TODO
+open Bincompat
 
 module CMX = struct
 
@@ -30,8 +29,9 @@ module CMX = struct
         
       end = struct
 
-        open V3120_cmi.CMI
-        open V3120_cmo.CMO        
+        open V3120_input_ast.AST
+        open V3120_input_cmi.CMI
+        open V3120_input_cmo.CMO        
 
         open Asttypes
           
@@ -159,12 +159,12 @@ let input_cmx_file ic magic =
     let ui = (input_value ic : V3120_types.Cmx_format.unit_infos) in
     CMX.Cmx_format.unit_infos ui
   else
-    V3112_cmx.input_cmx_file ic magic
+    V3112_input_cmx.input_cmx_file ic magic
 
 let input_cmxa_file ic magic = 
   if magic = V3120_types.cmxa_magic_number then
     let infos = (input_value ic : V3120_types.Cmx_format.library_infos) in
     CMX.Cmx_format.library_infos infos
   else
-    V3112_cmx.input_cmxa_file ic magic
+    V3112_input_cmx.input_cmxa_file ic magic
 

@@ -44,23 +44,32 @@ OPTUTILS=$(UTILS)
 COMPAT_CMI=\
   compat/3.11.2/v3112_types.cmo \
   compat/3.12.0/v3120_types.cmo \
-  compat/3.11.2/v3112_ast.cmo \
-  compat/3.12.0/v3120_ast.cmo \
-  compat/3.11.2/v3112_cmi.cmo \
-  compat/3.12.0/v3120_cmi.cmo \
+  compat/3.11.2/v3112_input_ast.cmo \
+  compat/3.11.2/v3112_output_ast.cmo \
+  compat/3.12.0/v3120_input_ast.cmo \
+  compat/3.12.0/v3120_output_ast.cmo \
+  compat/3.11.2/v3112_input_cmi.cmo \
+  compat/3.11.2/v3112_output_cmi.cmo \
+  compat/3.12.0/v3120_input_cmi.cmo \
+  compat/3.12.0/v3120_output_cmi.cmo \
 
 COMPAT_CMO=\
-  compat/3.11.2/v3112_cmo.cmo \
-  compat/3.12.0/v3120_cmo.cmo
+  compat/3.11.2/v3112_input_cmo.cmo \
+  compat/3.11.2/v3112_output_cmo.cmo \
+  compat/3.12.0/v3120_input_cmo.cmo \
+  compat/3.12.0/v3120_output_cmo.cmo
 
 COMPAT_CMX=\
-  compat/3.11.2/v3112_cmx.cmo \
-  compat/3.12.0/v3120_cmx.cmo
+  compat/3.11.2/v3112_input_cmx.cmo \
+  compat/3.11.2/v3112_output_cmx.cmo \
+  compat/3.12.0/v3120_input_cmx.cmo \
+  compat/3.12.0/v3120_output_cmx.cmo
 
 
 PARSING=parsing/linenum.cmo parsing/location.cmo parsing/longident.cmo \
   parsing/syntaxerr.cmo parsing/parser.cmo \
-  parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo
+  parsing/lexer.cmo parsing/parse.cmo parsing/printast.cmo \
+  parsing/bincompat.cmo
 
 TYPING=typing/unused_var.cmo typing/ident.cmo typing/path.cmo \
   typing/primitive.cmo typing/types.cmo \

@@ -38,8 +38,8 @@ OTHEROBJS=\
   ../typing/btype.cmo ../typing/primitive.cmo ../typing/typedtree.cmo \
   ../typing/subst.cmo ../typing/predef.cmo \
   ../typing/datarepr.cmo ../typing/cmi_format.cmo \
-  ../compat/3.11.2/v3112_cmi.cmo \
-  ../compat/3.12.0/v3120_cmi.cmo \
+  ../compat/3.11.2/v3112_input_cmi.cmo \
+  ../compat/3.12.0/v3120_input_cmi.cmo \
   ../typing/env.cmo ../typing/oprint.cmo \
   ../typing/ctype.cmo ../typing/printtyp.cmo ../typing/mtype.cmo \
   ../bytecomp/runtimedef.cmo ../bytecomp/bytesections.cmo \
