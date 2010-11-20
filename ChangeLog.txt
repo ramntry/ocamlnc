@@ -1,3 +1,7 @@
+2010/11/20:
+ * Implemented ast input from camlp4 for 3.12.0 and 3.11.2. Not yet tested.
+ * Added interface files
+
 2010/11/19:
  * Started implementing AST input (for camlp4)
 

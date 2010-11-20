@@ -51,13 +51,13 @@ let input_intf_file ic magic =
   if magic = Config.ast_intf_magic_number then
     (input_value ic : Parsetree.signature)
   else
-    raise Cmi_format.No_such_magic
+    V3120_ast.input_intf_file ic magic
 
 let input_impl_file ic magic =
   if magic = Config.ast_impl_magic_number then
     (input_value ic : Parsetree.structure)
   else
-    raise Cmi_format.No_such_magic
+    V3120_ast.input_impl_file ic magic
 
 let file ppf inputfile parse_fun input_fun ast_magic =
   let ic = open_in_bin inputfile in

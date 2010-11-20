@@ -1,5 +1,10 @@
 exception TODO
 
+let ghost_loc loc =
+  { loc with Location.loc_ghost = true }
+
+  let string s = s
+  
 module AST = struct
 
 
@@ -45,6 +50,14 @@ module Asttypes = struct
       match d with
         T.Upto -> Upto
       | T.Downto -> Downto
+
+    let closed_flag cf = match cf with
+        T.Closed -> Closed | T.Open -> Open
+
+    let override_flag ovf =
+      match ovf with
+        T.Override -> Override
+      | T.Fresh -> Fresh
 
     let label s = s
 
@@ -94,6 +107,8 @@ end
 module Parsetree : sig
   val signature :
     V3120_types.Parsetree.signature -> Parsetree.signature
+  val structure :
+    V3120_types.Parsetree.structure -> Parsetree.structure
 
 end = struct
 
@@ -147,243 +162,347 @@ and row_field r =
     T.Rtag (l, bool, list) ->
       Rtag (label l, bool, List.map core_type list)
   | T.Rinherit c -> Rinherit (core_type c)
+          
+let class_infos a c =
+  { pci_virt = virtual_flag c.T.pci_virt;
+    pci_params = (let (list, l) = c.T.pci_params in
+      (list, Location.t l));
+    pci_name = c.T.pci_name;
+    pci_expr = a c.T.pci_expr;
+    pci_variance = c.T.pci_variance;
+    pci_loc = Location.t c.T.pci_loc; 
+  }
 
-(*
-(* Type expressions for the class language *)
 
-type 'a class_infos =
-  { pci_virt: virtual_flag;
-    pci_params: string list * Location.t;
-    pci_name: string;
-    pci_expr: 'a;
-    pci_variance: (bool * bool) list;
-    pci_loc: Location.t }
+let option f x =
+  match x with
+    None -> None
+  | Some s -> Some (f s)
+  
+let rec pattern p =
+  { ppat_desc =  pattern_desc p.T.ppat_desc;
+    ppat_loc = Location.t p.T.ppat_loc }
 
-(* Value expressions for the core language *)
+and pattern_desc p =
+  match p with
+    T.Ppat_any -> Ppat_any
+  | T.Ppat_var s -> Ppat_var s
+  | T.Ppat_alias (p1, s) -> Ppat_alias (pattern p1, s)
+  | T.Ppat_constant c -> Ppat_constant (constant c)
+  | T.Ppat_tuple list -> Ppat_tuple (List.map pattern list)
+  | T.Ppat_construct (l, o, bool) ->
+      Ppat_construct (Longident.t l, option pattern o, bool)
+  | T.Ppat_variant (l, o) ->
+      Ppat_variant (label l, option pattern o)
+  | T.Ppat_record (list, cl) ->
+      Ppat_record (List.map (fun (l, p) ->
+            (Longident.t l, pattern p)) list, closed_flag cl)
+  | T.Ppat_array list ->  Ppat_array (List.map pattern list)
+  | T.Ppat_or (p1, p2) -> Ppat_or (pattern p1, pattern p2)
+  | T.Ppat_constraint (p1, c) -> Ppat_constraint (pattern p1, core_type c)
+  | T.Ppat_type l -> Ppat_type (Longident.t l)
+  | T.Ppat_lazy p1 -> Ppat_lazy (pattern p1)
 
-type pattern =
-  { ppat_desc: pattern_desc;
-    ppat_loc: Location.t }
+let ghexp d loc = { pexp_desc = d; pexp_loc = ghost_loc loc; }
+let ghtyp d loc = { ptyp_desc = d; ptyp_loc = ghost_loc loc; }
+let mkexp exp loc = { pexp_desc = exp; pexp_loc = loc }
+      
+let rec expression e =
+  let pexp_loc = Location.t e.T.pexp_loc in
+  let pexp_desc =
+    match e.T.pexp_desc with
+      T.Pexp_pack (m, p) ->
+        Pexp_constraint (
+          ghexp (Pexp_pack (module_expr m)) pexp_loc, 
+          Some (ghtyp (Ptyp_package (package_type p)) pexp_loc), None)
+    | _ ->   expression_desc e.T.pexp_desc
+  in
+  { pexp_desc; pexp_loc  }
 
-and pattern_desc =
-    Ppat_any
-  | T.Ppat_var of string
-  | T.Ppat_alias of pattern * string
-  | T.Ppat_constant of constant
-  | T.Ppat_tuple of pattern list
-  | T.Ppat_construct of Longident.t * pattern option * bool
-  | T.Ppat_variant of label * pattern option
-  | T.Ppat_record of (Longident.t * pattern) list * closed_flag
-  | T.Ppat_array of pattern list
-  | T.Ppat_or of pattern * pattern
-  | T.Ppat_constraint of pattern * core_type
-  | T.Ppat_type of Longident.t
-  | T.Ppat_lazy of pattern
+and expression_desc e =
+  match e with
+    T.Pexp_ident l -> Pexp_ident (Longident.t l)
+  | T.Pexp_constant c -> Pexp_constant (constant c)
+  | T.Pexp_let (r, list, e) ->
+      Pexp_let (rec_flag r,
+        List.map (fun (p,e) ->
+            (pattern p, expression e)) list, expression e)
+  | T.Pexp_function (l, o, list) ->
+      Pexp_function (label l, option expression o,
+        List.map (fun (p,e) -> (pattern p, expression e)) list)
+  | T.Pexp_apply (e, list) ->
+      Pexp_apply (expression e, List.map (fun (l, e) ->
+            (label l,  expression e)) list)
+  | T.Pexp_match (e, list) ->
+      Pexp_match (expression e,
+        List.map (fun (p,e) -> (pattern p, expression e)) list)
+  | T.Pexp_try (e, list) ->
+      Pexp_try (expression e,
+        List.map (fun (p,e) -> (pattern p, expression e)) list)
+  | T.Pexp_tuple list -> 
+      Pexp_tuple (List.map expression list)
+  | T.Pexp_construct (l, o, bool) ->
+      Pexp_construct (Longident.t l, option expression o, bool)
+  | T.Pexp_variant (l, o) ->
+      Pexp_variant (label l, option expression o)
+  | T.Pexp_record (list, o) ->
+      Pexp_record (List.map (fun (l, e) ->
+            (Longident.t l, expression e)) list, option expression o)
+  | T.Pexp_field (e, l) ->
+      Pexp_field (expression e, Longident.t l)
+  | T.Pexp_setfield (e1, l, e2) ->
+      Pexp_setfield (expression e1, Longident.t l, expression e2)
+  | T.Pexp_array list -> Pexp_array (List.map expression list)
+  | T.Pexp_ifthenelse (e1, e2, o) ->
+      Pexp_ifthenelse (expression e1, expression e2, option expression o)
+  | T.Pexp_sequence (e1, e2) ->
+      Pexp_sequence (expression e1, expression e2)
+  | T.Pexp_while (e1, e2) ->
+      Pexp_while (expression e1, expression e2)
+  | T.Pexp_for (s, e1, e2, d, e3) ->
+      Pexp_for (s, expression e1, expression e2,
+        direction_flag d, expression e3)
+  | T.Pexp_constraint (e1, o1, o2) ->
+      Pexp_constraint (expression e1, option core_type o1, option core_type o2)
+  | T.Pexp_when (e1, e2) -> Pexp_when (expression e1, expression e2)
+  | T.Pexp_send (e1, s) -> Pexp_send (expression e1, s)
+  | T.Pexp_new l -> Pexp_new (Longident.t l)
+  | T.Pexp_setinstvar (s, e) -> Pexp_setinstvar (s, expression e)
+  | T.Pexp_override list ->
+      Pexp_override (List.map (fun (s, e) -> (s, expression e)) list)
+  | T.Pexp_letmodule (s, m, e) ->
+      Pexp_letmodule (s, module_expr m, expression e)
+  | T.Pexp_assert e -> Pexp_assert (expression e)
+  | T.Pexp_assertfalse -> Pexp_assertfalse
+  | T.Pexp_lazy e -> Pexp_lazy (expression e)
+  | T.Pexp_poly (e, o) -> Pexp_poly (expression e, option core_type o)
+  | T.Pexp_object cl -> Pexp_object (class_structure cl)
+  | T.Pexp_newtype (s, e) -> Pexp_newtype (s, expression e)
+  | T.Pexp_pack (m, p) -> assert false
+  | T.Pexp_open (l, e) -> Pexp_open (Longident.t l, expression e)
 
-type expression =
-  { pexp_desc: expression_desc;
-    pexp_loc: Location.t }
+and value_description v =
+  { 
+    pval_type = core_type v.T.pval_type;
+    pval_prim = v.T.pval_prim;
+  }
 
-and expression_desc =
-    Pexp_ident of Longident.t
-  | T.Pexp_constant of constant
-  | T.Pexp_let of rec_flag * (pattern * expression) list * expression
-  | T.Pexp_function of label * expression option * (pattern * expression) list
-  | T.Pexp_apply of expression * (label * expression) list
-  | T.Pexp_match of expression * (pattern * expression) list
-  | T.Pexp_try of expression * (pattern * expression) list
-  | T.Pexp_tuple of expression list
-  | T.Pexp_construct of Longident.t * expression option * bool
-  | T.Pexp_variant of label * expression option
-  | T.Pexp_record of (Longident.t * expression) list * expression option
-  | T.Pexp_field of expression * Longident.t
-  | T.Pexp_setfield of expression * Longident.t * expression
-  | T.Pexp_array of expression list
-  | T.Pexp_ifthenelse of expression * expression * expression option
-  | T.Pexp_sequence of expression * expression
-  | T.Pexp_while of expression * expression
-  | T.Pexp_for of string * expression * expression * direction_flag * expression
-  | T.Pexp_constraint of expression * core_type option * core_type option
-  | T.Pexp_when of expression * expression
-  | T.Pexp_send of expression * string
-  | T.Pexp_new of Longident.t
-  | T.Pexp_setinstvar of string * expression
-  | T.Pexp_override of (string * expression) list
-  | T.Pexp_letmodule of string * module_expr * expression
-  | T.Pexp_assert of expression
-  | T.Pexp_assertfalse
-  | T.Pexp_lazy of expression
-  | T.Pexp_poly of expression * core_type option
-  | T.Pexp_object of class_structure
-  | T.Pexp_newtype of string * expression
-  | T.Pexp_pack of module_expr * package_type
-  | T.Pexp_open of Longident.t * expression
 
-(* Value descriptions *)
+and type_declaration t =
+  { ptype_params = t.T.ptype_params;
+    ptype_cstrs = List.map (fun (c1, c2, l) ->
+        (core_type c1, core_type c2, Location.t l)) t.T.ptype_cstrs;
+    ptype_kind = type_kind t.T.ptype_kind;
+    ptype_private = private_flag t.T.ptype_private;
+    ptype_manifest =  option core_type t.T.ptype_manifest;
+    ptype_variance = t.T.ptype_variance;
+    ptype_loc =  Location.t t.T.ptype_loc;
+  }
 
-and value_description =
-  { pval_type: core_type;
-    pval_prim: string list }
+and type_kind t =
+  match t with
+    T.Ptype_abstract -> Ptype_abstract
+  | T.Ptype_variant list ->
+      Ptype_variant (List.map (fun (s, list, l) ->
+            (s, List.map core_type list, Location.t l)) list)
+  | T.Ptype_record list ->
+      Ptype_record (List.map (fun (s,m,c,l) ->
+            (s, mutable_flag m, core_type c, Location.t l)) list)
 
-(* Type declarations *)
+and exception_declaration list = List.map core_type list
 
-and type_declaration =
-  { ptype_params: string list;
-    ptype_cstrs: (core_type * core_type * Location.t) list;
-    ptype_kind: type_kind;
-    ptype_private: private_flag;
-    ptype_manifest: core_type option;
-    ptype_variance: (bool * bool) list;
-    ptype_loc: Location.t }
+and class_type c =
+  { pcty_desc = class_type_desc c.T.pcty_desc;
+    pcty_loc = Location.t c.T.pcty_loc; }
 
-and type_kind =
-    Ptype_abstract
-  | T.Ptype_variant of (string * core_type list * Location.t) list
-  | T.Ptype_record of
-      (string * mutable_flag * core_type * Location.t) list
+and class_type_desc c =
+  match c with
+    T.Pcty_constr (l, list) ->
+      Pcty_constr (Longident.t l, List.map core_type list)
+  | T.Pcty_signature c -> Pcty_signature (class_signature c)
+  | T.Pcty_fun (l, ct, cl) ->
+      Pcty_fun (label l, core_type ct, class_type cl)
 
-and exception_declaration = core_type list
+and class_signature (c, list) = 
+  (core_type c, List.map class_type_field list)
 
-(* Type expressions for the class language *)
+and class_type_field c =
+  match c with
+    T.Pctf_inher c -> Pctf_inher (class_type c)
+  | T.Pctf_val (s, m, v, c, l) ->
+      Pctf_val (s, mutable_flag m, virtual_flag v, core_type c, Location.t l)
+  | T.Pctf_virt (s, p, c, l) ->
+      Pctf_virt (s, private_flag p, core_type c, Location.t l)
+  | T.Pctf_meth (s, p, c, l) ->
+      Pctf_meth (s, private_flag p, core_type c, Location.t l)
+  | T.Pctf_cstr (c1, c2, l) ->
+      Pctf_cstr (core_type c1, core_type c2, Location.t l)
 
-and class_type =
-  { pcty_desc: class_type_desc;
-    pcty_loc: Location.t }
+and class_description c = class_infos class_type c
 
-and class_type_desc =
-    Pcty_constr of Longident.t * core_type list
-  | T.Pcty_signature of class_signature
-  | T.Pcty_fun of label * core_type * class_type
+and class_type_declaration c = class_infos class_type c
 
-and class_signature = core_type * class_type_field list
+and class_expr c =
+  { pcl_desc = class_expr_desc c.T.pcl_desc;
+    pcl_loc = Location.t c.T.pcl_loc; }
 
-and class_type_field =
-    Pctf_inher of class_type
-  | T.Pctf_val of (string * mutable_flag * virtual_flag * core_type * Location.t)
-  | T.Pctf_virt  of (string * private_flag * core_type * Location.t)
-  | T.Pctf_meth  of (string * private_flag * core_type * Location.t)
-  | T.Pctf_cstr  of (core_type * core_type * Location.t)
+and class_expr_desc c =
+  match c with
+    T.Pcl_constr (l, list) ->
+      Pcl_constr (Longident.t l, List.map core_type list)
+  | T.Pcl_structure c ->
+      Pcl_structure (class_structure c)
+  | T.Pcl_fun (l, o, p, c) ->
+      Pcl_fun (label l, option expression o, pattern p, class_expr c)
+  | T.Pcl_apply (c, list) ->
+      Pcl_apply (class_expr c, List.map (fun (l, e) ->
+            (label l, expression e)) list)
+  | T.Pcl_let (r, list, c) ->
+      Pcl_let (rec_flag r,
+        List.map (fun (p,e) -> (pattern p, expression e)) list, class_expr c)
+  | T.Pcl_constraint (c1, c2) ->
+      Pcl_constraint (class_expr c1, class_type c2)
 
-and class_description = class_type class_infos
+and class_structure (p, list) = 
+  (pattern p, List.map class_field list)
 
-and class_type_declaration = class_type class_infos
+and class_field c =
+  match c with
+    T.Pcf_inher (ovf, e, op) ->
+      Pcf_inher (override_flag ovf, class_expr e, option string op)
+  | T.Pcf_valvirt (s, mf, c, l) ->
+      Pcf_valvirt (s, mutable_flag mf, core_type c, Location.t l)
+  | T.Pcf_val (s, mf, ovf, e, loc) ->
+      Pcf_val (s, mutable_flag mf, override_flag ovf, expression e,  Location.t loc)
+  | T.Pcf_virt  (s, pf, c, loc) ->
+      Pcf_virt (s, private_flag pf, core_type c, Location.t loc)
+  | T.Pcf_meth (s, pf, ovf, e, loc) ->
+      Pcf_meth (s , private_flag pf, override_flag ovf, expression e, Location.t loc)
+  | T.Pcf_cstr (c1, c2, loc) ->
+      Pcf_cstr (core_type c1, core_type c2, Location.t loc)
+  | T.Pcf_let  (r, list, loc) ->
+      Pcf_let ( rec_flag r, List.map (fun (pat, e)  ->
+            (pattern pat, expression e)) list, Location.t loc)
+  | T.Pcf_init e -> Pcf_init (expression e)
 
-(* Value expressions for the class language *)
+and class_declaration list = class_infos class_expr list
 
-and class_expr =
-  { pcl_desc: class_expr_desc;
-    pcl_loc: Location.t }
+and module_type m =
+  { pmty_desc = module_type_desc m.T.pmty_desc;
+    pmty_loc = Location.t m.T.pmty_loc }
 
-and class_expr_desc =
-    Pcl_constr of Longident.t * core_type list
-  | T.Pcl_structure of class_structure
-  | T.Pcl_fun of label * expression option * pattern * class_expr
-  | T.Pcl_apply of class_expr * (label * expression) list
-  | T.Pcl_let of rec_flag * (pattern * expression) list * class_expr
-  | T.Pcl_constraint of class_expr * class_type
+and module_type_desc m =
+  match m with
+    T.Pmty_ident l -> Pmty_ident (Longident.t l)
+  | T.Pmty_signature sg -> Pmty_signature (signature sg)
+  | T.Pmty_functor (s, mt1, mt2) -> 
+      Pmty_functor (s, module_type mt1, module_type mt2)
+  | T.Pmty_with (mt, list) ->
+      Pmty_with (module_type mt, List.map (fun (l, w) ->
+            (Longident.t l, with_constraint w)) list)
+  | T.Pmty_typeof me -> Pmty_typeof (module_expr me)
+      
+and signature list = List.map signature_item list
 
-and class_structure = pattern * class_field list
+and signature_item sg =
+  { psig_desc = signature_item_desc sg.T.psig_desc;
+    psig_loc = Location.t sg.T.psig_loc }
 
-and class_field =
-    Pcf_inher of override_flag * class_expr * string option
-  | T.Pcf_valvirt of (string * mutable_flag * core_type * Location.t)
-  | T.Pcf_val of (string * mutable_flag * override_flag * expression * Location.t)
-  | T.Pcf_virt  of (string * private_flag * core_type * Location.t)
-  | T.Pcf_meth of (string * private_flag *override_flag * expression * Location.t)
-  | T.Pcf_cstr  of (core_type * core_type * Location.t)
-  | T.Pcf_let   of rec_flag * (pattern * expression) list * Location.t
-  | T.Pcf_init  of expression
+and signature_item_desc si =
+  match si with
+    T.Psig_value (s, v) ->
+      Psig_value (s, value_description v)
+  | T.Psig_type list -> 
+      Psig_type (List.map (fun (s, t) -> (string s, type_declaration t)) list)
+  | T.Psig_exception (s, e) ->
+      Psig_exception (s,  exception_declaration e)
+  | T.Psig_module (s, mt) ->
+      Psig_module (s, module_type mt)
+  | T.Psig_recmodule list ->
+      Psig_recmodule (List.map (fun (s, mt) -> (s, module_type mt)) list)
+  | T.Psig_modtype (s, md) ->
+      Psig_modtype (s, modtype_declaration md)
+  | T.Psig_open l -> Psig_open (Longident.t l)
+  | T.Psig_include mt -> Psig_include (module_type mt)
+  | T.Psig_class list ->
+      Psig_class (List.map class_description list)
+  | T.Psig_class_type list -> Psig_class_type (List.map class_type_declaration list)
 
-and class_declaration = class_expr class_infos
+and modtype_declaration m =
+  match m with
+    T.Pmodtype_abstract -> Pmodtype_abstract
+  | T.Pmodtype_manifest mt -> Pmodtype_manifest (module_type mt)
 
-(* Type expressions for the module language *)
-
-and module_type =
-  { pmty_desc: module_type_desc;
-    pmty_loc: Location.t }
-
-and module_type_desc =
-    Pmty_ident of Longident.t
-  | T.Pmty_signature of signature
-  | T.Pmty_functor of string * module_type * module_type
-  | T.Pmty_with of module_type * (Longident.t * with_constraint) list
-  | T.Pmty_typeof of module_expr
-
-and signature = signature_item list
-
-and signature_item =
-  { psig_desc: signature_item_desc;
-    psig_loc: Location.t }
-
-and signature_item_desc =
-    Psig_value of string * value_description
-  | T.Psig_type of (string * type_declaration) list
-  | T.Psig_exception of string * exception_declaration
-  | T.Psig_module of string * module_type
-  | T.Psig_recmodule of (string * module_type) list
-  | T.Psig_modtype of string * modtype_declaration
-  | T.Psig_open of Longident.t
-  | T.Psig_include of module_type
-  | T.Psig_class of class_description list
-  | T.Psig_class_type of class_type_declaration list
-
-and modtype_declaration =
-    Pmodtype_abstract
-  | T.Pmodtype_manifest of module_type
-
-and with_constraint =
-    Pwith_type of type_declaration
-  | T.Pwith_module of Longident.t
-  | T.Pwith_typesubst of type_declaration
-  | T.Pwith_modsubst of Longident.t
+and with_constraint w =
+  match w with
+    T.Pwith_type t -> Pwith_type (type_declaration t)
+  | T.Pwith_module l -> Pwith_module (Longident.t l)
+  | T.Pwith_typesubst t -> Pwith_typesubst (type_declaration t)
+  | T.Pwith_modsubst l ->  Pwith_modsubst (Longident.t l)
 
 (* value expressions for the module language *)
 
-and module_expr =
-  { pmod_desc: module_expr_desc;
-    pmod_loc: Location.t }
+and module_expr me =
+  let pmod_loc = Location.t me.T.pmod_loc in
+  let pmod_desc = match me.T.pmod_desc with
+    | T.Pmod_unpack (e, p) ->
+        Pmod_unpack (ghexp 
+          (Pexp_constraint (expression e,
+              Some (ghtyp (Ptyp_package (package_type p)) pmod_loc),
+              None
+              ))
+          pmod_loc)
+    | me ->  module_expr_desc me in
+  { pmod_desc; pmod_loc }
 
-and module_expr_desc =
-    Pmod_ident of Longident.t
-  | T.Pmod_structure of structure
-  | T.Pmod_functor of string * module_type * module_expr
-  | T.Pmod_apply of module_expr * module_expr
-  | T.Pmod_constraint of module_expr * module_type
-  | T.Pmod_unpack of expression * package_type
+and module_expr_desc me =
+  match me with
+    T.Pmod_ident l -> Pmod_ident (Longident.t l)
+  | T.Pmod_structure (s) -> Pmod_structure (structure s)
+  | T.Pmod_functor (s, mt, me) -> 
+      Pmod_functor (s, module_type mt, module_expr me)
+  | T.Pmod_apply (me1, me2) -> Pmod_apply (module_expr me1, module_expr me2)
+  | T.Pmod_constraint (me, mt) -> Pmod_constraint (module_expr me, module_type mt)
+  | T.Pmod_unpack (e, p) -> assert false
 
-and structure = structure_item list
+and structure list = List.map structure_item list
 
-and structure_item =
-  { pstr_desc: structure_item_desc;
-    pstr_loc: Location.t }
+and structure_item si =
+  { pstr_desc = structure_item_desc si.T.pstr_desc;
+    pstr_loc = Location.t  si.T.pstr_loc }
 
-and structure_item_desc =
-    Pstr_eval of expression
-  | T.Pstr_value of rec_flag * (pattern * expression) list
-  | T.Pstr_primitive of string * value_description
-  | T.Pstr_type of (string * type_declaration) list
-  | T.Pstr_exception of string * exception_declaration
-  | T.Pstr_exn_rebind of string * Longident.t
-  | T.Pstr_module of string * module_expr
-  | T.Pstr_recmodule of (string * module_type * module_expr) list
-  | T.Pstr_modtype of string * module_type
-  | T.Pstr_open of Longident.t
-  | T.Pstr_class of class_declaration list
-  | T.Pstr_class_type of class_type_declaration list
-  | T.Pstr_include of module_expr
+and structure_item_desc si =
+  match si with
+    T.Pstr_eval e -> Pstr_eval (expression e)
+  | T.Pstr_value (r, list) -> Pstr_value (rec_flag r, 
+        List.map (fun (pat, e) -> (pattern pat, expression e)) list)
+  | T.Pstr_primitive (s, v) -> Pstr_primitive (s, value_description v)
+  | T.Pstr_type (list) -> Pstr_type (List.map
+        (fun (s, t) -> (s, type_declaration t)) list)
+  | T.Pstr_exception (s, e) -> Pstr_exception (s, exception_declaration e)
+  | T.Pstr_exn_rebind (s, l) -> Pstr_exn_rebind (s, Longident.t l)
+  | T.Pstr_module (s, me) -> Pstr_module (s, module_expr me)
+  | T.Pstr_recmodule list -> Pstr_recmodule (List.map (
+          fun (s, mt, me) -> (s, module_type mt, module_expr me)) list)
+  | T.Pstr_modtype (s, mt) -> Pstr_modtype (s, module_type mt)
+  | T.Pstr_open (l) -> Pstr_open (Longident.t l)
+  | T.Pstr_class (list) -> Pstr_class (List.map class_declaration list)
+  | T.Pstr_class_type (list) -> Pstr_class_type (List.map class_type_declaration list)
+  | T.Pstr_include (me) -> Pstr_include (module_expr me)
 
+    (*
 (* Toplevel phrases *)
 
 type toplevel_phrase =
     Ptop_def of structure
-  | T.Ptop_dir of string * directive_argument
+  | T.Ptop_dir (a) -> Ptop_dir (string, directive_argument
 
 and directive_argument =
     Pdir_none
-  | T.Pdir_string of string
-  | T.Pdir_int of int
-  | T.Pdir_ident of Longident.t
-  | T.Pdir_bool of bool
+  | T.Pdir_string (a) -> Pdir_string (string
+  | T.Pdir_int (a) -> Pdir_int (int
+  | T.Pdir_ident (a) -> Pdir_ident (Longident.t
+  | T.Pdir_bool (a) -> Pdir_bool (bool
 *)
 
 end
@@ -396,4 +515,12 @@ let input_intf_file ic magic =
   else begin
     let v = (input_value ic : V3120_types.Parsetree.signature) in
       AST.Parsetree.signature v
+    end
+
+let input_impl_file ic magic =
+  if magic <> V3120_types.ast_impl_magic_number then
+    V3112_ast.input_impl_file ic magic
+  else begin
+      let v = (input_value ic : V3120_types.Parsetree.structure) in
+      AST.Parsetree.structure v
     end

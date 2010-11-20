@@ -37,6 +37,8 @@ COMPILEROBJS=\
    ../../compat/3.11.2/v3112_types.cmo \
    ../../compat/3.12.0/v3120_types.cmo \
    ../../typing/cmi_format.cmo \
+   ../../compat/3.11.2/v3112_ast.cmo \
+   ../../compat/3.12.0/v3120_ast.cmo \
    ../../compat/3.11.2/v3112_cmi.cmo \
    ../../compat/3.12.0/v3120_cmi.cmo \
    ../../typing/env.cmo \
