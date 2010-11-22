@@ -25,21 +25,28 @@ DEPFLAGS=$(INCLUDES)
 
 INCLUDES=\
   -I ../utils -I ../parsing -I ../typing -I ../bytecomp -I ../toplevel \
-  -I $(UNIXDIR)
+  -I ../compat  -I $(UNIXDIR)
 
 OTHEROBJS=\
   $(UNIXDIR)/unix.cma \
   ../utils/misc.cmo ../utils/config.cmo \
   ../utils/tbl.cmo ../utils/clflags.cmo ../utils/consistbl.cmo \
   ../parsing/longident.cmo \
-  ../compat/3.11.2/v3112_types.cmo \
-  ../compat/3.12.0/v3120_types.cmo \
+  ../parsing/bincompat.cmo \
+  ../compat/v3112_types.cmo \
+  ../compat/v3120_types.cmo \
   ../typing/ident.cmo ../typing/path.cmo ../typing/types.cmo \
   ../typing/btype.cmo ../typing/primitive.cmo ../typing/typedtree.cmo \
   ../typing/subst.cmo ../typing/predef.cmo \
   ../typing/datarepr.cmo ../typing/cmi_format.cmo \
-  ../compat/3.11.2/v3112_input_cmi.cmo \
-  ../compat/3.12.0/v3120_input_cmi.cmo \
+  ../compat/v3112_output_ast.cmo \
+  ../compat/v3120_output_ast.cmo \
+  ../compat/v3112_input_ast.cmo \
+  ../compat/v3120_input_ast.cmo \
+  ../compat/v3112_output_cmi.cmo \
+  ../compat/v3120_output_cmi.cmo \
+  ../compat/v3112_input_cmi.cmo \
+  ../compat/v3120_input_cmi.cmo \
   ../typing/env.cmo ../typing/oprint.cmo \
   ../typing/ctype.cmo ../typing/printtyp.cmo ../typing/mtype.cmo \
   ../bytecomp/runtimedef.cmo ../bytecomp/bytesections.cmo \

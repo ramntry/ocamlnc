@@ -146,8 +146,8 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/utils/warnings.cmo \
 	$(OCAMLSRCDIR)/utils/ccomp.cmo \
 	$(OCAMLSRCDIR)/utils/consistbl.cmo \
-	$(OCAMLSRCDIR)/compat/3.11.2/v3112_types.cmo \
-	$(OCAMLSRCDIR)/compat/3.12.0/v3120_types.cmo \
+	$(OCAMLSRCDIR)/compat/v3112_types.cmo \
+	$(OCAMLSRCDIR)/compat/v3120_types.cmo \
 	$(OCAMLSRCDIR)/parsing/linenum.cmo\
 	$(OCAMLSRCDIR)/parsing/location.cmo\
 	$(OCAMLSRCDIR)/parsing/longident.cmo \
@@ -155,6 +155,7 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/parsing/parser.cmo \
 	$(OCAMLSRCDIR)/parsing/lexer.cmo \
 	$(OCAMLSRCDIR)/parsing/parse.cmo \
+	$(OCAMLSRCDIR)/parsing/bincompat.cmo \
 	$(OCAMLSRCDIR)/typing/types.cmo \
 	$(OCAMLSRCDIR)/typing/path.cmo \
 	$(OCAMLSRCDIR)/typing/btype.cmo \
@@ -162,8 +163,14 @@ OCAMLCMOFILES=$(OCAMLSRCDIR)/parsing/printast.cmo \
 	$(OCAMLSRCDIR)/typing/datarepr.cmo \
 	$(OCAMLSRCDIR)/typing/subst.cmo \
 	$(OCAMLSRCDIR)/typing/cmi_format.cmo \
-	$(OCAMLSRCDIR)/compat/3.11.2/v3112_cmi.cmo \
-	$(OCAMLSRCDIR)/compat/3.12.0/v3120_cmi.cmo \
+	$(OCAMLSRCDIR)/compat/v3112_input_ast.cmo \
+	$(OCAMLSRCDIR)/compat/v3112_output_ast.cmo \
+	$(OCAMLSRCDIR)/compat/v3112_input_cmi.cmo \
+	$(OCAMLSRCDIR)/compat/v3112_output_cmi.cmo \
+	$(OCAMLSRCDIR)/compat/v3120_input_ast.cmo \
+	$(OCAMLSRCDIR)/compat/v3120_output_ast.cmo \
+	$(OCAMLSRCDIR)/compat/v3120_output_cmi.cmo \
+	$(OCAMLSRCDIR)/compat/v3120_input_cmi.cmo \
 	$(OCAMLSRCDIR)/typing/env.cmo \
 	$(OCAMLSRCDIR)/typing/ctype.cmo \
 	$(OCAMLSRCDIR)/typing/primitive.cmo \
