@@ -85,10 +85,19 @@ let copy_object_file oc name =
       raise(Error(Not_an_object_file file_name))      
   | x -> close_in ic; raise x
 
+let output_cma_file version =
+  if version = "" || version = "current" then
+    (cma_magic_number, output_value)   (* DONE *)
+  else 
+    V3120_output_cmo.output_cma_file version
+      
 let create_archive file_list lib_name =
   let outchan = open_out_bin lib_name in
   try
-    output_string outchan cma_magic_number;
+    let (magic_number, output_toc) = 
+      output_cma_file !Clflags.output_version
+    in    
+    output_string outchan magic_number;
     let ofs_pos_toc = pos_out outchan in
     output_binary_int outchan 0;
     let units = List.flatten(List.map (copy_object_file outchan) file_list) in
@@ -99,7 +108,7 @@ let create_archive file_list lib_name =
         lib_ccopts = !Clflags.ccopts @ !lib_ccopts;
         lib_dllibs = !Clflags.dllibs @ !lib_dllibs } in
     let pos_toc = pos_out outchan in
-    output_value outchan toc;
+    output_toc outchan toc;
     seek_out outchan ofs_pos_toc;
     output_binary_int outchan pos_toc;
     close_out outchan

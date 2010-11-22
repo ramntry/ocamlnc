@@ -352,9 +352,18 @@ let rec emit = function
 
 (* Emission to a file *)
 
+let output_cmo_file version =
+  if version = "" || version = "current" then
+    (Config.cmo_magic_number, output_value) (* DONE *)
+  else
+    V3120_output_cmo.output_cmo_file version
+
 let to_file outchan unit_name code =
   init();
-  output_string outchan cmo_magic_number;
+  let (magic_number, output_compunit) = 
+    output_cmo_file !Clflags.output_version
+  in
+  output_string outchan magic_number;
   let pos_depl = pos_out outchan in
   output_binary_int outchan 0;
   let pos_code = pos_out outchan in
@@ -381,7 +390,7 @@ let to_file outchan unit_name code =
   Btype.cleanup_abbrev ();              (* Remove any cached abbreviation
                                            expansion before saving *)
   let pos_compunit = pos_out outchan in
-  output_value outchan compunit;
+  output_compunit outchan compunit;
   seek_out outchan pos_depl;
   output_binary_int outchan pos_compunit
 

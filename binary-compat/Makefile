@@ -33,7 +33,7 @@ MKDIR=mkdir -p
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
 	 -I toplevel \
-	 -I compat/3.11.2 -I compat/3.12.0
+	 -I compat
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
@@ -42,28 +42,28 @@ UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
 OPTUTILS=$(UTILS)
 
 COMPAT_CMI=\
-  compat/3.11.2/v3112_types.cmo \
-  compat/3.12.0/v3120_types.cmo \
-  compat/3.11.2/v3112_input_ast.cmo \
-  compat/3.11.2/v3112_output_ast.cmo \
-  compat/3.12.0/v3120_input_ast.cmo \
-  compat/3.12.0/v3120_output_ast.cmo \
-  compat/3.11.2/v3112_input_cmi.cmo \
-  compat/3.11.2/v3112_output_cmi.cmo \
-  compat/3.12.0/v3120_input_cmi.cmo \
-  compat/3.12.0/v3120_output_cmi.cmo \
+  compat/v3112_types.cmo \
+  compat/v3120_types.cmo \
+  compat/v3112_input_ast.cmo \
+  compat/v3112_output_ast.cmo \
+  compat/v3120_input_ast.cmo \
+  compat/v3120_output_ast.cmo \
+  compat/v3112_input_cmi.cmo \
+  compat/v3112_output_cmi.cmo \
+  compat/v3120_input_cmi.cmo \
+  compat/v3120_output_cmi.cmo \
 
 COMPAT_CMO=\
-  compat/3.11.2/v3112_input_cmo.cmo \
-  compat/3.11.2/v3112_output_cmo.cmo \
-  compat/3.12.0/v3120_input_cmo.cmo \
-  compat/3.12.0/v3120_output_cmo.cmo
+  compat/v3112_input_cmo.cmo \
+  compat/v3112_output_cmo.cmo \
+  compat/v3120_input_cmo.cmo \
+  compat/v3120_output_cmo.cmo
 
 COMPAT_CMX=\
-  compat/3.11.2/v3112_input_cmx.cmo \
-  compat/3.11.2/v3112_output_cmx.cmo \
-  compat/3.12.0/v3120_input_cmx.cmo \
-  compat/3.12.0/v3120_output_cmx.cmo
+  compat/v3112_input_cmx.cmo \
+  compat/v3112_output_cmx.cmo \
+  compat/v3120_input_cmx.cmo \
+  compat/v3120_output_cmx.cmo
 
 
 PARSING=parsing/linenum.cmo parsing/location.cmo parsing/longident.cmo \
@@ -780,7 +780,7 @@ partialclean::
 	rm -f *~
 
 depend: beforedepend
-	(for d in utils parsing typing bytecomp asmcomp driver toplevel compat/3.*; \
+	(for d in utils parsing typing bytecomp asmcomp driver toplevel compat; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
 

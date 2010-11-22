@@ -5,18 +5,18 @@ let this_version = "3.11.2"
   
 module CMI = struct
 
-    open V3120_output_ast.AST
+    open V3112_output_ast.AST
 
       module Ident : sig
 
     val reset : unit -> unit
-    val t : Ident.t -> V3120_types.Ident.t
+    val t : Ident.t -> V3112_types.Ident.t
 
 end = struct
 
     open Ident
       
-  module T = V3120_types.Ident
+  module T = V3112_types.Ident
   let tbl = Hashtbl.create 13
 
   let reset () = Hashtbl.clear tbl
@@ -38,11 +38,11 @@ end
 
 module Path : sig
 
-  val t : Path.t -> V3120_types.Path.t
+  val t : Path.t -> V3112_types.Path.t
 
 end = struct
 
-  module T = V3120_types.Path
+  module T = V3112_types.Path
   open Path
 
   let rec t p =
@@ -55,11 +55,11 @@ end
 
 module Primitive : sig
 
-  val description : Primitive.description -> V3120_types.Primitive.description
+  val description : Primitive.description -> V3112_types.Primitive.description
 
 end = struct
 
-    module T = V3120_types.Primitive
+    module T = V3112_types.Primitive
     open Primitive
 
     let description p =
@@ -77,17 +77,17 @@ module Types : sig
     val reset : unit -> unit
 
     val signature :
-      Types.signature -> V3120_types.Types.signature
+      Types.signature -> V3112_types.Types.signature
 
     val record_representation :
       Types.record_representation ->
-      V3120_types.Types.record_representation
+      V3112_types.Types.record_representation
 
   end = struct
 
     open Asttypes
 
-    module T = V3120_types.Types
+    module T = V3112_types.Types
     open Types
 
     let tbl = Hashtbl.create 113
@@ -143,8 +143,7 @@ module Types : sig
       | Tvariant r -> T.Tvariant (row_desc r)
       | Tunivar -> T.Tunivar
       | Tpoly (t, list) -> T.Tpoly (type_expr t, List.map type_expr list)
-      | Tpackage (p, sl, tl) ->
-          T.Tpackage (Path.t p, sl, List.map type_expr tl)
+      | Tpackage _ -> raise (No_Such_Feature (this_version, "package type"))
 
     and abbrev_memo ab =
       match ab with
@@ -328,12 +327,12 @@ end
 module Cmi_format : sig
 
     val pers_flags :
-      Cmi_format.pers_flags -> V3120_types.Cmi_format.pers_flags
+      Cmi_format.pers_flags -> V3112_types.Cmi_format.pers_flags
     ;;
 
   end = struct
 
-    module T = V3120_types.Cmi_format
+    module T = V3112_types.Cmi_format
     open Cmi_format
 
     let pers_flags flag =
@@ -345,16 +344,33 @@ end
 
 open Cmi_format
 
+  (*
 let output_cmi_file version =
   if version <> this_version then
-    V3112_output_cmi.output_cmi_file version
-  else
-  (V3120_types.cmi_magic_number,
+    raise No_Such_Magic;
+
+  (V3112_types.cmi_magic_number,
     fun oc cmi ->
       CMI.Ident.reset ();
       CMI.Types.reset ();
 
       output_value oc (cmi.cmi_name, CMI.Types.signature cmi.cmi_sign);
       output_value oc cmi.cmi_crcs;
-      output_value oc (List.map CMI.Cmi_format.pers_flags cmi.cmi_flags);
+      output_value oc ();
   )
+  *)
+
+let output_cmi_file oc filename version cmi =
+  if version <> this_version then
+    raise No_Such_Version;
+  
+  output_string oc V3112_types.cmi_magic_number;
+  output_value oc (cmi.cmi_name, CMI.Types.signature cmi.cmi_sign);
+  flush oc;
+  let crc = Digest.file filename in
+  cmi.cmi_crcs <- (cmi.cmi_name, crc) :: cmi.cmi_crcs;
+  output_value oc cmi.cmi_crcs;
+  output_value oc (List.map CMI.Cmi_format.pers_flags cmi.cmi_flags);
+  crc
+  
+  

@@ -240,7 +240,7 @@ module Cmo_format : sig
 
 end
 
-let this_version = "3.12.0"
+let this_version = "3.11.2"
     
 let output_cmo_file version =
   if version = this_version then

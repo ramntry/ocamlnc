@@ -10,6 +10,9 @@ and cmxa_magic_number = "Caml1999Z010"
 and ast_impl_magic_number = "Caml1999M012" (* different from 3.12.0 *)
 and ast_intf_magic_number = "Caml1999N011" (* different from 3.12.0 *)
 
+let _ =
+  Clflags.available_versions := "3.11.2" :: !Clflags.available_versions
+  
 module Asttypes = struct
 
 type constant =

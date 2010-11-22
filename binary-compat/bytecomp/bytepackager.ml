@@ -173,7 +173,7 @@ let build_global_target oc target_name members mapping pos coercion =
   relocs := List.map (fun (r, ofs) -> (r, pos + ofs)) rel @ !relocs
 
 (* Build the .cmo file obtained by packaging the given .cmo files. *)
-
+  
 let package_object_files files targetfile targetname coercion =
   let members =
     map_left_right read_member_info files in
@@ -187,7 +187,9 @@ let package_object_files files targetfile targetname coercion =
       unit_names in
   let oc = open_out_bin targetfile in
   try
-    output_string oc Config.cmo_magic_number;
+    let (magic_number, output_compunit) =
+      Emitcode.output_cmo_file !Clflags.output_version in
+    output_string oc magic_number;
     let pos_depl = pos_out oc in
     output_binary_int oc 0;
     let pos_code = pos_out oc in
@@ -211,7 +213,7 @@ let package_object_files files targetfile targetname coercion =
         cu_force_link = !force_link;
         cu_debug = if pos_final > pos_debug then pos_debug else 0;
         cu_debugsize = pos_final - pos_debug } in
-    output_value oc compunit;
+    output_compunit oc compunit;
     seek_out oc pos_depl;
     output_binary_int oc pos_final;
     close_out oc

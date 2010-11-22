@@ -3,10 +3,10 @@ open Bincompat
 type pers_flags = Rectypes
 
 type cmi_file = {
-  cmi_name : string;
-  cmi_sign : Types.signature_item list;
-  cmi_crcs : (string * Digest.t) list;
-  cmi_flags : pers_flags list;
+    cmi_name : string;
+    cmi_sign : Types.signature_item list;
+    mutable cmi_crcs : (string * Digest.t) list;
+    cmi_flags : pers_flags list;
 }
 
 let input_cmi_file ic magic =

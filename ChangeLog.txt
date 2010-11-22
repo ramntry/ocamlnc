@@ -1,3 +1,11 @@
+2010/11/22:
+ * Finished implementing input from and output to versions 3.11.2 and 3.12.0
+    for all usual binary object files (ast, .cmi, .cmo, .cmx, .cma, .cmxa)
+ * New options:
+    -vers VERSION: output to binary format of version VERSION
+    -vers help: print all available versions
+    -vers current: output to current binary format (default)
+
 2010/11/20:
  * New module parsing/bincompat.ml
  * Implemented ast, cmi, cmo, cma output to versions 3.11.2 and 3.12.0

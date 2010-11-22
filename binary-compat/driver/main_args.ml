@@ -366,6 +366,11 @@ let mk_dstartup f =
   "-dstartup", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_output_version f =
+  "-vers", Arg.String f, " <version> : output for version <version>"
+
+
+
 let mk__ f =
   "-", Arg.String f,
   "<file>  Treat <file> as a file name (even if it starts with `-')"
@@ -415,6 +420,7 @@ module type Bytecomp_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
   val _where : unit -> unit
+  val _output_version : string -> unit
 
   val _nopervasives : unit -> unit
   val _use_prims : string -> unit
@@ -422,7 +428,7 @@ module type Bytecomp_options = sig
   val _drawlambda : unit -> unit
   val _dlambda : unit -> unit
   val _dinstr : unit -> unit
-
+      
   val anonymous : string -> unit
 end;;
 
@@ -498,6 +504,7 @@ module type Optcomp_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
   val _where : unit -> unit
+  val _output_version : string -> unit
 
   val _nopervasives : unit -> unit
   val _dparsetree : unit -> unit
@@ -618,7 +625,8 @@ struct
     mk_warn_error F._warn_error;
     mk_warn_help F._warn_help;
     mk_where F._where;
-
+    mk_output_version F._output_version;
+        
     mk_nopervasives F._nopervasives;
     mk_use_prims F._use_prims;
     mk_dparsetree F._dparsetree;
@@ -708,7 +716,8 @@ struct
     mk_warn_error F._warn_error;
     mk_warn_help F._warn_help;
     mk_where F._where;
-
+    mk_output_version F._output_version;        
+        
     mk_nopervasives F._nopervasives;
     mk_dparsetree F._dparsetree;
     mk_drawlambda F._drawlambda;

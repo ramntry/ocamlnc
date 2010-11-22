@@ -1,4 +1,6 @@
 open Bincompat
+
+let this_version = "3.12.0"
   
 let ghost_loc loc =
   { loc with V3120_types.Location.loc_ghost = true }
@@ -202,7 +204,7 @@ and pattern_desc p =
   | Ppat_constraint (p1, c) -> T.Ppat_constraint (pattern p1, core_type c)
   | Ppat_type l -> T.Ppat_type (Longident.t l)
   | Ppat_lazy p1 -> T.Ppat_lazy (pattern p1)
-  | Ppat_unpack _ -> raise (No_Such_Feature ("3.12.0", "Unpack pattern"))
+  | Ppat_unpack _ -> raise (No_Such_Feature (this_version, "Unpack pattern"))
       
 let ghmod d loc = { T.pmod_desc = d; pmod_loc = ghost_loc loc; }
 let ghmty d loc = { T.pmty_desc = d; pmty_loc = ghost_loc loc; }
@@ -290,7 +292,7 @@ and expression_desc e =
   | Pexp_object cl -> T.Pexp_object (class_structure cl)
   | Pexp_newtype (s, e) -> T.Pexp_newtype (s, expression e)
   | Pexp_pack m -> 
-      raise (No_Such_Feature ("3.12.0", "Pack without constraints"))
+      raise (No_Such_Feature (this_version, "Pack without constraints"))
   | Pexp_open (l, e) -> T.Pexp_open (Longident.t l, expression e)
 
 and value_description v =
@@ -502,7 +504,7 @@ and module_expr_desc me =
           )) loc
       )
   | Pmod_unpack e -> 
-      raise (No_Such_Feature ("3.12.0", "Unpack without constraints"))
+      raise (No_Such_Feature (this_version, "Unpack without constraints"))
 
 and structure list = List.map structure_item list
 
@@ -552,7 +554,7 @@ end
 
 
 let output_intf_file version =
-  if version = "3.12.0" then
+  if version = this_version then
     (V3120_types.ast_intf_magic_number, 
       (fun oc ast ->
           output_value oc (AST.Parsetree.signature ast)))
@@ -560,7 +562,7 @@ let output_intf_file version =
     V3112_output_ast.output_intf_file version
 
 let output_impl_file version =
-  if version = "3.12.0" then
+  if version = this_version then
     (V3120_types.ast_impl_magic_number, 
       (fun oc ast ->
           output_value oc (AST.Parsetree.structure ast)))

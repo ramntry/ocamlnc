@@ -9,6 +9,9 @@ and ast_impl_magic_number = "Caml1999M013"
 and ast_intf_magic_number = "Caml1999N012"
 and cmxs_magic_number = "Caml2007D001"
 
+let _ =
+  Clflags.available_versions := "3.12.0" :: !Clflags.available_versions
+
 module Asttypes = struct
 
 (* Auxiliary a.s.t. types used by parsetree and typedtree. *)

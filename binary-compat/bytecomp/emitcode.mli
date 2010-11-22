@@ -38,3 +38,6 @@ val to_packed_file:
              list of instructions to emit
            Result:
              relocation information (reversed) *)
+
+val output_cmo_file :
+  string -> string * (out_channel -> Cmo_format.compilation_unit -> unit)

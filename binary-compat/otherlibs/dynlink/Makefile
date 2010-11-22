@@ -30,17 +30,22 @@ COMPILEROBJS=\
   ../../utils/terminfo.cmo ../../utils/warnings.cmo \
   ../../parsing/asttypes.cmi ../../parsing/linenum.cmo \
   ../../parsing/location.cmo ../../parsing/longident.cmo \
+  ../../parsing/bincompat.cmo \
   ../../typing/ident.cmo ../../typing/path.cmo \
   ../../typing/primitive.cmo ../../typing/types.cmo \
   ../../typing/btype.cmo ../../typing/subst.cmo ../../typing/predef.cmo \
   ../../typing/datarepr.cmo \
-   ../../compat/3.11.2/v3112_types.cmo \
-   ../../compat/3.12.0/v3120_types.cmo \
+   ../../compat/v3112_types.cmo \
+   ../../compat/v3120_types.cmo \
    ../../typing/cmi_format.cmo \
-   ../../compat/3.11.2/v3112_input_ast.cmo \
-   ../../compat/3.12.0/v3120_input_ast.cmo \
-   ../../compat/3.11.2/v3112_input_cmi.cmo \
-   ../../compat/3.12.0/v3120_input_cmi.cmo \
+   ../../compat/v3112_output_ast.cmo \
+   ../../compat/v3112_input_ast.cmo \
+   ../../compat/v3120_output_ast.cmo \
+   ../../compat/v3120_input_ast.cmo \
+   ../../compat/v3112_output_cmi.cmo \
+   ../../compat/v3112_input_cmi.cmo \
+   ../../compat/v3120_output_cmi.cmo \
+   ../../compat/v3120_input_cmi.cmo \
    ../../typing/env.cmo \
   ../../bytecomp/lambda.cmo ../../bytecomp/instruct.cmo \
   ../../bytecomp/cmo_format.cmi ../../bytecomp/opcodes.cmo \

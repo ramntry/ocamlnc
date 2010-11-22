@@ -202,10 +202,18 @@ let need_send_fun n =
 
 (* Write the description of the current unit *)
 
+let output_cmx_file version =
+  if version = "" || version = "current" then
+    (cmx_magic_number, output_value)    (* DONE *)
+  else
+    V3120_output_cmx.output_cmx_file version
+
 let write_unit_info info filename =
   let oc = open_out_bin filename in
-  output_string oc cmx_magic_number;
-  output_value oc info;
+  let (magic_number, output_compunit) = 
+    output_cmx_file !Clflags.output_version in
+  output_string oc magic_number;
+  output_compunit oc info;
   flush oc;
   let crc = Digest.file filename in
   Digest.output oc crc;

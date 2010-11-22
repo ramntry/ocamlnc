@@ -815,20 +815,35 @@ let imported_units() =
 
 (* Save a signature to a file *)
 
+let output_cmi_file oc filename version cmi =
+  if version = "" || version = "current" then 
+    begin
+      output_string oc cmi_magic_number;
+      output_value oc (cmi.cmi_name, cmi.cmi_sign); (* DONE *)
+      flush oc;
+      let crc = Digest.file filename in
+      cmi.cmi_crcs <- (cmi.cmi_name, crc) :: cmi.cmi_crcs;
+      output_value oc cmi.cmi_crcs;          (* DONE *)
+      output_value oc cmi.cmi_flags; (* DONE *)
+      crc
+      end
+  else 
+    V3120_output_cmi.output_cmi_file oc filename version cmi
+    
+    
 let save_signature_with_imports sg modname filename imports =
   Btype.cleanup_abbrev ();
   Subst.reset_for_saving ();
   let sg = Subst.signature (Subst.for_saving Subst.identity) sg in
   let oc = open_out_bin filename in
   try
-    output_string oc cmi_magic_number;
-    output_value oc (modname, sg);
-    flush oc;
-    let crc = Digest.file filename in
-    let crcs = (modname, crc) :: imports in
-    output_value oc crcs;
-    let flags = if !Clflags.recursive_types then [Rectypes] else [] in
-    output_value oc flags;
+    let cmi = {
+        cmi_name = modname;
+        cmi_sign = sg;
+        cmi_crcs = imports;
+        cmi_flags = if !Clflags.recursive_types then [Rectypes] else [];
+        } in
+    let crc = output_cmi_file oc filename !Clflags.output_version cmi in
     close_out oc;
     (* Enter signature in persistent table so that imported_unit()
        will also return its crc *)
@@ -839,9 +854,9 @@ let save_signature_with_imports sg modname filename imports =
       { ps_name = modname;
         ps_sig = sg;
         ps_comps = comps;
-        ps_crcs = crcs;
+        ps_crcs = cmi.cmi_crcs;
         ps_filename = filename;
-        ps_flags = flags } in
+        ps_flags = cmi.cmi_flags } in
     Hashtbl.add persistent_structures modname ps;
     Consistbl.set crc_units modname crc filename
   with exn ->

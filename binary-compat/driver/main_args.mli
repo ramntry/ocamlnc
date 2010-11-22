@@ -57,6 +57,7 @@ module type Bytecomp_options =
     val _warn_error : string -> unit
     val _warn_help : unit -> unit
     val _where : unit -> unit
+    val _output_version : string -> unit
 
     val _nopervasives : unit -> unit
     val _use_prims : string -> unit
@@ -141,6 +142,7 @@ module type Optcomp_options = sig
   val _warn_error : string -> unit
   val _warn_help : unit -> unit
   val _where : unit -> unit
+  val _output_version : string -> unit
 
   val _nopervasives : unit -> unit
   val _dparsetree : unit -> unit

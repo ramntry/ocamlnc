@@ -39,11 +39,19 @@ let read_info name =
   info.ui_approx <- Clambda.Value_unknown;
   (Filename.chop_suffix filename ".cmx" ^ ext_obj, (info, crc))
 
+let output_cmxa_file version =
+  if version = "" || version = "current" then
+    (cmxa_magic_number, output_value)    (* DONE *)
+  else
+    V3120_output_cmx.output_cmxa_file version
+    
 let create_archive file_list lib_name =
   let archive_name = chop_extension_if_any lib_name ^ ext_lib in
   let outchan = open_out_bin lib_name in
   try
-    output_string outchan cmxa_magic_number;
+    let (magic_number, output_library) = output_cmxa_file 
+      !Clflags.output_version in
+    output_string outchan magic_number;
     let (objfile_list, descr_list) =
       List.split (List.map read_info file_list) in
     List.iter2
@@ -54,7 +62,7 @@ let create_archive file_list lib_name =
       { lib_units = descr_list;
         lib_ccobjs = !Clflags.ccobjs;
         lib_ccopts = !Clflags.ccopts } in
-    output_value outchan infos;
+    output_library outchan infos;
     if Ccomp.create_archive archive_name objfile_list <> 0
     then raise(Error(Archiver_error archive_name));
     close_out outchan

@@ -76,3 +76,6 @@ val std_include_flag : string -> string
 val std_include_dir : unit -> string list
 val shared : bool ref
 val dlcode : bool ref
+val output_version : string ref
+val available_versions : string list ref
+  

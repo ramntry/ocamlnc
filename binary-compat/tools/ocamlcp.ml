@@ -92,6 +92,8 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _drawlambda = option "-drawlambda"
   let _dlambda = option "-dlambda"
   let _dinstr = option "-dinstr"
+  let _output_version = option_with_arg "-vers"
+        
   let anonymous = process_file
 end);;
 

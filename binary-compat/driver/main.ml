@@ -132,6 +132,15 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _warn_error = (Warnings.parse_options true)
   let _warn_help = Warnings.help_warnings
   let _where = print_standard_library
+  let _output_version s =
+        if s = "help" then 
+          let ppf = Format.err_formatter in
+          Format.fprintf ppf "Available output versions: ";
+          List.iter (fun v -> Format.fprintf ppf "%s " v) !available_versions;
+          Format.fprintf ppf "\n@."
+        else
+          Clflags.output_version := s
+
   let _verbose = set verbose
   let _nopervasives = set nopervasives
   let _dparsetree = set dump_parsetree
