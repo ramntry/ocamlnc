@@ -1,3 +1,13 @@
+2010-11-25:
+ * Added command "genannot" to translate a .types file into a .annot file
+    * Some duplicated annotations are removed
+    * Some forgotten annotations have been added
+    * "call(" annotations are not generated
+    * Display warning messages about identifiers without annotations
+       (identifiers bound by "for" and "external")
+ * Removed automatic generation of _ast2src.ml and _typ2src.ml files
+ * Added functor in Typedtree to iter on the typedtree
+
 2010-11-16:
  * Moved code from typedtree.ml to:
    * new file parsing/pprintast.ml for pretty-printing of parsetree

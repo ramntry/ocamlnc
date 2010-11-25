@@ -337,6 +337,8 @@ and find_class =
   find (fun env -> env.classes) (fun sc -> sc.comp_classes)
 and find_cltype =
   find (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes)
+and find_annot =
+  find (fun env -> env.annotations) (fun sc -> sc.comp_annotations)
 
 (* Find the manifest type associated to a type when appropriate:
    - the type should be public or should have a private row,

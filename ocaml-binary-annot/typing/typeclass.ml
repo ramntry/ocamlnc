@@ -188,7 +188,7 @@ let rec limited_generalize rv =
 (* Record a class type *)
 let rc node =
   Typedtree.add_saved_type (Saved_class_expr node);
-  Stypes.record (Stypes.Ti_class node);
+  Stypes.record (Stypes.Ti_class node); (* moved to genannot *)
   node
 
 

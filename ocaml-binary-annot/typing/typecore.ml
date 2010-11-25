@@ -92,12 +92,12 @@ let type_object =
 *)
 let re node =
   Typedtree.add_saved_type (Saved_expression node);
-  Stypes.record (Stypes.Ti_expr node);
+  Stypes.record (Stypes.Ti_expr node); (* moved to genannot *)
   node
 ;;
 let rp node =
   Typedtree.add_saved_type (Saved_pattern node);
-  Stypes.record (Stypes.Ti_pat node);
+  Stypes.record (Stypes.Ti_pat node); (* moved to genannot *)
   node
 ;;
 
@@ -229,7 +229,7 @@ let enter_variable ?(is_module=false) loc name ty =
   end else begin
     match !pattern_scope with
     | None -> ()
-    | Some s -> Stypes.record (Stypes.An_ident (loc, name, s));
+    | Some s -> Stypes.record (Stypes.An_ident (loc, name, s)); (* moved to genannot *)
   end;
   id
 
@@ -1104,8 +1104,8 @@ let rec type_exp env sexp =
                     else
                       name_of_path p ^ "." ^ s
                 | Path.Papply(p1, p2) -> name_of_path p1 ^ "(" ^ name_of_path p2 ^ ")" in
-              Stypes.record
-                (Stypes.An_ident (loc, name_of_path path, annot))
+              Stypes.record  (* moved to genannot *)
+                (Stypes.An_ident (loc, name_of_path path, annot)) (* moved to genannot *)
             with _ -> ()
           end;
         let (path, desc) = Typetexp.find_value env loc lid in
@@ -1456,7 +1456,9 @@ let rec type_exp env sexp =
         exp_loc = arg.exp_loc;
         exp_type = ty';
           exp_env = env } in
-      re { arg with exp_desc = Texp_constraint (arg, cty, cty') }
+      re { arg with 
+        exp_desc = Texp_constraint (arg, cty, cty'); 
+        exp_loc = loc; }
   | Pexp_when(scond, sbody) ->
       let cond = type_expect env scond (instance Predef.type_bool) in
       let body = type_exp env sbody in

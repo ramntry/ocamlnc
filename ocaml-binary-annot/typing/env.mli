@@ -30,6 +30,7 @@ val find_module: Path.t -> t -> module_type
 val find_modtype: Path.t -> t -> modtype_declaration
 val find_class: Path.t -> t -> class_declaration
 val find_cltype: Path.t -> t -> class_type_declaration
+val find_annot: Path.t -> t -> Annot.ident
 
 val find_type_expansion: Path.t -> t -> type_expr list * type_expr
 val find_type_expansion_opt: Path.t -> t -> type_expr list * type_expr

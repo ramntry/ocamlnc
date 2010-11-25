@@ -70,7 +70,7 @@ let type_open env loc lid =
 
 (* Record a module type *)
 let rm node =
-  Stypes.record (Stypes.Ti_mod node);
+  Stypes.record (Stypes.Ti_mod node); (* moved to genannot *)
   node
 
 (* Forward declaration, to be filled in by type_module_type_of *)
@@ -1035,7 +1035,7 @@ and type_structure funct_body anchor env sstr scope =
          final_env)
   in
   if !Clflags.annotations
-  then List.iter (function {pstr_loc = l} -> Stypes.record_phrase l) sstr;
+  then List.iter (function {pstr_loc = l} -> Stypes.record_phrase l) sstr; (* moved to genannot *)
   let previous_saved_types = Typedtree.get_saved_types () in
   let (items, sg, finalenv) = type_struct env sstr in
   let str = { str_items = items; str_type = sg } in
@@ -1181,6 +1181,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
         output_value oc [| Saved_implementation str |];
         close_out oc;
 
+(*
         let oc = open_out (outputprefix ^ "_ast2src.ml") in
         let ppf = Format.formatter_of_out_channel oc in
         Pprintast.print_structure ppf ast;
@@ -1193,7 +1194,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
         Pprintast.print_structure ppf (Untypeast.untype_structure str);
         Format.pp_print_flush ppf ();
         close_out oc;
-
+*)
       end;
     (str, coercion)
   with e ->
