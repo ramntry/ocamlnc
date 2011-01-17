@@ -24,6 +24,8 @@ open Clambda
 open Cmm
 open Cmx_format
 
+let structured_constants = ref ([] : (string * structured_constant) list)
+
 (* Local binding of complex expressions *)
 
 let bind name arg fn =
@@ -183,6 +185,8 @@ let test_bool = function
 
 (* Float *)
 
+let unboxed_ids = ref IdentSet.empty
+
 let box_float c = Cop(Calloc, [alloc_float_header; c])
 
 let rec unbox_float = function
@@ -194,7 +198,24 @@ let rec unbox_float = function
   | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map unbox_float el)
   | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_float e1, unbox_float e2)
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float e1, id, unbox_float e2)
+  | Cvar id as c ->
+      unboxed_ids := IdentSet.add id !unboxed_ids;
+      Cop(Cload Double_u, [c])
+  | Cconst_symbol lbl ->
+      let cst = try List.assoc lbl !structured_constants with Not_found -> assert false in
+      begin match cst with
+      | Const_base(Const_float f) -> Cconst_float f
+      | _ -> assert false
+      end
   | c -> Cop(Cload Double_u, [c])
+
+
+let unbox_if_float e =
+  let back = !unboxed_ids in
+  let r = unbox_float e in
+  unboxed_ids := back;
+  r
+
 
 (* Complex *)
 
@@ -429,8 +450,6 @@ let new_const_label () =
 let new_const_symbol () =
   incr const_label;
   Compilenv.make_symbol (Some (string_of_int !const_label))
-
-let structured_constants = ref ([] : (string * structured_constant) list)
 
 let transl_constant = function
     Const_base(Const_int n) ->
@@ -866,9 +885,10 @@ let rec transl = function
         | _ ->
             bind "met" (lookup_tag obj (transl met)) (call_met obj args))
   | Ulet(id, exp, body) ->
-      begin match is_unboxed_number exp with
-        No_unboxing ->
+(*      begin match is_unboxed_number exp with
+        No_unboxing ->*)
           Clet(id, transl exp, transl body)
+(*
       | Boxed_float ->
           transl_unbox_let box_float unbox_float transl_unbox_float
                            id exp body
@@ -876,6 +896,7 @@ let rec transl = function
           transl_unbox_let (box_int bi) (unbox_int bi) (transl_unbox_int bi)
                            id exp body
       end
+*)
   | Uletrec(bindings, body) ->
       transl_letrec bindings (transl body)
 
@@ -1325,7 +1346,7 @@ and transl_prim_3 p arg1 arg2 arg3 dbg =
               bind "arr" (transl arg1) (fun arr ->
                 Cifthenelse(is_addr_array_ptr arr,
                             addr_array_set arr index newval,
-                            float_array_set arr index (unbox_float newval)))))
+                            float_array_set arr index (unbox_if_float newval)))))
       | Paddrarray ->
           addr_array_set (transl arg1) (transl arg2) (transl arg3)
       | Pintarray ->
@@ -1345,7 +1366,7 @@ and transl_prim_3 p arg1 arg2 arg3 dbg =
                               addr_array_set arr idx newval),
                     Csequence(Cop(Ccheckbound dbg, [float_array_length hdr; idx]),
                               float_array_set arr idx
-                                              (unbox_float newval)))))))
+                                              (unbox_if_float newval)))))))
       | Paddrarray ->
           bind "index" (transl arg2) (fun idx ->
             bind "arr" (transl arg1) (fun arr ->
@@ -1523,12 +1544,131 @@ and transl_letrec bindings cont =
         fill_blocks rem
   in init_blocks bsz
 
+let transl_with_unboxing params body =
+  unboxed_ids := IdentSet.empty;
+  assert(IdentSet.is_empty !unboxed_ids);
+  let body, ids =
+    Misc.try_finally
+      (fun () -> let body = transl body in body, !unboxed_ids)
+      (fun () -> unboxed_ids := IdentSet.empty)
+  in
+  (* Traverse the body to find out, for each id:
+     - whether it is assigned;
+     - whether it is used directly in boxed form.
+   *)
+  let need_boxed = ref IdentSet.empty in
+  let assigned = ref IdentSet.empty in
+  let rec check = function
+    | Cop(Cload Double_u, [Cvar _]) ->
+        ()
+    | Cvar id ->
+        if IdentSet.mem id ids then
+          need_boxed := IdentSet.add id !need_boxed
+    | Cassign (id, exp) ->
+        if IdentSet.mem id ids then
+          assigned := IdentSet.add id !assigned
+
+    | Cconst_int _
+    | Cconst_natint _
+    | Cconst_float _
+    | Cconst_symbol _
+    | Cconst_pointer _
+    | Cconst_natpointer _ -> ()
+    | Clet (_, e1, e2)
+    | Csequence (e1, e2)
+    | Ccatch (_, _, e1, e2)
+    | Ctrywith (e1, _, e2) -> check e1; check e2
+    | Ctuple el
+    | Cop (_, el)
+    | Cexit (_, el) -> List.iter check el
+    | Cifthenelse (e1, e2, e3) -> check e1; check e2; check e3
+    | Cswitch (e, _, ea) -> check e; Array.iter check ea
+    | Cloop e -> check e
+  in
+  check body;
+  let assigned = !assigned and need_boxed = !need_boxed in
+  let ids = IdentSet.diff ids (IdentSet.inter assigned need_boxed) in
+(*
+  IdentSet.iter
+    (fun id ->
+      Printf.printf "Candidate for float unboxing: %s"
+        (Ident.unique_name id);
+      if IdentSet.mem id assigned then Printf.printf " (assigned)";
+      if IdentSet.mem id need_boxed then Printf.printf " (need_boxed)";
+      Printf.printf "\n%!"
+    ) ids;
+*)
+  let unboxed_id_tbl = ref Ident.empty in
+  let get_unboxed_id id =
+    try Ident.find_same id !unboxed_id_tbl
+    with Not_found ->
+      fatal_error (Printf.sprintf "Cannot find unboxed id for %s" (Ident.unique_name id))
+  in
+  let rec subst = function
+    | Clet(id, arg, body) ->
+        let arg = subst arg in
+        if IdentSet.mem id ids then
+          let unboxed_id = Ident.create (Ident.name id) in
+          unboxed_id_tbl := Ident.add id unboxed_id !unboxed_id_tbl;
+          let body = subst body in
+          if IdentSet.mem id need_boxed then
+            Clet(id, arg, Clet(unboxed_id, Cop(Cload Double_u, [Cvar id]), body))
+          else
+            Clet(unboxed_id, unbox_float arg, body)
+        else
+          Clet(id, arg, subst body)
+    | Cassign(id, arg) ->
+        if IdentSet.mem id ids then
+          let unboxed_id = get_unboxed_id id in
+          Cassign(unboxed_id, subst (unbox_float arg)) (* introduce extra unboxing *)
+        else
+          Cassign(id, subst arg)
+    | Ctuple argv -> Ctuple(List.map subst argv)
+    | (Cop(Cload _, [Cvar id]) | Cop(Cload _, [Cop(Cadda, [Cvar id; _])])) as e ->
+        if IdentSet.mem id ids then
+          Cvar (get_unboxed_id id )
+        else
+          e
+    | Cop(op, argv) -> Cop(op, List.map subst argv)
+    | Csequence(e1, e2) -> Csequence(subst e1, subst e2)
+    | Cifthenelse(e1, e2, e3) -> Cifthenelse(subst e1, subst e2, subst e3)
+    | Cswitch(arg, index, cases) ->
+        Cswitch(subst arg, index, Array.map subst cases)
+    | Cloop e -> Cloop(subst e)
+    | Ccatch(nfail, ids, e1, e2) -> Ccatch(nfail, ids, subst e1, subst e2)
+    | Cexit (nfail, el) -> Cexit (nfail, List.map subst el)
+    | Ctrywith(e1, id, e2) -> Ctrywith(subst e1, id, subst e2)
+    | (Cvar _ | Cconst_natpointer _ |Cconst_pointer _ |Cconst_symbol _ |Cconst_float _ | Cconst_natint _ |Cconst_int _) as e -> e
+  in
+  let body =
+    if IdentSet.is_empty ids then body else
+    begin
+      List.iter
+        (fun id ->
+          if IdentSet.mem id ids then
+            let unboxed_id = Ident.create (Ident.name id) in
+            unboxed_id_tbl := Ident.add id unboxed_id !unboxed_id_tbl
+        ) params;
+      let body = subst body in
+      List.fold_left
+        (fun body id ->
+          if IdentSet.mem id ids then
+            Clet(get_unboxed_id id, Cop(Cload Double_u, [Cvar id]), body)
+          else
+            body
+        )
+        body params
+    end
+  in
+  assert(IdentSet.is_empty !unboxed_ids);
+  body
+
 (* Translate a function definition *)
 
 let transl_function lbl params body =
   Cfunction {fun_name = lbl;
              fun_args = List.map (fun id -> (id, typ_addr)) params;
-             fun_body = transl body;
+             fun_body = transl_with_unboxing params body;
              fun_fast = !Clflags.optimize_for_speed}
 
 (* Translate all function definitions *)
@@ -1725,7 +1865,7 @@ let emit_all_constants cont =
 
 let compunit size ulam =
   let glob = Compilenv.make_symbol None in
-  let init_code = transl ulam in
+  let init_code = transl_with_unboxing [] ulam in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
                        fun_body = init_code; fun_fast = false}] in
