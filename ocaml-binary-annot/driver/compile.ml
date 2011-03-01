@@ -89,8 +89,10 @@ let interface ppf sourcefile outputprefix =
       fprintf std_formatter "%a@." Printtyp.signature
         (Typemod.simplify_signature sg);
     Warnings.check_fatal ();
-    if not !Clflags.print_types then
+    if not !Clflags.print_types then begin
       Env.save_signature sg modulename (outputprefix ^ ".cmi");
+      Typemod.save_signature tsg outputprefix;
+    end;
     Pparse.remove_preprocessed inputfile
   with e ->
     Pparse.remove_preprocessed_if_ast inputfile;

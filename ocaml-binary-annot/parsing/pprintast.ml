@@ -2062,4 +2062,5 @@ let toplevel_phrase ppf x =
   pp_print_newline ppf ();;
 
 let print_structure = structure
+let print_signature = signature
 

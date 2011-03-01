@@ -1,0 +1,47 @@
+OCAMLC=ocamlc.opt
+OCAMLOPT=ocamlopt.opt
+OCAMLYACC=ocamlyacc
+OCAMLLEX=ocamllex.opt
+OCAMLDEP=ocamldep.opt
+
+CMXS=$(MLS:.ml=.cmx)
+CMIS=$(MLS:.ml=.cmi)
+CMOS=$(MLS:.ml=.cmo)
+OBJS=$(CMXS:.cmx=.o)
+CMXAS=$(CMAS:.cma=.cmxa)
+ANNOTS=$(MLS:.ml=.annot)
+
+all: $(TARGET).byte
+clean:
+	rm -f *~ $(TARGET) $(OBJS) $(CMXS) $(CMIS) $(CMOS) $(CMXAS) $(ANNOTS)
+
+depend:
+	$(OCAMLDEP) $(INCLUDES) $(MLS) $(MLIS) >> .depend
+
+$(TARGET).opt: $(CMXS)
+	$(OCAMLOPT) -o $(TARGET).opt $(CMXAS) $(CMXS)
+
+$(TARGET).byte: $(CMOS)
+	$(OCAMLC) -o $(TARGET).byte $(CMAS) $(CMOS)
+
+.SUFFIXES: .mli .mll .mly .ml .cmx .cmo .cmi
+
+.ml.cmo:
+	$(OCAMLC)  $(OFLAGS) $(INCLUDES) -c $(MOREFLAGS) $<
+
+.ml.cmx:
+	$(OCAMLOPT) $(OFLAGS) $(INCLUDES) -c $(MOREFLAGS) $<
+
+.mli.cmi:
+	$(OCAMLC) $(OFLAGS) $(INCLUDES) -c $(MOREFLAGS) $<
+
+.mll.ml :
+	$(OCAMLLEX) $<
+
+.mly.ml :
+	$(OCAMLYACC) $<
+
+.mly.mli:
+	$(OCAMLYACC) $<
+
+-include .depend

@@ -1,3 +1,9 @@
+2011-02-18:
+ * Save typedtree also for .mli files
+ * Changed extensions:
+    * .cmt for .ml file typedtree
+    * .cmti for .mli file typedtree (containing a non-substituted version of the .cmi)
+
 2010-11-25:
  * Added command "genannot" to translate a .types file into a .annot file
     * Some duplicated annotations are removed

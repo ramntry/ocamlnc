@@ -1,0 +1,12 @@
+TARGET=cmt2info
+MLIS=
+MLS=cmt2info.ml
+CMAS= unix.cma toplevellib.cma
+INCLUDES= \
+ -I ../ocaml-binary-annot/typing \
+ -I ../ocaml-binary-annot/parsing \
+ -I ../ocaml-binary-annot/utils \
+
+OFLAGS=-g -annot
+
+include Makefile.rules
