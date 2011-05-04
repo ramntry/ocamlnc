@@ -91,7 +91,7 @@ let rec make_params n = function
     [] -> []
   | _ :: l -> ("a" ^ string_of_int n) :: make_params (n+1) l
 
-let wrap_param s = {ptyp_desc=Ptyp_var s; ptyp_loc=Location.none}
+let wrap_param s = {ptyp_desc=Ptyp_var s; ptyp_loc=Location.none; ptyp_attrs=[]}
 
 let merge_constraint initial_env loc sg lid constr =
   let real_id = ref None in
@@ -274,7 +274,7 @@ and approx_sig env ssg =
                  Tsig_type(i2, d2, rs);
                  Tsig_type(i3, d3, rs)])
               decls [rem])
-      | _ ->
+      | Psig_value _ | Psig_exception _ ->
           approx_sig env srem
 
 and approx_modtype_info env sinfo =

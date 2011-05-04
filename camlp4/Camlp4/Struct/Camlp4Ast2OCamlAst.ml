@@ -57,14 +57,14 @@ module Make (Ast : Sig.Camlp4Ast) = struct
   value mkloc = Loc.to_ocaml_location;
   value mkghloc loc = Loc.to_ocaml_location (Loc.ghostify loc);
 
-  value mktyp loc d = {ptyp_desc = d; ptyp_loc = mkloc loc};
+  value mktyp loc d = {ptyp_desc = d; ptyp_loc = mkloc loc; ptyp_attrs = []};
   value mkpat loc d = {ppat_desc = d; ppat_loc = mkloc loc};
   value mkghpat loc d = {ppat_desc = d; ppat_loc = mkghloc loc};
   value mkexp loc d = {pexp_desc = d; pexp_loc = mkloc loc};
   value mkmty loc d = {pmty_desc = d; pmty_loc = mkloc loc};
-  value mksig loc d = {psig_desc = d; psig_loc = mkloc loc};
+  value mksig loc d = {psig_desc = d; psig_loc = mkloc loc; psig_attrs = []};
   value mkmod loc d = {pmod_desc = d; pmod_loc = mkloc loc};
-  value mkstr loc d = {pstr_desc = d; pstr_loc = mkloc loc};
+  value mkstr loc d = {pstr_desc = d; pstr_loc = mkloc loc; pstr_attrs = []};
   value mkfield loc d = {pfield_desc = d; pfield_loc = mkloc loc};
   value mkcty loc d = {pcty_desc = d; pcty_loc = mkloc loc};
   value mkpcl loc d = {pcl_desc = d; pcl_loc = mkloc loc};
@@ -302,6 +302,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
   value mktype loc tl cl tk tp tm =
     let (params, variance) = List.split tl in
     {ptype_params = params; ptype_cstrs = cl; ptype_kind = tk;
+     ptype_attrs = [];
      ptype_private = tp; ptype_manifest = tm; ptype_loc = mkloc loc;
      ptype_variance = variance}
   ;
@@ -404,6 +405,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     (id, pwith_type
       {ptype_params = params; ptype_cstrs = [];
         ptype_kind = kind;
+        ptype_attrs = [];
         ptype_private = priv;
         ptype_manifest = Some ct;
         ptype_loc = mkloc loc; ptype_variance = variance});

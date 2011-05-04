@@ -115,6 +115,7 @@ let create_package_mty fake loc env (p, l) =
       let d = {ptype_params = [];
                ptype_cstrs = [];
                ptype_kind = Ptype_abstract;
+               ptype_attrs = [];
                ptype_private = Asttypes.Public;
                ptype_manifest = if fake then None else Some t;
                ptype_variance = [];

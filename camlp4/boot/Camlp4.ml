@@ -14237,7 +14237,7 @@ module Struct =
               
             let mkghloc loc = Loc.to_ocaml_location (Loc.ghostify loc)
               
-            let mktyp loc d = { ptyp_desc = d; ptyp_loc = mkloc loc; }
+            let mktyp loc d = { ptyp_desc = d; ptyp_loc = mkloc loc; ptyp_attrs = []}
               
             let mkpat loc d = { ppat_desc = d; ppat_loc = mkloc loc; }
               
@@ -14247,11 +14247,11 @@ module Struct =
               
             let mkmty loc d = { pmty_desc = d; pmty_loc = mkloc loc; }
               
-            let mksig loc d = { psig_desc = d; psig_loc = mkloc loc; }
+            let mksig loc d = { psig_desc = d; psig_loc = mkloc loc; psig_attrs = []}
               
             let mkmod loc d = { pmod_desc = d; pmod_loc = mkloc loc; }
               
-            let mkstr loc d = { pstr_desc = d; pstr_loc = mkloc loc; }
+            let mkstr loc d = { pstr_desc = d; pstr_loc = mkloc loc; pstr_attrs = []}
               
             let mkfield loc d = { pfield_desc = d; pfield_loc = mkloc loc; }
               
@@ -14521,6 +14521,7 @@ module Struct =
                   ptype_params = params;
                   ptype_cstrs = cl;
                   ptype_kind = tk;
+                  ptype_attrs = [];
                   ptype_private = tp;
                   ptype_manifest = tm;
                   ptype_loc = mkloc loc;
@@ -14644,6 +14645,7 @@ module Struct =
                       ptype_params = params;
                       ptype_cstrs = [];
                       ptype_kind = kind;
+                      ptype_attrs = [];
                       ptype_private = priv;
                       ptype_manifest = Some ct;
                       ptype_loc = mkloc loc;

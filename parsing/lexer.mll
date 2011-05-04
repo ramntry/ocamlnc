@@ -248,6 +248,8 @@ rule token = parse
       }
   | blank +
       { token lexbuf }
+  | "``"
+      { BACKQUOTEBACKQUOTE }
   | "_"
       { UNDERSCORE }
   | "~"

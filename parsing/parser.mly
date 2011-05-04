@@ -21,7 +21,7 @@ open Longident
 open Parsetree
 
 let mktyp d =
-  { ptyp_desc = d; ptyp_loc = symbol_rloc() }
+  { ptyp_desc = d; ptyp_loc = symbol_rloc(); ptyp_attrs = [] }
 let mkpat d =
   { ppat_desc = d; ppat_loc = symbol_rloc() }
 let mkexp d =
@@ -29,11 +29,11 @@ let mkexp d =
 let mkmty d =
   { pmty_desc = d; pmty_loc = symbol_rloc() }
 let mksig d =
-  { psig_desc = d; psig_loc = symbol_rloc() }
+  { psig_desc = d; psig_loc = symbol_rloc(); psig_attrs = [] }
 let mkmod d =
   { pmod_desc = d; pmod_loc = symbol_rloc() }
 let mkstr d =
-  { pstr_desc = d; pstr_loc = symbol_rloc() }
+  { pstr_desc = d; pstr_loc = symbol_rloc(); pstr_attrs = [] }
 let mkfield d =
   { pfield_desc = d; pfield_loc = symbol_rloc() }
 let mkclass d =
@@ -66,7 +66,7 @@ let mkoperator name pos =
 *)
 let ghexp d = { pexp_desc = d; pexp_loc = symbol_gloc () };;
 let ghpat d = { ppat_desc = d; ppat_loc = symbol_gloc () };;
-let ghtyp d = { ptyp_desc = d; ptyp_loc = symbol_gloc () };;
+let ghtyp d = { ptyp_desc = d; ptyp_loc = symbol_gloc (); ptyp_attrs = [] };;
 
 let mkassert e =
   match e with
@@ -134,7 +134,7 @@ let rec mktailpat = function
       {ppat_desc = Ppat_construct(Lident "::", Some arg, false); ppat_loc = l}
 
 let ghstrexp e =
-  { pstr_desc = Pstr_eval e; pstr_loc = {e.pexp_loc with loc_ghost = true} }
+  { pstr_desc = Pstr_eval e; pstr_loc = {e.pexp_loc with loc_ghost = true}; pstr_attrs = [] }
 
 let array_function str name =
   Ldot(Lident str, (if !Clflags.fast then "unsafe_" ^ name else name))
@@ -218,6 +218,7 @@ let pat_of_label lbl =
 %token AS
 %token ASSERT
 %token BACKQUOTE
+%token BACKQUOTEBACKQUOTE
 %token BANG
 %token BAR
 %token BARBAR
@@ -510,6 +511,8 @@ structure_item:
       { mkstr(Pstr_class_type (List.rev $3)) }
   | INCLUDE module_expr
       { mkstr(Pstr_include $2) }
+  | structure_item attribute_on_item
+      { let it = $1 in {it with pstr_attrs = $2 :: it.pstr_attrs} }
 ;
 module_binding:
     EQUAL module_expr
@@ -578,6 +581,8 @@ signature_item:
       { mksig(Psig_class (List.rev $2)) }
   | CLASS TYPE class_type_declarations
       { mksig(Psig_class_type (List.rev $3)) }
+  | signature_item attribute_on_item
+      { let it = $1 in {it with psig_attrs = $2 :: it.psig_attrs} }
 ;
 
 module_declaration:
@@ -727,13 +732,17 @@ class_type:
       { mkcty(Pcty_fun("?" ^ $2 ,
                        {ptyp_desc =
                         Ptyp_constr(Ldot (Lident "*predef*", "option"), [$4]);
-                        ptyp_loc = $4.ptyp_loc},
+                        ptyp_loc = $4.ptyp_loc;
+                        ptyp_attrs = [];
+                       },
                        $6)) }
   | OPTLABEL simple_core_type_or_tuple MINUSGREATER class_type
       { mkcty(Pcty_fun("?" ^ $1 ,
                        {ptyp_desc =
                         Ptyp_constr(Ldot (Lident "*predef*", "option"), [$2]);
-                        ptyp_loc = $2.ptyp_loc},
+                        ptyp_loc = $2.ptyp_loc;
+                        ptyp_attrs = [];
+                       },
                        $4)) }
   | LIDENT COLON simple_core_type_or_tuple MINUSGREATER class_type
       { mkcty(Pcty_fun($1, $3, $5)) }
@@ -1250,16 +1259,27 @@ type_declarations:
 ;
 
 type_declaration:
-    type_parameters LIDENT type_kind constraints
+    type_parameters LIDENT attributes type_kind constraints
       { let (params, variance) = List.split $1 in
-        let (kind, private_flag, manifest) = $3 in
+        let (kind, private_flag, manifest) = $4 in
         ($2, {ptype_params = params;
-              ptype_cstrs = List.rev $4;
+              ptype_cstrs = List.rev $5;
               ptype_kind = kind;
+              ptype_attrs = $3;
               ptype_private = private_flag;
               ptype_manifest = manifest;
               ptype_variance = variance;
               ptype_loc = symbol_rloc()}) }
+;
+attributes:
+    /* */  { [] }
+  | attribute attributes { $1 :: $2 }
+;
+attribute:
+  | PLUS expr { $2 }
+;
+attribute_on_item:
+  | BACKQUOTEBACKQUOTE expr QUOTE QUOTE { $2 }
 ;
 constraints:
         constraints CONSTRAINT constrain        { $3 :: $1 }
@@ -1333,6 +1353,7 @@ with_constraint:
         ($3, Pwith_type {ptype_params = params;
                          ptype_cstrs = List.rev $6;
                          ptype_kind = Ptype_abstract;
+                         ptype_attrs = [];
                          ptype_manifest = Some $5;
                          ptype_private = $4;
                          ptype_variance = variance;
@@ -1344,6 +1365,7 @@ with_constraint:
         ($3, Pwith_typesubst {ptype_params = params;
                               ptype_cstrs = [];
                               ptype_kind = Ptype_abstract;
+                              ptype_attrs = [];
                               ptype_manifest = Some $5;
                               ptype_private = Public;
                               ptype_variance = variance;
@@ -1382,14 +1404,20 @@ core_type:
 core_type2:
     simple_core_type_or_tuple
       { $1 }
+  | core_type2 attribute
+      { let x = $1 in {x with ptyp_attrs = $2::x.ptyp_attrs} }
   | QUESTION LIDENT COLON core_type2 MINUSGREATER core_type2
       { mktyp(Ptyp_arrow("?" ^ $2 ,
                {ptyp_desc = Ptyp_constr(Ldot (Lident "*predef*", "option"), [$4]);
-                ptyp_loc = $4.ptyp_loc}, $6)) }
+                ptyp_loc = $4.ptyp_loc;
+                ptyp_attrs = [];
+               }, $6)) }
   | OPTLABEL core_type2 MINUSGREATER core_type2
       { mktyp(Ptyp_arrow("?" ^ $1 ,
                {ptyp_desc = Ptyp_constr(Ldot (Lident "*predef*", "option"), [$2]);
-                ptyp_loc = $2.ptyp_loc}, $4)) }
+                ptyp_loc = $2.ptyp_loc;
+                ptyp_attrs = [];
+               }, $4)) }
   | LIDENT COLON core_type2 MINUSGREATER core_type2
       { mktyp(Ptyp_arrow($1, $3, $5)) }
   | core_type2 MINUSGREATER core_type2

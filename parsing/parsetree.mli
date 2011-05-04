@@ -20,7 +20,9 @@ open Asttypes
 
 type core_type =
   { ptyp_desc: core_type_desc;
-    ptyp_loc: Location.t }
+    ptyp_loc: Location.t;
+    ptyp_attrs: attributes;
+   }
 
 and core_type_desc =
     Ptyp_any
@@ -34,6 +36,8 @@ and core_type_desc =
   | Ptyp_variant of row_field list * bool * label list option
   | Ptyp_poly of string list * core_type
   | Ptyp_package of package_type
+
+and attributes = expression list
 
 and package_type = Longident.t * (string * core_type) list
 
@@ -51,7 +55,7 @@ and row_field =
 
 (* Type expressions for the class language *)
 
-type 'a class_infos =
+and 'a class_infos =
   { pci_virt: virtual_flag;
     pci_params: string list * Location.t;
     pci_name: string;
@@ -61,7 +65,7 @@ type 'a class_infos =
 
 (* Value expressions for the core language *)
 
-type pattern =
+and pattern =
   { ppat_desc: pattern_desc;
     ppat_loc: Location.t }
 
@@ -81,7 +85,7 @@ and pattern_desc =
   | Ppat_lazy of pattern
   | Ppat_unpack of string
 
-type expression =
+and expression =
   { pexp_desc: expression_desc;
     pexp_loc: Location.t }
 
@@ -132,6 +136,7 @@ and type_declaration =
   { ptype_params: string list;
     ptype_cstrs: (core_type * core_type * Location.t) list;
     ptype_kind: type_kind;
+    ptype_attrs: attributes;
     ptype_private: private_flag;
     ptype_manifest: core_type option;
     ptype_variance: (bool * bool) list;
@@ -214,7 +219,9 @@ and signature = signature_item list
 
 and signature_item =
   { psig_desc: signature_item_desc;
-    psig_loc: Location.t }
+    psig_loc: Location.t;
+    psig_attrs: attributes;
+   }
 
 and signature_item_desc =
     Psig_value of string * value_description
@@ -256,7 +263,9 @@ and structure = structure_item list
 
 and structure_item =
   { pstr_desc: structure_item_desc;
-    pstr_loc: Location.t }
+    pstr_loc: Location.t;
+    pstr_attrs: attributes;
+   }
 
 and structure_item_desc =
     Pstr_eval of expression

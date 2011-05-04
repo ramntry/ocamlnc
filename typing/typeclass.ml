@@ -1435,7 +1435,7 @@ let () =
 (* Approximate the class declaration as class ['params] id = object end *)
 let approx_class sdecl =
   let self' =
-    { ptyp_desc = Ptyp_any; ptyp_loc = Location.none } in
+    { ptyp_desc = Ptyp_any; ptyp_loc = Location.none; ptyp_attrs = [] } in
   let clty' =
     { pcty_desc = Pcty_signature(self', []);
       pcty_loc = sdecl.pci_expr.pcty_loc } in
