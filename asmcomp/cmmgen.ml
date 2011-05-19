@@ -1563,7 +1563,8 @@ let transl_with_unboxing params body =
           need_boxed := IdentSet.add id !need_boxed
     | Cassign (id, exp) ->
         if IdentSet.mem id ids then
-          assigned := IdentSet.add id !assigned
+          assigned := IdentSet.add id !assigned;
+        check exp
 
     | Cconst_int _
     | Cconst_natint _
@@ -1584,17 +1585,20 @@ let transl_with_unboxing params body =
   in
   check body;
   let assigned = !assigned and need_boxed = !need_boxed in
-(*
+  Printf.printf "Candidates:\n%!";
   IdentSet.iter
     (fun id ->
-      Printf.printf "Candidate for float unboxing: %s"
-        (Ident.unique_name id);
+      Printf.printf "Ident: %s" (Ident.unique_name id);
       if IdentSet.mem id assigned then Printf.printf " (assigned)";
       if IdentSet.mem id need_boxed then Printf.printf " (need_boxed)";
       Printf.printf "\n%!"
     ) ids;
-*)
   let unboxed_id_tbl = ref Ident.empty in
+  let create_unboxed_id id =
+    let unboxed_id = Ident.create (Ident.name id ^ "_unboxed") in
+    unboxed_id_tbl := Ident.add id unboxed_id !unboxed_id_tbl;
+    unboxed_id
+  in
   let get_unboxed_id id =
     try Ident.find_same id !unboxed_id_tbl
     with Not_found ->
@@ -1612,8 +1616,7 @@ let transl_with_unboxing params body =
     | Clet(id, arg, body) ->
         let arg = subst arg in
         if IdentSet.mem id ids then
-          let unboxed_id = Ident.create (Ident.name id) in
-          unboxed_id_tbl := Ident.add id unboxed_id !unboxed_id_tbl;
+          let unboxed_id = create_unboxed_id id in
           let body = subst body in
           if IdentSet.mem id need_boxed then
             Clet(id, arg, Clet(unboxed_id, Cop(Cload Double_u, [Cvar id]), body))
@@ -1650,8 +1653,7 @@ let transl_with_unboxing params body =
       List.iter
         (fun id ->
           if IdentSet.mem id ids then
-            let unboxed_id = Ident.create (Ident.name id) in
-            unboxed_id_tbl := Ident.add id unboxed_id !unboxed_id_tbl
+            ignore (create_unboxed_id id)
         ) params;
       let body = subst body in
       List.fold_left
