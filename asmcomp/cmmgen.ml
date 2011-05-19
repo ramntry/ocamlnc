@@ -1545,13 +1545,10 @@ and transl_letrec bindings cont =
   in init_blocks bsz
 
 let transl_with_unboxing params body =
-  unboxed_ids := IdentSet.empty;
-  assert(IdentSet.is_empty !unboxed_ids);
-  let body, ids =
-    Misc.try_finally
-      (fun () -> let body = transl body in body, !unboxed_ids)
-      (fun () -> unboxed_ids := IdentSet.empty)
-  in
+  let rec loop body =
+    if IdentSet.is_empty !unboxed_ids then body
+    else let ids = !unboxed_ids in
+    unboxed_ids := IdentSet.empty;
   (* Traverse the body to find out, for each id:
      - whether it is assigned;
      - whether it is used directly in boxed form.
@@ -1588,7 +1585,6 @@ let transl_with_unboxing params body =
   check body;
   let assigned = !assigned and need_boxed = !need_boxed in
   let ids = IdentSet.diff ids (IdentSet.inter assigned need_boxed) in
-(*
   IdentSet.iter
     (fun id ->
       Printf.printf "Candidate for float unboxing: %s"
@@ -1597,7 +1593,7 @@ let transl_with_unboxing params body =
       if IdentSet.mem id need_boxed then Printf.printf " (need_boxed)";
       Printf.printf "\n%!"
     ) ids;
-*)
+
   let unboxed_id_tbl = ref Ident.empty in
   let get_unboxed_id id =
     try Ident.find_same id !unboxed_id_tbl
@@ -1660,8 +1656,14 @@ let transl_with_unboxing params body =
         body params
     end
   in
-  assert(IdentSet.is_empty !unboxed_ids);
-  body
+  loop body
+  in
+  try
+    let body = transl body in
+    loop body
+  with exn ->
+    unboxed_ids := IdentSet.empty;
+    raise exn
 
 (* Translate a function definition *)
 
