@@ -1584,7 +1584,7 @@ let transl_with_unboxing params body =
   in
   check body;
   let assigned = !assigned and need_boxed = !need_boxed in
-  let ids = IdentSet.diff ids (IdentSet.inter assigned need_boxed) in
+(*
   IdentSet.iter
     (fun id ->
       Printf.printf "Candidate for float unboxing: %s"
@@ -1593,7 +1593,7 @@ let transl_with_unboxing params body =
       if IdentSet.mem id need_boxed then Printf.printf " (need_boxed)";
       Printf.printf "\n%!"
     ) ids;
-
+*)
   let unboxed_id_tbl = ref Ident.empty in
   let get_unboxed_id id =
     try Ident.find_same id !unboxed_id_tbl
@@ -1601,6 +1601,14 @@ let transl_with_unboxing params body =
       fatal_error (Printf.sprintf "Cannot find unboxed id for %s" (Ident.unique_name id))
   in
   let rec subst = function
+    | Cvar id when IdentSet.mem id ids && IdentSet.mem id assigned ->
+        let unboxed_id = get_unboxed_id id in
+        Cifthenelse
+          (Cop (Ccmpf Ceq, [Cvar unboxed_id; Cop(Cload Double_u, [Cvar id])]),
+           Cvar id,
+           Csequence (Cassign (id, box_float (Cvar unboxed_id)),
+                      Cvar id))
+
     | Clet(id, arg, body) ->
         let arg = subst arg in
         if IdentSet.mem id ids then
