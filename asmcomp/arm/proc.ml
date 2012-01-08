@@ -134,6 +134,15 @@ let max_register_pressure = function
     Iextcall(_, _) -> [| 4 |]
   | _ -> [| 9 |]
 
+(* Pure operations (without any side effect besides updating their result
+   registers). *)
+
+let op_is_pure = function
+  | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
+  | Iextcall _ | Istackoffset _ | Istore _ | Ialloc _
+  | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
+  | _ -> true
+
 (* Layout of the stack *)
 
 let num_stack_slots = [| 0 |]
