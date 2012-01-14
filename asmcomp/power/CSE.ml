@@ -28,6 +28,11 @@ method! class_of_operation op =
   | Ispecific(Ialloc_far _) -> Op_other
   | _ -> super#class_of_operation op
 
+method! is_cheap_operation op =
+  match op with
+  | Iconst_int n -> n <= 32767n && n >= -32768n
+  | _ -> false
+
 end
 
 let fundecl f =

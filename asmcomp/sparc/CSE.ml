@@ -24,8 +24,7 @@ inherit cse_generic as super
 
 method! is_cheap_operation op =
   match op with
-  | Iconst_int _ -> true
-  | Iconst_symbol _ -> true
+  | Iconst_int n -> n <= 4095n && n >= -4096n
   | _ -> false
 
 end
