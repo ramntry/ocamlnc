@@ -16,20 +16,17 @@
 
 open Arch
 open Mach
+open CSEgen
 
 class cse = object (self)
 
-inherit CSEgen.cse_generic as super
+inherit cse_generic as super
 
-method! is_factorable_operation op =
+method! class_of_operation op =
   match op with
-  | Ispecific _ -> true
-  | _ -> super#is_factorable_operation op
-
-method! is_checkbound_operation op =
-  match op with
-  | Ispecific(Ishiftcheckbound _) -> true
-  | _ -> super#is_checkbound_operation op
+  | Ispecific(Ishiftcheckbound _) -> Op_checkbound
+  | Ispecific _ -> Op_pure
+  | _ -> super#class_of_operation op
 
 end
 

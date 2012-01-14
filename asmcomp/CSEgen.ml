@@ -113,20 +113,10 @@ let set_fresh_regs n rs rhs =
 let set_unknown_regs n rs =
   { n with num_reg = Array.fold_right Reg.Map.remove rs n.num_reg }
 
-(* Forget all equations satisfying a given predicate *)
-
-let kill_equations pred n =
-  let remove_eq (op, args as rhs) res eqs =
-    if pred op then Equations.remove rhs eqs else eqs in
-  { n with num_eqs = Equations.fold remove_eq n.num_eqs n.num_eqs }
-
-(* Keep only the equations satisfying the given predicate.
-   Also forget everything known about registers. *)
+(* Keep only the equations satisfying the given predicate. *)
 
 let filter_equations pred n =
-  { num_next = n.num_next;
-    num_eqs = Equations.filter (fun (op,_) res -> pred op) n.num_eqs;
-    num_reg = Reg.Map.empty }
+  { n with num_eqs = Equations.filter (fun (op,_) res -> pred op) n.num_eqs }
 
 (* Prepend a reg-reg move *)
 
@@ -136,25 +126,37 @@ let insert_move srcs dsts i =
   | 1 -> instr_cons (Iop Imove) srcs dsts i
   | _ -> assert false
 
+(* Classification of operations *)
+
+type op_class =
+  | Op_pure     (* pure, produce one result *)
+  | Op_checkbound     (* checkbound-style: no result, can raise an exn *)
+  | Op_load           (* memory load *)
+  | Op_store of bool  (* memory store, false = init, true = assign *)
+  | Op_other          (* anything else that does not store in memory *)
+
 class cse_generic = object (self)
 
-(* Operations that can be factored: must be pure and produce at most one result.
-   As a special exception, bound checks can be factored, even though
-   they can raise an exception.
-   This method and the other [is_xxx_operation] can be overriden in
-   processor-specific files to handle specific operations. *)
+(* Default classification of operations.  Can be overriden in
+   processor-specific files to classify specific operations better. *)
 
-method is_factorable_operation op =
+method class_of_operation op =
   match op with
-  | Iconst_int _ -> true
-  | Iconst_float _ -> true
-  | Iconst_symbol _ -> true
-  | Iload _ -> true
-  | Iintop _ -> true
-  | Iintop_imm _ -> true
-  | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf -> true
-  | Ifloatofint | Iintoffloat -> true
-  | _ -> false
+  | Imove | Ispill | Ireload -> assert false   (* treated specially *)
+  | Iconst_int _ | Iconst_float _ | Iconst_symbol _ -> Op_pure
+  | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
+  | Iextcall _ -> assert false                 (* treated specially *)
+  | Istackoffset _ -> Op_other
+  | Iload(_,_) -> Op_load
+  | Istore(_,_,asg) -> Op_store asg
+  | Ialloc _ -> Op_other
+  | Iintop(Icheckbound) -> Op_checkbound
+  | Iintop _ -> Op_pure
+  | Iintop_imm(Icheckbound, _) -> Op_checkbound
+  | Iintop_imm(_, _) -> Op_pure
+  | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
+  | Ifloatofint | Iintoffloat -> Op_pure
+  | Ispecific _ -> Op_other
 
 (* Operations that are so cheap that it isn't worth factoring them. *)
 
@@ -163,27 +165,18 @@ method is_cheap_operation op =
   | Iconst_int _ -> true
   | _ -> false
 
-(* Operations that perform a memory read *)
+(* Forget all equations involving memory loads.  Performed after a
+   non-initializing store *)
 
-method is_load_operation op =
-  match op with
-  | Iload _ -> true
-  | _ -> false
+method private kill_loads n =
+  filter_equations (fun o -> self#class_of_operation o <> Op_load) n
 
-(* Operations that perform a memory store *)
+(* Keep only equations involving checkbounds, and forget register values.
+   Performed across a call. *)
 
-method is_store_operation op =
-  match op with
-  | Istore _ -> true
-  | _ -> false
-
-(* Operations that perform a checkbound *)
-
-method is_checkbound_operation op =
-  match op with
-  | Iintop(Icheckbound) -> true
-  | Iintop_imm(Icheckbound, _) -> true
-  | _ -> false
+method private keep_checkbounds n =
+  filter_equations (fun o -> self#class_of_operation o = Op_checkbound)
+                   {n with num_reg = Reg.Map.empty }
 
 (* Perform CSE on the given instruction [i] and its successors.
    [n] is the value numbering current at the beginning of [i]. *)
@@ -203,38 +196,42 @@ method private cse n i =
          register pressure too much.  We do remember the checkbound
          instructions already performed, though, since their reuse
          cannot increase register pressure. *)
-      let n1 = filter_equations self#is_checkbound_operation n in
+      let n1 = self#keep_checkbounds n in
       {i with next = self#cse n1 i.next}
   | Iop op ->
-      if self#is_factorable_operation op then begin
-        assert (Array.length i.res <= 1);
-        let (n1, varg) = valnum_regs n i.arg in
-        begin match find_equation n1 (op, varg) with
-        | Some vres ->
-            (* This operation was computed earlier. *)
-            let n2 = set_known_regs n1 i.res vres in            
-            begin match find_regs_containing n1 vres with
-            | Some res when not (self#is_cheap_operation op) ->
-                (* We can replace res <- op args with r <- move res.
-                   If the operation is very cheap to compute, e.g.
-                   an integer constant, don't bother. *)
-                insert_move res i.res (self#cse n2 i.next)                
-            | _ ->
-                {i with next = self#cse n2 i.next}
-            end
-        | None ->
-            (* This operation produces a result we haven't seen earlier. *)
-            let n2 = set_fresh_regs n1 i.res (op, varg) in
-            {i with next = self#cse n2 i.next}
-        end
-      end else begin
-        let n1 =
-          if self#is_store_operation op
-          then kill_equations self#is_load_operation n
-          else n in
-        let n2 = set_unknown_regs n1 i.res in
-        {i with next = self#cse n2 i.next}
-      end
+      begin match self#class_of_operation op with
+      | Op_pure | Op_checkbound | Op_load ->
+          assert (Array.length i.res <= 1);
+          let (n1, varg) = valnum_regs n i.arg in
+          begin match find_equation n1 (op, varg) with
+          | Some vres ->
+              (* This operation was computed earlier. *)
+              let n2 = set_known_regs n1 i.res vres in            
+              begin match find_regs_containing n1 vres with
+              | Some res when not (self#is_cheap_operation op) ->
+                  (* We can replace res <- op args with r <- move res.
+                     If the operation is very cheap to compute, e.g.
+                     an integer constant, don't bother. *)
+                  insert_move res i.res (self#cse n2 i.next)                
+              | _ ->
+                  {i with next = self#cse n2 i.next}
+              end
+          | None ->
+              (* This operation produces a result we haven't seen earlier. *)
+              let n2 = set_fresh_regs n1 i.res (op, varg) in
+              {i with next = self#cse n2 i.next}
+          end
+      | Op_store false | Op_other ->
+          (* An initializing store or an "other" operation do not invalidate
+             any equations, but we do not know anything about the results. *)
+          let n1 = set_unknown_regs n i.res in
+          {i with next = self#cse n1 i.next}
+      | Op_store true ->
+          (* A non-initializing store: it can invalidate
+             anything we know about prior loads. *)
+          let n1 = set_unknown_regs (self#kill_loads n) i.res in
+          {i with next = self#cse n1 i.next}
+      end        
   (* For control structures, we set the numbering to empty at every
      join point, but propagate the current numbering across fork points. *)
   | Iifthenelse(test, ifso, ifnot) ->

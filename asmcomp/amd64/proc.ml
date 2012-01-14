@@ -254,7 +254,7 @@ let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
   | Iop(Iextcall(_, false)) -> destroyed_at_c_call
   | Iop(Iintop(Idiv | Imod)) -> [| rax; rdx |]
-  | Iop(Istore(Single, _)) -> [| rxmm15 |]
+  | Iop(Istore(Single, _, _)) -> [| rxmm15 |]
   | Iop(Ialloc _ | Iintop(Icomp _) | Iintop_imm((Idiv|Imod|Icomp _), _))
         -> [| rax |]
   | Iswitch(_, _) -> [| rax; rdx |]
@@ -273,7 +273,7 @@ let max_register_pressure = function
   | Iintop(Idiv | Imod) -> [| 11; 16 |]
   | Ialloc _ | Iintop(Icomp _) | Iintop_imm((Idiv|Imod|Icomp _), _)
         -> [| 12; 16 |]
-  | Istore(Single, _) -> [| 13; 15 |]
+  | Istore(Single, _, _) -> [| 13; 15 |]
   | _ -> [| 13; 16 |]
 
 (* Pure operations (without any side effect besides updating their result
