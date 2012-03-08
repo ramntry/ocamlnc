@@ -778,8 +778,8 @@ and search_pos_expr ~pos exp =
   | Texp_record (l, opt) ->
       List.iter l ~f:(fun (_, exp) -> search_pos_expr exp ~pos);
       (match opt with None -> () | Some exp -> search_pos_expr exp ~pos)
-  | Texp_field (exp, _) -> search_pos_expr exp ~pos
-  | Texp_setfield (a, _, b) ->
+  | Texp_field (exp, _) | Texp_field_nth (exp, _) -> search_pos_expr exp ~pos
+  | Texp_setfield (a, _, b) | Texp_setfield_nth (a, _, b) ->
       search_pos_expr a ~pos; search_pos_expr b ~pos
   | Texp_array l -> List.iter l ~f:(search_pos_expr ~pos)
   | Texp_ifthenelse (a, b, c) ->
