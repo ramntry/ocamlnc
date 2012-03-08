@@ -346,7 +346,18 @@ let has_variants p =
 
 
 (* pattern environment *)
-let pattern_variables = ref ([]: (Ident.t * type_expr * Location.t * bool (* as-variable *)) list)
+module PatVar =
+  struct
+    type t =
+        {
+         id: Ident.t;
+         ty: type_expr;
+         loc: Location.t;
+         as_var: bool;
+        }
+  end
+
+let pattern_variables = ref ([]: PatVar.t list)
 let pattern_force = ref ([] : (unit -> unit) list)
 let pattern_scope = ref (None : Annot.ident option);;
 let allow_modules = ref false
@@ -360,10 +371,10 @@ let reset_pattern scope allow =
 ;;
 
 let enter_variable ?(is_module=false) ?(is_as_variable=false) loc name ty =
-  if List.exists (fun (id, _, _, _) -> Ident.name id = name) !pattern_variables
+  if List.exists (fun pv -> Ident.name pv.PatVar.id = name) !pattern_variables
   then raise(Error(loc, Multiply_bound_variable name));
   let id = Ident.create name in
-  pattern_variables := (id, ty, loc, is_as_variable) :: !pattern_variables;
+  pattern_variables := {PatVar.id; ty; loc; as_var = is_as_variable=false} :: !pattern_variables;
   if is_module then begin
     (* Note: unpack patterns enter a variable of the same name *)
     if not !allow_modules then raise (Error (loc, Modules_not_allowed));
@@ -377,7 +388,7 @@ let enter_variable ?(is_module=false) ?(is_as_variable=false) loc name ty =
 
 let sort_pattern_variables vs =
   List.sort
-    (fun (x,_,_,_) (y,_,_,_) -> Pervasives.compare (Ident.name x) (Ident.name y))
+    (fun pv1 pv2 -> Pervasives.compare (Ident.name pv1.PatVar.id) (Ident.name pv2.PatVar.id))
     vs
 
 let enter_orpat_variables loc env  p1_vs p2_vs =
@@ -386,27 +397,27 @@ let enter_orpat_variables loc env  p1_vs p2_vs =
   let p1_vs = sort_pattern_variables p1_vs
   and p2_vs = sort_pattern_variables p2_vs in
 
+  let open PatVar in
   let rec unify_vars p1_vs p2_vs = match p1_vs, p2_vs with
-      | (x1,t1,l1,a1)::rem1, (x2,t2,l2,a2)::rem2 when Ident.equal x1 x2 ->
-          if x1==x2 then
+      | pv1::rem1, pv2::rem2 when Ident.equal pv1.id pv2.id ->
+          if pv1.id==pv2.id then
             unify_vars rem1 rem2
           else begin
             begin try
-              unify env t1 t2
+              unify env pv1.ty pv2.ty
             with
             | Unify trace ->
                 raise(Error(loc, Pattern_type_clash(trace)))
             end;
-          (x2,x1)::unify_vars rem1 rem2
+          (pv2.id,pv1.id)::unify_vars rem1 rem2
           end
       | [],[] -> []
-      | (x,_,_,_)::_, [] -> raise (Error (loc, Orpat_vars x))
-      | [],(x,_,_,_)::_  -> raise (Error (loc, Orpat_vars x))
-      | (x,_,_,_)::_, (y,_,_,_)::_ ->
+      | pv::_, [] | [],pv::_  -> raise (Error (loc, Orpat_vars pv.id))
+      | pv1::_, pv2::_ ->
           let min_var =
-            if Ident.name x < Ident.name y then x
-            else y in
-          raise (Error (loc, Orpat_vars min_var)) in
+            if Ident.name pv1.id < Ident.name pv2.id then pv1
+            else pv2 in
+          raise (Error (loc, Orpat_vars min_var.id)) in
   unify_vars p1_vs p2_vs
 
 let rec build_as_type env p =
@@ -906,13 +917,14 @@ let rec iter3 f lst1 lst2 lst3 =
       assert false
 
 let add_pattern_variables ?check ?check_as env =
+  let open PatVar in
   let pv = get_ref pattern_variables in
   (List.fold_right
-    (fun (id, ty, loc, as_var) env ->
-       let check = if as_var then check_as else check in
-       let e1 = Env.add_value ?check id
-           {val_type = ty; val_kind = Val_reg; val_loc = loc} env in
-       Env.add_annot id (Annot.Iref_internal loc) e1)
+    (fun pv env ->
+       let check = if pv.as_var then check_as else check in
+       let e1 = Env.add_value ?check pv.id
+           {val_type = pv.ty; val_kind = Val_reg; val_loc = pv.loc} env in
+       Env.add_annot pv.id (Annot.Iref_internal pv.loc) e1)
     pv env,
    get_ref module_variables)
 
@@ -945,7 +957,7 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
   if is_optional l then unify_pat val_env pat (type_option (newvar ()));
   let (pv, met_env) =
     List.fold_right
-      (fun (id, ty, loc, as_var) (pv, env) ->
+      (fun {PatVar.id; ty; loc; as_var} (pv, env) ->
          let check s =
            if as_var then Warnings.Unused_var s
            else Warnings.Unused_var_strict s in
@@ -976,7 +988,7 @@ let type_self_pattern cl_num privty val_env met_env par_env spat =
   pattern_variables := [];
   let (val_env, met_env, par_env) =
     List.fold_right
-      (fun (id, ty, loc, as_var) (val_env, met_env, par_env) ->
+      (fun {PatVar.id; ty; loc; as_var} (val_env, met_env, par_env) ->
          (Env.add_value id {val_type = ty;
                             val_kind = Val_unbound;
                             val_loc = loc;
