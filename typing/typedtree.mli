@@ -60,7 +60,9 @@ and expression_desc =
   | Texp_variant of label * expression option
   | Texp_record of (label_description * expression) list * expression option
   | Texp_field of expression * label_description
+  | Texp_field_nth of expression * int
   | Texp_setfield of expression * label_description * expression
+  | Texp_setfield_nth of expression * int * expression
   | Texp_array of expression list
   | Texp_ifthenelse of expression * expression * expression option
   | Texp_sequence of expression * expression

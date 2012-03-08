@@ -586,7 +586,7 @@ and transl_exp0 e =
         transl_primitive p
   | Texp_ident(path, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
-  | Texp_ident(path, {val_kind = Val_reg | Val_self _}) ->
+  | Texp_ident(path, {val_kind = Val_reg | Val_self _ | Val_cargs _}) ->
       transl_path path
   | Texp_ident _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
   | Texp_constant cst ->
@@ -694,12 +694,16 @@ and transl_exp0 e =
           Record_regular -> Pfield lbl.lbl_pos
         | Record_float -> Pfloatfield lbl.lbl_pos in
       Lprim(access, [transl_exp arg])
+  | Texp_field_nth(arg, n) ->
+      Lprim(Pfield n, [transl_exp arg])
   | Texp_setfield(arg, lbl, newval) ->
       let access =
         match lbl.lbl_repres with
           Record_regular -> Psetfield(lbl.lbl_pos, maybe_pointer newval)
         | Record_float -> Psetfloatfield lbl.lbl_pos in
       Lprim(access, [transl_exp arg; transl_exp newval])
+  | Texp_setfield_nth(arg, n, newval) ->
+      Lprim(Psetfield(n, maybe_pointer newval), [transl_exp arg; transl_exp newval])
   | Texp_array expr_list ->
       let kind = array_kind e in
       let ll = transl_list expr_list in

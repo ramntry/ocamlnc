@@ -106,6 +106,8 @@ type error =
   | Unexpected_existential
   | Label_cannot_be_qualified of Longident.t
   | Record_expected
+  | Mixed_pattern_variable of string
+  | Constructor_arguments of string
 
 exception Error of Location.t * error
 

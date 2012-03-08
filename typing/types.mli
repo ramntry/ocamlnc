@@ -100,6 +100,7 @@ and value_kind =
   | Val_anc of (string * Ident.t) list * string
                                         (* Ancestor *)
   | Val_unbound                         (* Unbound variable *)
+  | Val_cargs of string                 (* Constructor arguments *)
 
 type constructor_args =
   | Targ_tuple of type_expr list

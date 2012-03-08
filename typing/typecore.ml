@@ -64,6 +64,8 @@ type error =
   | Unexpected_existential
   | Label_cannot_be_qualified of Longident.t
   | Record_expected
+  | Mixed_pattern_variable of string
+  | Constructor_arguments of string
 
 exception Error of Location.t * error
 
@@ -354,6 +356,7 @@ module PatVar =
          ty: type_expr;
          loc: Location.t;
          as_var: bool;
+         bind_cargs: string option; (* binds all arguments of a constructor*)
         }
   end
 
@@ -370,11 +373,11 @@ let reset_pattern scope allow =
   module_variables := [];
 ;;
 
-let enter_variable ?(is_module=false) ?(is_as_variable=false) loc name ty =
+let enter_variable ?(is_module=false) ?(is_as_variable=false) ?bind_cargs loc name ty =
   if List.exists (fun pv -> Ident.name pv.PatVar.id = name) !pattern_variables
   then raise(Error(loc, Multiply_bound_variable name));
   let id = Ident.create name in
-  pattern_variables := {PatVar.id; ty; loc; as_var = is_as_variable=false} :: !pattern_variables;
+  pattern_variables := {PatVar.id; ty; loc; as_var = is_as_variable; bind_cargs} :: !pattern_variables;
   if is_module then begin
     (* Note: unpack patterns enter a variable of the same name *)
     if not !allow_modules then raise (Error (loc, Modules_not_allowed));
@@ -400,6 +403,10 @@ let enter_orpat_variables loc env  p1_vs p2_vs =
   let open PatVar in
   let rec unify_vars p1_vs p2_vs = match p1_vs, p2_vs with
       | pv1::rem1, pv2::rem2 when Ident.equal pv1.id pv2.id ->
+          if pv1.bind_cargs <> pv2.bind_cargs then
+            raise(Error(loc, Mixed_pattern_variable (Ident.name pv1.id)));
+          (* TODO: better error message *)
+
           if pv1.id==pv2.id then
             unify_vars rem1 rem2
           else begin
@@ -709,6 +716,7 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
         pat_type = expected_ty;
         pat_env = !env }
   | Ppat_construct(lid, sarg, explicit_arity) ->
+      let postprocess = ref (fun p -> p) in
       let constr =
         match lid, constrs with
           Longident.Lident s, Some constrs when Hashtbl.mem constrs s ->
@@ -733,6 +741,25 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
             replicate_list sp constr.cstr_arity
         | Targ_tuple _, Some sp -> [sp]
 
+        | Targ_record _, Some {ppat_desc = Ppat_var name; ppat_loc = loc} ->
+            postprocess :=
+              (fun q ->
+                begin_def ();
+                let ty_var = build_as_type !env q in
+                end_def ();
+                generalize ty_var;
+                let bind_cargs = Longident.last lid in
+                let id = enter_variable ~bind_cargs loc name ty_var in
+                rp
+                  {
+                   pat_desc = Tpat_alias(q, id);
+                   pat_loc = loc;
+                   pat_type = q.pat_type;
+                   pat_env = !env;
+                  }
+              );
+            replicate_list {ppat_desc = Ppat_any; ppat_loc = loc}
+              constr.cstr_arity;
         | Targ_record _, Some ({ppat_desc = Ppat_any} as sp) ->
             replicate_list sp constr.cstr_arity
         | Targ_record labs, Some {ppat_desc = Ppat_record (fields, closed)} ->
@@ -757,11 +784,14 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
       else
         unify_pat_types loc !env ty_res expected_ty;
       let args = List.map2 (fun p t -> type_pat p t) sargs ty_args in
-      rp {
+      let p =
+        rp {
         pat_desc = Tpat_construct(constr, args);
         pat_loc = loc;
         pat_type = expected_ty;
         pat_env = !env }
+      in
+      !postprocess p
   | Ppat_variant(l, sarg) ->
       let arg = may_map (fun p -> type_pat p (newvar())) sarg in
       let arg_type = match arg with None -> [] | Some arg -> [arg.pat_type]  in
@@ -922,8 +952,13 @@ let add_pattern_variables ?check ?check_as env =
   (List.fold_right
     (fun pv env ->
        let check = if pv.as_var then check_as else check in
+       let val_kind =
+         match pv.bind_cargs with
+         | None -> Val_reg
+         | Some s -> Val_cargs s
+       in
        let e1 = Env.add_value ?check pv.id
-           {val_type = pv.ty; val_kind = Val_reg; val_loc = pv.loc} env in
+           {val_type = pv.ty; val_kind; val_loc = pv.loc} env in
        Env.add_annot pv.id (Annot.Iref_internal pv.loc) e1)
     pv env,
    get_ref module_variables)
@@ -1478,6 +1513,51 @@ let duplicate_ident_types loc caselist env =
       with Not_found -> env)
     env idents
 
+(* Helpers for record constructors *)
+
+let find_cargs_label env loc ty field constr =
+  let lab =
+    match field with
+    | Longident.Lident lab -> lab
+    | _ -> raise(Error(loc, Label_cannot_be_qualified field))
+  in
+
+  let ty_path, ty_args =
+    match (Ctype.repr ty).desc with
+    | Tconstr(path, tyl, _) -> path, tyl
+    | _ -> assert false
+  in
+  let ty_decl =
+    try Env.find_type ty_path env
+    with Not_found -> assert false
+  in
+  let (_, cargs, ret_typ) =
+    match ty_decl.type_kind with
+    | Type_variant constrs ->
+        begin try List.find (fun (n, _, _) -> n = constr) constrs
+        with Not_found -> assert false
+        end
+    | _ -> assert false
+  in
+  assert(ret_typ = None); (* TODO: support GADTs *)
+  let rank = ref (-1) in
+  let (_, mut, field_typ) =
+    match cargs with
+    | Targ_tuple _ -> assert false
+    | Targ_record fields ->
+        List.find (fun (l, mut, _) -> incr rank; l = lab) fields
+  in
+  let ty, ty_params =
+    match instance_list env (field_typ :: ty_decl.type_params) with
+    | t :: tyl -> t, tyl
+    | _ -> assert false
+  in
+  begin try List.iter2 (Ctype.unify env) ty_params ty_args
+  with Unify _ -> assert false
+  end;
+  !rank, ty, mut
+
+
 (* Typing of expressions *)
 
 let unify_exp env exp expected_ty =
@@ -1495,7 +1575,7 @@ let rec type_exp env sexp =
    In the principal case, [type_expected'] may be at generic_level.
  *)
 
-and type_expect ?in_function env sexp ty_expected =
+and type_expect ?(allow_cargs_var = false) ?in_function env sexp ty_expected =
   let loc = sexp.pexp_loc in
   (* Record the expression type before unifying it with the expected type *)
   let rue exp =
@@ -1529,6 +1609,8 @@ and type_expect ?in_function env sexp ty_expected =
                 Texp_ident(path, desc)
             | Val_unbound ->
                 raise(Error(loc, Masked_instance_variable lid))
+            | Val_cargs s when not allow_cargs_var ->
+                raise(Error(loc, Constructor_arguments s))
             | _ ->
                 Texp_ident(path, desc)
             end;
@@ -1820,27 +1902,52 @@ and type_expect ?in_function env sexp ty_expected =
         exp_type = instance env ty_expected;
         exp_env = env }
   | Pexp_field(sarg, lid) ->
-      let arg = type_exp env sarg in
-      let label = Typetexp.find_label env loc lid in
-      let (_, ty_arg, ty_res) = instance_label false label in
-      unify_exp env arg ty_res;
-      rue {
-        exp_desc = Texp_field(arg, label);
-        exp_loc = loc;
-        exp_type = ty_arg;
-        exp_env = env }
+      let arg = type_expect ~allow_cargs_var:true env sarg (newvar ()) in
+      begin match arg.exp_desc with
+      | Texp_ident(_, {val_kind = Val_cargs constr}) ->
+          let rank, ty, _ = find_cargs_label env loc arg.exp_type lid constr in
+          rue {
+          exp_desc = Texp_field_nth (arg, rank);
+          exp_loc = loc;
+          exp_type = ty;
+          exp_env = env }
+      | _ ->
+          let label = Typetexp.find_label env loc lid in
+          let (_, ty_arg, ty_res) = instance_label false label in
+          unify_exp env arg ty_res;
+          rue {
+          exp_desc = Texp_field(arg, label);
+          exp_loc = loc;
+          exp_type = ty_arg;
+          exp_env = env }
+      end
   | Pexp_setfield(srecord, lid, snewval) ->
-      let record = type_exp env srecord in
-      let label = Typetexp.find_label env loc lid in
-      let (label, newval) =
-        type_label_exp false env loc record.exp_type (label, snewval) in
-      if label.lbl_mut = Immutable then
-        raise(Error(loc, Label_not_mutable lid));
-      rue {
-        exp_desc = Texp_setfield(record, label, newval);
-        exp_loc = loc;
-        exp_type = instance_def Predef.type_unit;
-        exp_env = env }
+      let record = type_expect ~allow_cargs_var:true env srecord (newvar ()) in
+      begin match record.exp_desc with
+      | Texp_ident(_, {val_kind = Val_cargs constr}) ->
+          let rank, ty, mut = find_cargs_label env loc record.exp_type lid constr in
+          let newval = type_expect env snewval ty in
+          if mut = Immutable then
+            raise(Error(loc, Label_not_mutable lid));
+          rue
+            {
+             exp_desc = Texp_setfield_nth(record, rank, newval);
+             exp_loc = loc;
+             exp_type = instance_def Predef.type_unit;
+             exp_env = env }
+      | _ ->
+          let label = Typetexp.find_label env loc lid in
+          let (label, newval) =
+            type_label_exp false env loc record.exp_type (label, snewval) in
+          if label.lbl_mut = Immutable then
+            raise(Error(loc, Label_not_mutable lid));
+          rue
+            {
+             exp_desc = Texp_setfield(record, label, newval);
+             exp_loc = loc;
+             exp_type = instance_def Predef.type_unit;
+             exp_env = env }
+      end
   | Pexp_array(sargl) ->
       let ty = newgenvar() in
       let to_unify = Predef.type_array ty in
@@ -3008,6 +3115,8 @@ let type_expression env sexp =
       {exp with exp_type = desc.val_type}
   | _ -> exp
 
+let type_expect = type_expect ~allow_cargs_var:false
+
 (* Error report *)
 
 open Format
@@ -3188,6 +3297,13 @@ let report_error ppf = function
         longident lid
   | Record_expected ->
       fprintf ppf "A record argument is expected"
+  | Mixed_pattern_variable s ->
+      fprintf ppf
+        "The pattern variable %s matches different kinds of variables"
+        s
+  | Constructor_arguments s ->
+      fprintf ppf
+        "This variable %s binds the arguments of a constructor. It cannot be used in this context" s
 
 let () =
   Env.add_delayed_check_forward := add_delayed_check
