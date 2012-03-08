@@ -168,5 +168,12 @@ val set_typeset: TypeSet.t ref -> TypeSet.t -> unit
 val log_type: type_expr -> unit
         (* Log the old value of a type, before modifying it by hand *)
 
+(**** Utilities for constructor arguments ****)
+
+val cargs_types: constructor_args -> type_expr list
+val cargs_map: (type_expr -> type_expr) -> constructor_args -> constructor_args
+val cargs_iter: (type_expr -> unit) -> constructor_args -> unit
+
 (**** Forward declarations ****)
 val print_raw: (Format.formatter -> type_expr -> unit) ref
+

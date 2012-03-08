@@ -101,12 +101,18 @@ and value_kind =
                                         (* Ancestor *)
   | Val_unbound                         (* Unbound variable *)
 
+type constructor_args =
+  | Targ_tuple of type_expr list
+  | Targ_record of record_definition
+
+and record_definition = (string * mutable_flag * type_expr) list
+
 (* Constructor descriptions *)
 
 type constructor_description =
   { cstr_res: type_expr;                (* Type of the result *)
     cstr_existentials: type_expr list;  (* list of existentials *)
-    cstr_args: type_expr list;          (* Type of the arguments *)
+    cstr_args: constructor_args;        (* Type of the arguments *)
     cstr_arity: int;                    (* Number of arguments *)
     cstr_tag: constructor_tag;          (* Tag for heap blocks *)
     cstr_consts: int;                   (* Number of constant constructors *) 
@@ -152,12 +158,11 @@ type type_declaration =
 
 and type_kind =
     Type_abstract
-  | Type_record of
-      (string * mutable_flag * type_expr) list * record_representation
-  | Type_variant of (string * type_expr list * type_expr option) list
+  | Type_record of record_definition * record_representation
+  | Type_variant of (string * constructor_args * type_expr option) list
 
 type exception_declaration =
-    { exn_args: type_expr list;
+    { exn_args: constructor_args;
       exn_loc: Location.t }
 
 (* Type expressions for the class language *)

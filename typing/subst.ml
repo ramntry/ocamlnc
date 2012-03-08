@@ -172,7 +172,7 @@ let type_declaration s decl =
             Type_variant
               (List.map
                  (fun (n, args, ret_type) -> 
-		   (n, List.map (typexp s) args, may_map (typexp s) ret_type))
+		   (n, cargs_map (typexp s) args, may_map (typexp s) ret_type))
                  cstrs)
         | Type_record(lbls, rep) ->
             Type_record
@@ -252,7 +252,7 @@ let value_description s descr =
    }
 
 let exception_declaration s descr =
-  { exn_args = List.map (type_expr s) descr.exn_args;
+  { exn_args = cargs_map (type_expr s) descr.exn_args;
     exn_loc = if s.for_saving then Location.none else descr.exn_loc;
    }
 

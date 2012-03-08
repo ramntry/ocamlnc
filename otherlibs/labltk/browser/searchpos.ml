@@ -160,6 +160,12 @@ let rec search_pos_class_type cl ~pos ~env =
         search_pos_class_type cty ~pos ~env
     end
 
+let search_pos_cargs ~pos ~env = function
+  | Parg_tuple l ->
+      List.iter ~f:(search_pos_type ~pos ~env) l
+  | Parg_record l ->
+      List.iter ~f:(fun (_,_,t,_) -> search_pos_type ~pos ~env t) l
+
 let search_pos_type_decl td ~pos ~env =
   if in_loc ~pos td.ptype_loc then begin
     begin match td.ptype_manifest with
@@ -170,7 +176,7 @@ let search_pos_type_decl td ~pos ~env =
       Ptype_abstract -> ()
     | Ptype_variant dl ->
         List.iter dl
-          ~f:(fun (_, tl, _, _) -> List.iter tl ~f:(search_pos_type ~pos ~env))
+          ~f:(fun (_, args, _, _) -> search_pos_cargs ~pos ~env args)
     | Ptype_record dl ->
         List.iter dl ~f:(fun (_, _, t, _) -> search_pos_type t ~pos ~env) in
     search_tkind td.ptype_kind;
@@ -202,8 +208,8 @@ let rec search_pos_signature l ~pos ~env =
         Psig_value (_, desc) -> search_pos_type desc.pval_type ~pos ~env
       | Psig_type l ->
           List.iter l ~f:(fun (_,desc) -> search_pos_type_decl ~pos desc ~env)
-      | Psig_exception (_, l) ->
-          List.iter l ~f:(search_pos_type ~pos ~env);
+      | Psig_exception (_, args) ->
+          search_pos_cargs ~pos ~env args;
           add_found_sig (`Type, Lident "exn") ~env ~loc:pt.psig_loc
       | Psig_module (_, t) ->
           search_pos_module t ~pos ~env

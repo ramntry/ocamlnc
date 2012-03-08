@@ -258,14 +258,14 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
 			  | _ -> assert false end
 		      | None -> decl.type_params
 		    in
-                    let ty_args =
-                      List.map
-                        (function ty ->
-                           try Ctype.apply env type_params ty ty_list with
-                             Ctype.Cannot_apply -> abstract_type)
-                        constr_args in
-                    tree_of_constr_with_args (tree_of_constr env path)
-                                           constr_name 0 depth obj ty_args		    
+                    let map_arg ty =
+                      try Ctype.apply env type_params ty ty_list with
+                        Ctype.Cannot_apply -> abstract_type
+                    in
+                    let constr_args = Btype.cargs_map map_arg constr_args in
+                    tree_of_constr_with_args
+                      (tree_of_constr env path constr_name)
+                      0 depth obj constr_args
                 | {type_kind = Type_record(lbl_list, rep)} ->
                     begin match check_depth depth obj ty with
                       Some x -> x
@@ -339,11 +339,14 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
               tree :: tree_list (i + 1) ty_list in
       tree_list start ty_list
 
-      and tree_of_constr_with_args
-             tree_of_cstr cstr_name start depth obj ty_args =
-        let lid = tree_of_cstr cstr_name in
+      and tree_of_constr_with_args lid start depth obj cstr_args =
+        let ty_args = Btype.cargs_types cstr_args in
         let args = tree_of_val_list start depth obj ty_args in
-        Oval_constr (lid, args)
+        match cstr_args with
+        | Targ_tuple _ ->
+            Oval_constr (lid, args)
+        | Targ_record l ->
+            Oval_constr (lid, [Oval_record (List.map2 (fun (s, _, _) x -> Oide_ident s, x) l args)])
 
     and tree_of_exception depth bucket =
       let name = (O.obj(O.field(O.field bucket 0) 0) : string) in
@@ -361,7 +364,9 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
         if not (EVP.same_value (O.field bucket 0) (EVP.eval_path path))
         then raise Not_found;
         tree_of_constr_with_args
-           (fun x -> Oide_ident x) name 1 depth bucket cstr.cstr_args
+          (Oide_ident name)
+          1 depth bucket cstr.cstr_args
+          (* check runtime representation *)
       with Not_found | EVP.Error ->
         match check_depth depth bucket ty with
           Some x -> x

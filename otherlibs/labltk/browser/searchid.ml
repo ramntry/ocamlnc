@@ -232,7 +232,7 @@ let rec search_type_in_signature t ~sign ~prefix ~mode =
           | Type_variant l ->
             List.exists l ~f:
             begin fun (_, l, r) ->
-              List.exists l ~f:matches ||
+              List.exists (Btype.cargs_types l) ~f:matches ||
               match r with None -> false | Some x -> matches x
             end
           | Type_record(l, rep) ->
@@ -240,7 +240,7 @@ let rec search_type_in_signature t ~sign ~prefix ~mode =
           end
           then [lid_of_id id, Ptype] else []
       | Tsig_exception (id, l) ->
-          if List.exists l.exn_args ~f:matches
+          if List.exists (Btype.cargs_types l.exn_args) ~f:matches
           then [lid_of_id id, Pconstructor]
           else []
       | Tsig_module (id, Tmty_signature sign, _) ->

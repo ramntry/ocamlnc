@@ -46,17 +46,18 @@ let constructor_descrs ty_res cstrs priv =
   let num_consts = ref 0 and num_nonconsts = ref 0  and num_normal = ref 0 in
   List.iter
     (fun (name, args, ret) ->
-      if args = [] then incr num_consts else incr num_nonconsts;
+      if args = Targ_tuple [] then incr num_consts else incr num_nonconsts;
       if ret = None then incr num_normal)
     cstrs;
   let rec describe_constructors idx_const idx_nonconst = function
       [] -> []
-    | (name, ty_args, ty_res_opt) :: rem ->
+    | (name, args, ty_res_opt) :: rem ->
 	let ty_res = 
 	  match ty_res_opt with
 	  | Some ty_res' -> ty_res'
 	  | None -> ty_res
 	in
+        let ty_args = cargs_types args in
         let (tag, descr_rem) =
           match ty_args with
             [] -> (Cstr_constant idx_const,
@@ -74,7 +75,7 @@ let constructor_descrs ty_res cstrs priv =
 	let cstr =
           { cstr_res = ty_res;    
 	    cstr_existentials = existentials; 
-            cstr_args = ty_args;
+            cstr_args = args;
             cstr_arity = List.length ty_args;
             cstr_tag = tag;
             cstr_consts = !num_consts;
@@ -90,7 +91,7 @@ let exception_descr path_exc decl =
   { cstr_res = Predef.type_exn;
     cstr_existentials = [];
     cstr_args = decl.exn_args;
-    cstr_arity = List.length decl.exn_args;
+    cstr_arity = List.length (cargs_types decl.exn_args);
     cstr_tag = Cstr_exception (path_exc, decl.exn_loc);
     cstr_consts = -1;
     cstr_nonconsts = -1;
@@ -128,7 +129,7 @@ exception Constr_not_found
 let rec find_constr tag num_const num_nonconst = function
     [] ->
       raise Constr_not_found
-  | (name, ([] as cstr),(_ as ret_type_opt)) :: rem ->
+  | (name, (Targ_tuple [] as cstr),(_ as ret_type_opt)) :: rem ->
       if tag = Cstr_constant num_const
       then (name,cstr,ret_type_opt)
       else find_constr tag (num_const + 1) num_nonconst rem

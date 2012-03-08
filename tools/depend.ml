@@ -67,6 +67,10 @@ let add_opt add_fn bv = function
     None -> ()
   | Some x -> add_fn bv x
 
+let add_cargs bv = function
+  | Parg_tuple tyl -> List.iter (add_type bv) tyl
+  | Parg_record l -> List.iter (fun (_, _, ty, _) -> add_type bv ty) l
+
 let add_type_declaration bv td =
   List.iter
     (fun (ty1, ty2, _) -> add_type bv ty1; add_type bv ty2)
@@ -75,7 +79,7 @@ let add_type_declaration bv td =
   let rec add_tkind = function
     Ptype_abstract -> ()
   | Ptype_variant cstrs ->
-      List.iter (fun (c, args, rty, _) -> List.iter (add_type bv) args; Misc.may (add_type bv) rty) cstrs
+      List.iter (fun (c, args, rty, _) -> add_cargs bv args; Misc.may (add_type bv) rty) cstrs
   | Ptype_record lbls ->
       List.iter (fun (l, mut, ty, _) -> add_type bv ty) lbls in
   add_tkind td.ptype_kind
@@ -196,7 +200,7 @@ and add_sig_item bv item =
   | Psig_type dcls ->
       List.iter (fun (id, td) -> add_type_declaration bv td) dcls; bv
   | Psig_exception(id, args) ->
-      List.iter (add_type bv) args; bv
+      add_cargs bv args; bv
   | Psig_module(id, mty) ->
       add_modtype bv mty; StringSet.add id bv
   | Psig_recmodule decls ->
@@ -246,7 +250,7 @@ and add_struct_item bv item =
   | Pstr_type dcls ->
       List.iter (fun (id, td) -> add_type_declaration bv td) dcls; bv
   | Pstr_exception(id, args) ->
-      List.iter (add_type bv) args; bv
+      add_cargs bv args; bv
   | Pstr_exn_rebind(id, l) ->
       add bv l; bv
   | Pstr_module(id, modl) ->

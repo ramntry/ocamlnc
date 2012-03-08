@@ -220,7 +220,12 @@ module Analyser =
         Types.Type_abstract ->
           Odoc_type.Type_abstract
       | Types.Type_variant l ->
-          let f (constructor_name, type_expr_list, ret_type) =
+          let f (constructor_name, args, ret_type) =
+            let type_expr_list =
+              match args with
+              | Targ_tuple l -> l
+              | Targ_record _ -> failwith "Odoc_sig: record constructor are not yet supported."
+            in
             let comment_opt =
               try
                 match List.assoc constructor_name name_comment_list with
@@ -520,11 +525,16 @@ module Analyser =
               with Not_found ->
                 raise (Failure (Odoc_messages.exception_not_found current_module_name name))
             in
+            let args =
+              match types_excep_decl.exn_args with
+              | Targ_tuple tyl -> List.map (Odoc_env.subst_type env) tyl
+              | Targ_record _ -> failwith "Odoc_sig: record constructor."
+            in
             let e =
               {
                 ex_name = Name.concat current_module_name name ;
                 ex_info = comment_opt ;
-                ex_args = List.map (Odoc_env.subst_type env) types_excep_decl.exn_args ;
+                ex_args = args;
                 ex_alias = None ;
                 ex_loc = { loc_impl = None ; loc_inter = Some (!file_name, pos_start_ele) } ;
                 ex_code =

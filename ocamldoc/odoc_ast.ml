@@ -1201,11 +1201,16 @@ module Analyser =
           let new_env = Odoc_env.add_exception env complete_name in
           let loc_start = loc.Location.loc_start.Lexing.pos_cnum in
           let loc_end =  loc.Location.loc_end.Lexing.pos_cnum in
+          let args =
+            match tt_excep_decl.exn_args with
+            | Targ_tuple tyl -> List.map (Odoc_env.subst_type env) tyl
+            | Targ_record _ -> failwith "Odoc_ast: record constructor."
+          in
           let new_ex =
             {
               ex_name = complete_name ;
               ex_info = comment_opt ;
-              ex_args = List.map (Odoc_env.subst_type new_env) tt_excep_decl.exn_args ;
+              ex_args = args;
               ex_alias = None ;
               ex_loc = { loc_impl = Some (!file_name, loc.Location.loc_start.Lexing.pos_cnum) ; loc_inter = None } ;
               ex_code =

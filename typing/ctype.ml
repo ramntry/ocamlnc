@@ -522,11 +522,11 @@ let closed_type_decl decl =
         ()
     | Type_variant v ->
         List.iter 
-          (fun (_, tyl,ret_type_opt) ->
+          (fun (_, args,ret_type_opt) ->
             match ret_type_opt with
             | Some _ -> ()
-            | None ->
-                List.iter closed_type tyl)
+            | None -> cargs_iter closed_type args
+          )
           v 
     | Type_record(r, rep) ->
         List.iter (fun (_, _, ty) -> closed_type ty) r
@@ -1042,7 +1042,7 @@ let new_declaration newtype manifest =
 
 let instance_constructor ?in_pattern cstr =
   let ty_res = copy cstr.cstr_res in
-  let ty_args = List.map copy cstr.cstr_args in
+  let ty_args = Btype.cargs_map copy cstr.cstr_args in
   begin match in_pattern with
   | None -> ()
   | Some (env, newtype_lev) ->
@@ -1085,7 +1085,7 @@ let instance_declaration decl =
      | Type_abstract -> Type_abstract
      | Type_variant cl ->
          Type_variant (
-         List.map (fun (s,tl,ot) -> (s, List.map copy tl, may_map copy ot))
+         List.map (fun (s,args,ot) -> (s, cargs_map copy args, may_map copy ot))
            cl)
      | Type_record (fl, rr) ->
          Type_record (List.map (fun (s,m,ty) -> (s, m, copy ty)) fl, rr)}
@@ -3984,11 +3984,11 @@ let nondep_type_decl env mid id is_covariant decl =
       | Type_variant cstrs ->
           Type_variant
             (List.map
-               (fun (c, tl,ret_type_opt) -> 
+               (fun (c, args,ret_type_opt) -> 
                  let ret_type_opt = 
                    may_map (nondep_type_rec env mid) ret_type_opt
                  in
-                 (c, List.map (nondep_type_rec env mid) tl,ret_type_opt)) 
+                 (c, cargs_map (nondep_type_rec env mid) args,ret_type_opt)) 
                cstrs)
       | Type_record(lbls, rep) ->
           Type_record

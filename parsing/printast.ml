@@ -359,12 +359,13 @@ and type_kind i ppf x =
       line i ppf "Ptype_abstract\n"
   | Ptype_variant l ->
       line i ppf "Ptype_variant\n";
-      list (i+1) string_x_core_type_list_x_location ppf l;
+      list (i+1) string_x_constructor_args_x_location ppf l;
   | Ptype_record l ->
       line i ppf "Ptype_record\n";
       list (i+1) string_x_mutable_flag_x_core_type_x_location ppf l;
 
-and exception_declaration i ppf x = list i core_type ppf x
+and exception_declaration i ppf x =
+  constructor_args i ppf x
 
 and class_type i ppf x =
   line i ppf "class_type %a\n" fmt_location x.pcty_loc;
@@ -525,6 +526,12 @@ and module_type i ppf x =
 
 and signature i ppf x = list i signature_item ppf x
 
+and constructor_args i ppf = function
+  | Parg_tuple l ->
+      list i core_type ppf l
+  | Parg_record r ->
+      list i string_x_mutable_flag_x_core_type_x_location ppf r
+
 and signature_item i ppf x =
   line i ppf "signature_item %a\n" fmt_location x.psig_loc;
   let i = i+1 in
@@ -665,9 +672,9 @@ and core_type_x_core_type_x_location i ppf (ct1, ct2, l) =
   core_type (i+1) ppf ct1;
   core_type (i+1) ppf ct2;
 
-and string_x_core_type_list_x_location i ppf (s, l, r_opt, loc) = 
+and string_x_constructor_args_x_location i ppf (s, args, r_opt, loc) =
   line i ppf "\"%s\" %a\n" s fmt_location loc;
-  list (i+1) core_type ppf l;
+  constructor_args (i+1) ppf args;
   option (i+1) core_type ppf r_opt;
 
 and string_x_mutable_flag_x_core_type_x_location i ppf (s, mf, ct, loc) =

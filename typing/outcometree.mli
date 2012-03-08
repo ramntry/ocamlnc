@@ -54,13 +54,17 @@ type out_type =
   | Otyp_object of (string * out_type) list * bool option
   | Otyp_record of (string * bool * out_type) list
   | Otyp_stuff of string
-  | Otyp_sum of (string * out_type list * out_type option) list
+  | Otyp_sum of (string * out_cargs * out_type option) list
   | Otyp_tuple of out_type list
   | Otyp_var of bool * string
   | Otyp_variant of
       bool * out_variant * bool * (string list) option
   | Otyp_poly of string list * out_type
   | Otyp_module of string * string list * out_type list
+
+and out_cargs =
+  | Oarg_tuple of out_type list
+  | Oarg_record of (string * bool * out_type) list
 
 and out_variant =
   | Ovar_fields of (string * bool * out_type list) list
@@ -87,7 +91,7 @@ and out_sig_item =
   | Osig_class_type of
       bool * string * (string * (bool * bool)) list * out_class_type *
         out_rec_status
-  | Osig_exception of string * out_type list
+  | Osig_exception of string * out_cargs
   | Osig_modtype of string * out_module_type
   | Osig_module of string * out_module_type * out_rec_status
   | Osig_type of out_type_decl * out_rec_status

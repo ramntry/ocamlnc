@@ -163,6 +163,34 @@ let report_type_mismatch first second decl ppf =
       if err = Manifest then () else
       Format.fprintf ppf "@ %a." (report_type_mismatch0 first second decl) err)
 
+let equal_ty env decl1 decl2 ty1 ty2 =
+  Ctype.equal env true (ty1::decl1) (ty2::decl2)
+
+let rec compare_records prefix env decl1 decl2 n labels1 labels2 =
+  match labels1, labels2 with
+    [], []           -> []
+  | [], (lab2,_,_)::_ -> [Field_missing (true, prefix ^ lab2)]
+  | (lab1,_,_)::_, [] -> [Field_missing (false, prefix ^ lab1)]
+  | (lab1, mut1, arg1)::rem1, (lab2, mut2, arg2)::rem2 ->
+      if lab1 <> lab2 then [Field_names (n, prefix ^ lab1, prefix ^ lab2)] else
+      if mut1 <> mut2 then [Field_mutable (prefix ^ lab1)] else
+      if equal_ty env decl1 decl2 arg1 arg2
+      then compare_records prefix env decl1 decl2 (n+1) rem1 rem2
+      else [Field_type (prefix ^ lab1)]
+
+let compare_cargs cstr env decl1 decl2 arg1 arg2 =
+  match arg1, arg2 with
+  | Targ_tuple l1, Targ_tuple l2 ->
+      if List.length l1 <> List.length l2 then [Field_arity cstr]
+      else if Misc.for_all2 (equal_ty env decl1 decl2) l1 l2
+      then []
+      else [Field_type cstr]
+  | Targ_record lbls1, Targ_record lbls2 ->
+      compare_records (cstr ^ "/") env decl1 decl2 1 lbls1 lbls2
+  | Targ_record _, Targ_tuple _
+  | Targ_tuple _, Targ_record _ ->
+      [Field_type cstr]
+
 let rec compare_variants env decl1 decl2 n cstrs1 cstrs2 =
   match cstrs1, cstrs2 with
     [], []           -> []
@@ -170,35 +198,15 @@ let rec compare_variants env decl1 decl2 n cstrs1 cstrs2 =
   | (cstr1,_,_)::_, [] -> [Field_missing (false, cstr1)]
   | (cstr1, arg1, ret1)::rem1, (cstr2, arg2,ret2)::rem2 ->
       if cstr1 <> cstr2 then [Field_names (n, cstr1, cstr2)] else
-      if List.length arg1 <> List.length arg2 then [Field_arity cstr1] else
       match ret1, ret2 with
-      | Some r1, Some r2 when not (Ctype.equal env true [r1] [r2]) -> 
+      | Some r1, Some r2 when not (Ctype.equal env true [r1] [r2]) ->
 	  [Field_type cstr1]
       | Some _, None | None, Some _ ->
 	  [Field_type cstr1]
-      | _ ->      
-	  if Misc.for_all2
-	      (fun ty1 ty2 ->
-		Ctype.equal env true (ty1::decl1.type_params)
-		  (ty2::decl2.type_params))
-	      (arg1) (arg2) 
-	  then 
-	    compare_variants env decl1 decl2 (n+1) rem1 rem2
-	  else [Field_type cstr1]
-	      
-	    
-let rec compare_records env decl1 decl2 n labels1 labels2 =
-  match labels1, labels2 with
-    [], []           -> []
-  | [], (lab2,_,_)::_ -> [Field_missing (true, lab2)]
-  | (lab1,_,_)::_, [] -> [Field_missing (false, lab1)]
-  | (lab1, mut1, arg1)::rem1, (lab2, mut2, arg2)::rem2 ->
-      if lab1 <> lab2 then [Field_names (n, lab1, lab2)] else
-      if mut1 <> mut2 then [Field_mutable lab1] else
-      if Ctype.equal env true (arg1::decl1.type_params)
-                              (arg2::decl2.type_params)
-      then compare_records env decl1 decl2 (n+1) rem1 rem2
-      else [Field_type lab1]
+      | _, _ ->
+          let err = compare_cargs cstr1 env decl1 decl2 arg1 arg2 in
+          if err <> [] then err
+          else compare_variants env decl1 decl2 (n+1) rem1 rem2
 
 let type_declarations env id decl1 decl2 =
   if decl1.type_arity <> decl2.type_arity then [Arity] else
@@ -211,9 +219,10 @@ let type_declarations env id decl1 decl2 =
           List.iter
             (fun (c, _, _) -> Env.mark_constructor_used name decl1 c)
             cstrs1;
-        compare_variants env decl1 decl2 1 cstrs1 cstrs2
+        compare_variants env decl1.type_params decl2.type_params 1
+          cstrs1 cstrs2
     | (Type_record(labels1,rep1), Type_record(labels2,rep2)) ->
-        let err = compare_records env decl1 decl2 1 labels1 labels2 in
+        let err = compare_records "" env decl1.type_params decl2.type_params 1 labels1 labels2 in
         if err <> [] || rep1 = rep2 then err else
         [Record_representation (rep2 = Record_float)]
     | (_, _) -> [Kind]
@@ -253,7 +262,7 @@ let type_declarations env id decl1 decl2 =
 (* Inclusion between exception declarations *)
 
 let exception_declarations env ed1 ed2 =
-  Misc.for_all2 (fun ty1 ty2 -> Ctype.equal env false [ty1] [ty2]) ed1.exn_args ed2.exn_args
+  (compare_cargs "" env [] [] ed1.exn_args ed2.exn_args) = []
 
 (* Inclusion between class types *)
 let encode_val (mut, ty) rem =

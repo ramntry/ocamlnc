@@ -1450,17 +1450,20 @@ constructor_declaration:
         ($1, arg_types,ret_type, symbol_rloc()) }
 ;
 
+constructor_args:
+  | core_type_list                            { Parg_tuple (List.rev $1) }
+  | LBRACE label_declarations opt_semi RBRACE { Parg_record (List.rev $2) }
+;
+
 constructor_arguments:
-    /*empty*/                                   { [] }
-  | OF core_type_list                           { List.rev $2 }
+    /*empty*/            { Parg_tuple [] }
+  | OF constructor_args  { $2 }
 ;
 
 generalized_constructor_arguments:
-    /*empty*/                                   { ([],None) }
-  | OF core_type_list                           { (List.rev $2,None) }
-  | COLON core_type_list MINUSGREATER simple_core_type
-                                                { (List.rev $2,Some $4) }
-  | COLON simple_core_type                      { ([],Some $2) }
+  | COLON constructor_args MINUSGREATER simple_core_type   { ($2, Some $4) }
+  | COLON simple_core_type                      { (Parg_tuple [], Some $2) }
+  | constructor_arguments { ($1, None) }
 ;
 
 

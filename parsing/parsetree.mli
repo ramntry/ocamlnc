@@ -140,11 +140,16 @@ and type_declaration =
 and type_kind =
     Ptype_abstract
   | Ptype_variant of
-      (string * core_type list * core_type option * Location.t) list
-  | Ptype_record of
-      (string * mutable_flag * core_type * Location.t) list
+      (string * constructor_args * core_type option * Location.t) list
+  | Ptype_record of record_definition
 
-and exception_declaration = core_type list
+and constructor_args =
+  | Parg_tuple of core_type list
+  | Parg_record of record_definition
+
+and record_definition = (string * mutable_flag * core_type * Location.t) list
+
+and exception_declaration = constructor_args
 
 (* Type expressions for the class language *)
 

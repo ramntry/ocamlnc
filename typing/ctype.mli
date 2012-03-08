@@ -117,7 +117,7 @@ val instance_list: Env.t -> type_expr list -> type_expr list
         (* Take an instance of a list of type schemes *)
 val instance_constructor:
         ?in_pattern:Env.t ref * int -> 
-        constructor_description -> type_expr list * type_expr
+        constructor_description -> constructor_args * type_expr
         (* Same, for a constructor *)
 val instance_parameterized_type:
         type_expr list -> type_expr -> type_expr list * type_expr

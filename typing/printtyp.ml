@@ -589,7 +589,7 @@ let rec tree_of_type_decl id decl =
   | Type_variant cstrs ->
       List.iter 
 	(fun (_, args,ret_type_opt) -> 
-	  List.iter mark_loops args;
+	  cargs_iter mark_loops args;
 	  may mark_loops ret_type_opt)
 	cstrs
   | Type_record(l, rep) ->
@@ -647,14 +647,17 @@ let rec tree_of_type_decl id decl =
   (name, args, ty, priv, constraints)
 
 and tree_of_constructor (name, args, ret_type_opt) =
-  if ret_type_opt = None then (name, tree_of_typlist false args, None) else
+  if ret_type_opt = None then (name, tree_of_cargs args, None) else
   let nm = !names in
   names := [];
   let ret = may_map (tree_of_typexp false) ret_type_opt in
-  let args = tree_of_typlist false args in
+  let args = tree_of_cargs args in
   names := nm;
   (name, args, ret)
-    
+
+and tree_of_cargs = function
+  | Targ_tuple tyl -> Oarg_tuple (tree_of_typlist false tyl)
+  | Targ_record lbls -> Oarg_record (List.map tree_of_label lbls)
 
 and tree_of_constructor_ret =
   function
@@ -673,9 +676,9 @@ let type_declaration id ppf decl =
 (* Print an exception declaration *)
 
 let tree_of_exception_declaration id decl =
-  reset_and_mark_loops_list decl.exn_args;
-  let tyl = tree_of_typlist false decl.exn_args in
-  Osig_exception (Ident.name id, tyl)
+  reset_and_mark_loops_list (cargs_types decl.exn_args);
+  let args = tree_of_cargs decl.exn_args in
+  Osig_exception (Ident.name id, args)
 
 let exception_declaration id ppf decl =
   !Oprint.out_sig_item ppf (tree_of_exception_declaration id decl)

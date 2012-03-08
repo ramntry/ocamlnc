@@ -97,7 +97,7 @@ let build_initial_env add_type add_exception empty_env =
   and decl_bool =
     {type_params = [];
      type_arity = 0;
-     type_kind = Type_variant(["false", [], None; "true", [], None]);
+     type_kind = Type_variant(["false", Targ_tuple [], None; "true", Targ_tuple [], None]);
      type_loc = Location.none;
      type_private = Public;
      type_manifest = None;
@@ -106,7 +106,7 @@ let build_initial_env add_type add_exception empty_env =
   and decl_unit =
     {type_params = [];
      type_arity = 0;
-     type_kind = Type_variant(["()", [], None]);
+     type_kind = Type_variant(["()", Targ_tuple [], None]);
      type_loc = Location.none;
      type_private = Public;
      type_manifest = None;
@@ -136,7 +136,7 @@ let build_initial_env add_type add_exception empty_env =
     {type_params = [tvar];
      type_arity = 1;
      type_kind =
-     Type_variant(["[]", [], None; "::", [tvar; type_list tvar], None]);
+     Type_variant(["[]", Targ_tuple [], None; "::", Targ_tuple [tvar; type_list tvar], None]);
      type_loc = Location.none;
      type_private = Public;
      type_manifest = None;
@@ -162,7 +162,7 @@ let build_initial_env add_type add_exception empty_env =
     let tvar = newgenvar() in
     {type_params = [tvar];
      type_arity = 1;
-     type_kind = Type_variant(["None", [], None; "Some", [tvar], None]);
+     type_kind = Type_variant(["None", Targ_tuple [], None; "Some", Targ_tuple [tvar], None]);
      type_loc = Location.none;
      type_private = Public;
      type_manifest = None;
@@ -180,7 +180,7 @@ let build_initial_env add_type add_exception empty_env =
      type_newtype_level = None}
   in
 
-  let add_exception id l = add_exception id { exn_args = l; exn_loc = Location.none } in
+  let add_exception id l = add_exception id { exn_args = Targ_tuple l; exn_loc = Location.none } in
   add_exception ident_match_failure
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
   add_exception ident_out_of_memory [] (

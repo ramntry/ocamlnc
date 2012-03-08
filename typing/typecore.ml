@@ -34,6 +34,7 @@ type error =
   | Apply_wrong_label of label * type_expr
   | Label_multiply_defined of Longident.t
   | Label_missing of string list
+  | Label_unexpected of string list
   | Label_not_mutable of Longident.t
   | Incomplete_format of string
   | Bad_conversion of string * int * char
@@ -61,6 +62,8 @@ type error =
   | Not_a_packed_module of type_expr
   | Recursive_local_constraint of (type_expr * type_expr) list
   | Unexpected_existential
+  | Label_cannot_be_qualified of Longident.t
+  | Record_expected
 
 exception Error of Location.t * error
 
@@ -100,6 +103,8 @@ let rp node =
   Stypes.record (Stypes.Ti_pat node);
   node
 ;;
+
+let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
 
 (* Upper approximation of free identifiers on the parse tree *)
 
@@ -415,6 +420,9 @@ let rec build_as_type env p =
       if keep then p.pat_type else
       let tyl = List.map (build_as_type env) pl in
       let ty_args, ty_res = instance_constructor cstr in
+      let ty_args = Btype.cargs_types ty_args in
+      (* XXX  Do we need to do something special for record constructor
+         (with mutable fields)? *)
       List.iter2 (fun (p,ty) -> unify_pat env {p with pat_type = ty})
         (List.combine pl tyl) ty_args;
       ty_res
@@ -578,6 +586,36 @@ let unify_head_only loc env ty constr =
 
 (* Typing of patterns *)
 
+let align_record_constructor default loc labs fields =
+  let names = Hashtbl.create 6 in
+  List.iter (fun (lab, _, _) -> Hashtbl.add names lab ()) labs;
+  let exprs = Hashtbl.create 6 in
+  let unexpected = ref [] in
+  List.iter
+    (function
+      | (Longident.Lident id as lid, e) ->
+          if Hashtbl.mem exprs id then
+            raise(Error(loc, Label_multiply_defined lid));
+
+          if not (Hashtbl.mem names id) then
+            unexpected := id :: !unexpected
+          else begin
+            Hashtbl.add exprs id e;
+            Hashtbl.remove names id;
+          end
+      | (lid, _) -> raise(Error(loc, Label_cannot_be_qualified lid));
+    ) fields;
+  if !unexpected <> [] then raise(Error(loc, Label_unexpected !unexpected));
+  let missing = Hashtbl.fold (fun lab _ l -> lab :: l) names [] in
+  let default = lazy (default missing) in
+  List.map
+    (fun (s, _, _) ->
+      try Hashtbl.find exprs s
+      with Not_found -> Lazy.force default
+    )
+    labs
+
+
 (* type_pat does not generate local constraints inside or patterns *)
 type type_pat_mode =
   | Normal
@@ -673,22 +711,36 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
       if constr.cstr_generalized then
         unify_head_only loc !env expected_ty constr;
       let sargs =
-        match sarg with
-          None -> []
-        | Some {ppat_desc = Ppat_tuple spl} when explicit_arity -> spl
-        | Some {ppat_desc = Ppat_tuple spl} when constr.cstr_arity > 1 -> spl
-        | Some({ppat_desc = Ppat_any} as sp) when constr.cstr_arity <> 1 ->
+        match constr.cstr_args, sarg with
+        | Targ_tuple _, None -> []
+        | Targ_tuple _, Some {ppat_desc = Ppat_tuple spl} when explicit_arity -> spl
+        | Targ_tuple _, Some {ppat_desc = Ppat_tuple spl} when constr.cstr_arity > 1 -> spl
+        | Targ_tuple _, Some({ppat_desc = Ppat_any} as sp) when constr.cstr_arity <> 1 ->
             if constr.cstr_arity = 0 then
               Location.prerr_warning sp.ppat_loc
-                                     Warnings.Wildcard_arg_to_constant_constr;
+                Warnings.Wildcard_arg_to_constant_constr;
             replicate_list sp constr.cstr_arity
-        | Some sp -> [sp] in
+        | Targ_tuple _, Some sp -> [sp]
+
+        | Targ_record _, Some ({ppat_desc = Ppat_any} as sp) ->
+            replicate_list sp constr.cstr_arity
+        | Targ_record labs, Some {ppat_desc = Ppat_record (fields, closed)} ->
+            let default missing =
+              if closed = Closed then
+                Location.prerr_warning loc (Warnings.Non_closed_record_pattern (String.concat ", " missing));
+              mkpat Ppat_any
+            in
+            align_record_constructor default loc labs fields
+        | Targ_record _, _ ->
+            raise(Error(loc, Record_expected))
+      in
       if List.length sargs <> constr.cstr_arity then
-        raise(Error(loc, Constructor_arity_mismatch(lid,
+        raise(Error(loc, Constructor_arity_mismatch (lid,
                                      constr.cstr_arity, List.length sargs)));
       let (ty_args, ty_res) =
         instance_constructor ~in_pattern:(env, get_newtype_level ()) constr
       in
+      let ty_args = Btype.cargs_types ty_args in
       if constr.cstr_generalized && mode = Normal then
         unify_pat_types_gadt loc env ty_res expected_ty
       else
@@ -908,8 +960,6 @@ let type_class_arg_pattern cl_num val_env met_env l spat =
   in
   let val_env, _ = add_pattern_variables val_env in
   (pat, pv, val_env, met_env)
-
-let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
 
 let type_self_pattern cl_num privty val_env met_env par_env spat =
   let spat =
@@ -2567,17 +2617,26 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
   let constr = Typetexp.find_constructor env loc lid in
   Env.mark_constructor env (Longident.last lid) constr;
   let sargs =
-    match sarg with
-      None -> []
-    | Some {pexp_desc = Pexp_tuple sel} when explicit_arity -> sel
-    | Some {pexp_desc = Pexp_tuple sel} when constr.cstr_arity > 1 -> sel
-    | Some se -> [se] in
+    match constr.cstr_args, sarg with
+    | Targ_tuple _, None -> []
+    | Targ_tuple _, Some {pexp_desc = Pexp_tuple sel} when explicit_arity -> sel
+    | Targ_tuple _, Some {pexp_desc = Pexp_tuple sel} when constr.cstr_arity > 1 -> sel
+    | Targ_tuple _, Some se -> [se]
+
+    | Targ_record labs, Some {pexp_desc = Pexp_record (fields, None)} ->
+        (* TODO: deal with overidding *)
+        let default missing = raise(Error(loc, Label_missing missing)) in
+        align_record_constructor default loc labs fields
+    | Targ_record _, _ ->
+        raise(Error(loc, Record_expected))
+  in
   if List.length sargs <> constr.cstr_arity then
     raise(Error(loc, Constructor_arity_mismatch
                   (lid, constr.cstr_arity, List.length sargs)));
   let separate = !Clflags.principal || Env.has_local_constraints env in
   if separate then (begin_def (); begin_def ());
   let (ty_args, ty_res) = instance_constructor constr in
+  let ty_args = cargs_types ty_args in
   let texp =
     re {
       exp_desc = Texp_construct(constr, []);
@@ -3002,6 +3061,10 @@ let report_error ppf = function
       let print_labels ppf = List.iter (fun lbl -> fprintf ppf "@ %s" lbl) in
       fprintf ppf "@[<hov>Some record field labels are undefined:%a@]"
         print_labels labels
+  | Label_unexpected labels ->
+      let print_labels ppf = List.iter (fun lbl -> fprintf ppf "@ %s" lbl) in
+      fprintf ppf "@[<hov>Some record field labels are unexpected:%a@]"
+        print_labels labels
   | Label_not_mutable lid ->
       fprintf ppf "The record field label %a is not mutable" longident lid
   | Incomplete_format s ->
@@ -3108,6 +3171,11 @@ let report_error ppf = function
   | Unexpected_existential ->
       fprintf ppf
         "Unexpected existential"
+  | Label_cannot_be_qualified lid ->
+      fprintf ppf "Label in this context cannot be qualified: %a"
+        longident lid
+  | Record_expected ->
+      fprintf ppf "A record argument is expected"
 
 let () =
   Env.add_delayed_check_forward := add_delayed_check

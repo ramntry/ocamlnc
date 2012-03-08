@@ -36,6 +36,22 @@ let lowest_level = 0
 let pivot_level = 2 * lowest_level - 1
     (* pivot_level - lowest_level < lowest_level *)
 
+(**** Utilities for constructor arguments ****)
+
+let cargs_types = function
+  | Targ_tuple tyl -> tyl
+  | Targ_record lbls -> List.map (fun (_, _, ty) -> ty) lbls
+
+let cargs_map f = function
+  | Targ_tuple tyl ->
+      Targ_tuple (List.map f tyl)
+  | Targ_record lbls ->
+      Targ_record (List.map (fun (l, m, ty) -> (l, m, f ty)) lbls)
+
+let cargs_iter f = function
+  | Targ_tuple tyl -> List.iter f tyl
+  | Targ_record lbls -> List.iter (fun (_, _, ty) -> f ty) lbls
+
 (**** Some type creators ****)
 
 let new_id = ref (-1)
@@ -331,8 +347,8 @@ let unmark_type_decl decl =
     Type_abstract -> ()
   | Type_variant cstrs ->
       List.iter 
-	(fun (c, tl, ret_type_opt) -> 
-	  List.iter unmark_type tl;
+	(fun (c, args, ret_type_opt) -> 
+          List.iter unmark_type (cargs_types args);
 	  Misc.may unmark_type ret_type_opt)
 	cstrs
   | Type_record(lbls, rep) ->

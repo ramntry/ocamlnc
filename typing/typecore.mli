@@ -76,6 +76,7 @@ type error =
   | Apply_wrong_label of label * type_expr
   | Label_multiply_defined of Longident.t
   | Label_missing of string list
+  | Label_unexpected of string list
   | Label_not_mutable of Longident.t
   | Incomplete_format of string
   | Bad_conversion of string * int * char
@@ -103,6 +104,8 @@ type error =
   | Not_a_packed_module of type_expr
   | Recursive_local_constraint of (type_expr * type_expr) list
   | Unexpected_existential
+  | Label_cannot_be_qualified of Longident.t
+  | Record_expected
 
 exception Error of Location.t * error
 

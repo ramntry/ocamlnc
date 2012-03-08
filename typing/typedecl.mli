@@ -72,6 +72,7 @@ type error =
   | Bad_fixed_type of string
   | Unbound_type_var_exc of type_expr * type_expr
   | Varying_anonymous
+  | Polymorphic_field_not_supported
 
 exception Error of Location.t * error
 
