@@ -2754,7 +2754,6 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
     | Targ_tuple _, Some se -> [se]
 
     | Targ_record labs, Some {pexp_desc = Pexp_record (fields, None)} ->
-        (* TODO: deal with overidding *)
         let default missing = raise(Error(loc, Label_missing missing)) in
         align_record_constructor default loc labs fields
     | Targ_record labs, Some {pexp_desc = Pexp_record (fields, Some ({pexp_desc = Pexp_ident _} as sexp0))} ->
@@ -2763,7 +2762,12 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
           mkexp (Pexp_field (sexp0, Longident.Lident s))
         in
         align_record_constructor default loc labs fields
-
+    | Targ_record labs, Some ({pexp_desc = Pexp_ident _} as sexp0) ->
+        (* do we want to enforce that sexp0 has the proper type? *)
+        let default missing s =
+          mkexp (Pexp_field (sexp0, Longident.Lident s))
+        in
+        align_record_constructor default loc labs []
     | Targ_record _, _ ->
         raise(Error(loc, Record_expected))
   in
