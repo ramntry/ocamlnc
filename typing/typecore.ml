@@ -107,6 +107,7 @@ let rp node =
 ;;
 
 let mkpat d = { ppat_desc = d; ppat_loc = Location.none }
+let mkexp d = { pexp_desc = d; pexp_loc = Location.none }
 
 (* Upper approximation of free identifiers on the parse tree *)
 
@@ -629,7 +630,7 @@ let align_record_constructor default loc labs fields =
   List.map
     (fun (s, _, _) ->
       try Hashtbl.find exprs s
-      with Not_found -> Lazy.force default
+      with Not_found -> Lazy.force default s
     )
     labs
 
@@ -766,7 +767,7 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
             let default missing =
               if closed = Closed then
                 Location.prerr_warning loc (Warnings.Non_closed_record_pattern (String.concat ", " missing));
-              mkpat Ppat_any
+              (fun _ -> mkpat Ppat_any)
             in
             align_record_constructor default loc labs fields
         | Targ_record _, _ ->
@@ -2746,6 +2747,13 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
         (* TODO: deal with overidding *)
         let default missing = raise(Error(loc, Label_missing missing)) in
         align_record_constructor default loc labs fields
+    | Targ_record labs, Some {pexp_desc = Pexp_record (fields, Some ({pexp_desc = Pexp_ident _} as sexp0))} ->
+        (* do we want to enforce that sexp0 has the proper type? *)
+        let default missing s =
+          mkexp (Pexp_field (sexp0, Longident.Lident s))
+        in
+        align_record_constructor default loc labs fields
+
     | Targ_record _, _ ->
         raise(Error(loc, Record_expected))
   in

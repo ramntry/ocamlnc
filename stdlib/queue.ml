@@ -21,10 +21,9 @@ exception Empty
    cyclic lists, so as to eliminate the [Nil] case and the sum
    type. *)
 
-type 'a cell = {
-    content: 'a;
-    mutable next: 'a cell
-  }
+type 'a cell =
+  | Cons of {content: 'a; mutable next: 'a cell}
+  | Nil
 
 (* A queue is a reference to either nothing or some cell of a cyclic
    list. By convention, that cell is to be viewed as the last cell in
@@ -46,49 +45,49 @@ type 'a t = {
 
 let create () = {
   length = 0;
-  tail = Obj.magic None
+  tail = Nil;
 }
 
 let clear q =
   q.length <- 0;
-  q.tail <- Obj.magic None
+  q.tail <- Nil
 
 let add x q =
-  if q.length = 0 then
-    let rec cell = {
-      content = x;
-      next = cell
-    } in
-    q.length <- 1;
-    q.tail <- cell
-  else
-    let tail = q.tail in
-    let head = tail.next in
-    let cell = {
-      content = x;
-      next = head
-    } in
-    q.length <- q.length + 1;
-    tail.next <- cell;
-    q.tail <- cell
+  match q.tail with
+  | Nil ->
+      let rec cell =
+        Cons
+          {
+           content = x;
+           next = cell
+          }
+      in
+      q.length <- 1;
+      q.tail <- cell
+  | Cons cons ->
+      let head = cons.next in
+      let cell = Cons {content = x; next = head} in
+      q.length <- q.length + 1;
+      cons.next <- cell;
+      q.tail <- cell
 
 let push =
   add
 
 let peek q =
-  if q.length = 0 then
-    raise Empty
-  else
-    q.tail.next.content
+  match q.tail with
+  | Cons {next = Cons{content}} -> content
+  | _ -> raise Empty
 
 let top =
   peek
 
 let take q =
-  if q.length = 0 then raise Empty;
-  q.length <- q.length - 1;
-  let tail = q.tail in
-  let head = tail.next in
+  match q.tail with
+  | Nil -> raise Empty
+  | Cons cons ->
+      q.length <- q.length - 1;
+      let head = tail.next in
   if head == tail then
     q.tail <- Obj.magic None
   else
