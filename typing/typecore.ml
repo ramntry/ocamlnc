@@ -730,7 +730,27 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
          correct head *)
       if constr.cstr_generalized then
         unify_head_only loc !env expected_ty constr;
-      let sargs =
+      let record_alias_postprocess name loc =
+        let post = !postprocess in
+        postprocess :=
+          (fun q ->
+            let q = post q in
+            begin_def ();
+            let ty_var = build_as_type !env q in
+            end_def ();
+            generalize ty_var;
+            let bind_cargs = Longident.last lid in
+            let id = enter_variable ~bind_cargs loc name ty_var in
+            rp
+              {
+               pat_desc = Tpat_alias(q, id);
+               pat_loc = loc;
+               pat_type = q.pat_type;
+               pat_env = !env;
+              }
+          )
+      in
+      let rec prepare_arg sarg =
         match constr.cstr_args, sarg with
         | Targ_tuple _, None -> []
         | Targ_tuple _, Some {ppat_desc = Ppat_tuple spl} when explicit_arity -> spl
@@ -742,25 +762,14 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
             replicate_list sp constr.cstr_arity
         | Targ_tuple _, Some sp -> [sp]
 
+        | Targ_record _, Some {ppat_desc = Ppat_alias (sp, name); ppat_loc = loc} ->
+            let l = prepare_arg (Some sp) in
+            record_alias_postprocess name loc;
+            l
         | Targ_record _, Some {ppat_desc = Ppat_var name; ppat_loc = loc} ->
-            postprocess :=
-              (fun q ->
-                begin_def ();
-                let ty_var = build_as_type !env q in
-                end_def ();
-                generalize ty_var;
-                let bind_cargs = Longident.last lid in
-                let id = enter_variable ~bind_cargs loc name ty_var in
-                rp
-                  {
-                   pat_desc = Tpat_alias(q, id);
-                   pat_loc = loc;
-                   pat_type = q.pat_type;
-                   pat_env = !env;
-                  }
-              );
-            replicate_list {ppat_desc = Ppat_any; ppat_loc = loc}
-              constr.cstr_arity;
+            let l = prepare_arg (Some (mkpat Ppat_any)) in
+            record_alias_postprocess name loc;
+            l
         | Targ_record _, Some ({ppat_desc = Ppat_any} as sp) ->
             replicate_list sp constr.cstr_arity
         | Targ_record labs, Some {ppat_desc = Ppat_record (fields, closed)} ->
@@ -773,6 +782,7 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
         | Targ_record _, _ ->
             raise(Error(loc, Record_expected))
       in
+      let sargs = prepare_arg sarg in
       if List.length sargs <> constr.cstr_arity then
         raise(Error(loc, Constructor_arity_mismatch (lid,
                                      constr.cstr_arity, List.length sargs)));
