@@ -410,6 +410,7 @@ let rec read_args xs r = match xs,r with
 
 let do_set_args erase_mutable q r = match q with
 | {pat_desc = Tpat_tuple omegas} ->
+    (* XXX : probably needs to do something special with mutable fields *)
     let args,rest = read_args omegas r in
     make_pat (Tpat_tuple args) q.pat_type q.pat_env::rest
 | {pat_desc = Tpat_record omegas} ->
