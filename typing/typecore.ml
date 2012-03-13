@@ -227,12 +227,12 @@ let type_option ty =
 
 let option_none ty loc =
   let cnone = Env.lookup_constructor (Longident.Lident "None") Env.initial in
-  { exp_desc = Texp_construct(cnone, []);
+  { exp_desc = Texp_construct(cnone, [], Immutable);
     exp_type = ty; exp_loc = loc; exp_env = Env.initial }
 
 let option_some texp =
   let csome = Env.lookup_constructor (Longident.Lident "Some") Env.initial in
-  { exp_desc = Texp_construct(csome, [texp]); exp_loc = texp.exp_loc;
+  { exp_desc = Texp_construct(csome, [texp], Immutable); exp_loc = texp.exp_loc;
     exp_type = type_option texp.exp_type; exp_env = texp.exp_env }
 
 let extract_option_type env ty =
@@ -1078,8 +1078,8 @@ let rec is_nonexpansive exp =
       is_nonexpansive e && List.for_all is_nonexpansive_opt (List.map fst el)
   | Texp_tuple el ->
       List.for_all is_nonexpansive el
-  | Texp_construct(_, el) ->
-      List.for_all is_nonexpansive el
+  | Texp_construct(_, el, mut) ->
+      mut = Immutable && List.for_all is_nonexpansive el
   | Texp_variant(_, arg) -> is_nonexpansive_opt arg
   | Texp_record(lbl_exp_list, opt_init_exp) ->
       List.for_all
@@ -2771,6 +2771,11 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
     | Targ_record _, _ ->
         raise(Error(loc, Record_expected))
   in
+  let mut =
+    match constr.cstr_args  with
+    | Targ_record labs -> if List.exists (fun (_, mut, _) -> mut = Mutable) labs then Mutable else Immutable
+    | _ -> Immutable
+  in
   if List.length sargs <> constr.cstr_arity then
     raise(Error(loc, Constructor_arity_mismatch
                   (lid, constr.cstr_arity, List.length sargs)));
@@ -2780,7 +2785,7 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
   let ty_args = cargs_types ty_args in
   let texp =
     re {
-      exp_desc = Texp_construct(constr, []);
+      exp_desc = Texp_construct(constr, [], mut);
       exp_loc = loc;
       exp_type = ty_res;
       exp_env = env } in
@@ -2804,7 +2809,7 @@ and type_construct env loc lid sarg explicit_arity ty_expected =
       (List.combine ty_args ty_args0) in
   if constr.cstr_private = Private then
     raise(Error(loc, Private_type ty_res));
-  { texp with exp_desc = Texp_construct(constr, args)}
+  { texp with exp_desc = Texp_construct(constr, args, mut)}
 
 (* Typing of statements (expressions whose values are discarded) *)
 

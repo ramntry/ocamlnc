@@ -294,10 +294,10 @@ let transl_prim loc prim args =
          simplify_constant_constructor) =
       Hashtbl.find comparisons_table prim_name in
     begin match args with
-      [arg1; {exp_desc = Texp_construct({cstr_tag = Cstr_constant _}, _)}]
+      [arg1; {exp_desc = Texp_construct({cstr_tag = Cstr_constant _}, _, _)}]
       when simplify_constant_constructor ->
         intcomp
-    | [{exp_desc = Texp_construct({cstr_tag = Cstr_constant _}, _)}; arg2]
+    | [{exp_desc = Texp_construct({cstr_tag = Cstr_constant _}, _, _)}; arg2]
       when simplify_constant_constructor ->
         intcomp
     | [arg1; {exp_desc = Texp_variant(_, None)}]
@@ -657,7 +657,7 @@ and transl_exp0 e =
       with Not_constant ->
         Lprim(Pmakeblock(0, Immutable), ll)
       end
-  | Texp_construct(cstr, args) ->
+  | Texp_construct(cstr, args, mut) ->
       let ll = transl_list args in
       begin match cstr.cstr_tag with
         Cstr_constant n ->
@@ -666,10 +666,10 @@ and transl_exp0 e =
           begin try
             Lconst(Const_block(n, List.map extract_constant ll))
           with Not_constant ->
-            Lprim(Pmakeblock(n, Immutable), ll)
+            Lprim(Pmakeblock(n, mut), ll)
           end
       | Cstr_exception (path, _) ->
-          Lprim(Pmakeblock(0, Immutable), transl_path path :: ll)
+          Lprim(Pmakeblock(0, mut), transl_path path :: ll)
       end
   | Texp_variant(l, arg) ->
       let tag = Btype.hash_variant l in
@@ -788,7 +788,7 @@ and transl_exp0 e =
           ( Const_int _ | Const_char _ | Const_string _
           | Const_int32 _ | Const_int64 _ | Const_nativeint _ )
       | Texp_function(_, _)
-      | Texp_construct ({cstr_arity = 0}, _)
+      | Texp_construct ({cstr_arity = 0}, _, _)
         -> transl_exp e
       | Texp_constant(Const_float _) ->
           Lprim(Pmakeblock(Obj.forward_tag, Immutable), [transl_exp e])

@@ -772,7 +772,7 @@ and search_pos_expr ~pos exp =
         search_pos_expr exp ~pos
       end
   | Texp_tuple l -> List.iter l ~f:(search_pos_expr ~pos)
-  | Texp_construct (_, l) -> List.iter l ~f:(search_pos_expr ~pos)
+  | Texp_construct (_, l, _) -> List.iter l ~f:(search_pos_expr ~pos)
   | Texp_variant (_, None) -> ()
   | Texp_variant (_, Some exp) -> search_pos_expr exp ~pos
   | Texp_record (l, opt) ->
