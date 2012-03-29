@@ -231,14 +231,18 @@ let rec unbox_float = function
   | Cvar id as c ->
       unboxed_ids := IdentSet.add id !unboxed_ids;
       Cop(Cload Double_u, [c])
-  | Cconst_symbol lbl ->
-      let (_, _, cst) =
-        try List.find (fun (l, _, _) -> l = lbl) (Compilenv.structured_constants ())
-        with Not_found -> assert false
-      in
-      begin match cst with
-      | Const_base(Const_float f) -> Cconst_float f
-      | _ -> assert false
+  | Cconst_symbol lbl as c ->
+      begin try
+        let (_, _, cst) =
+          List.find (fun (l, _, _) -> l = lbl)
+            (Compilenv.structured_constants ())
+        in
+        match cst with
+        | Const_base(Const_float f) -> Cconst_float f
+        | _ -> assert false
+      with Not_found ->
+        (* This can happen with global float symbols in inlined functions. *)
+        Cop(Cload Double_u, [c])
       end
   | c -> Cop(Cload Double_u, [c])
 
@@ -1650,7 +1654,7 @@ let transl_with_unboxing name params body =
     in
     check body;
     let assigned = !assigned and need_boxed = !need_boxed in
-(*
+
     Printf.printf "Float variables in function %s:\n%!" name;
     IdentSet.iter
       (fun id ->
@@ -1659,7 +1663,7 @@ let transl_with_unboxing name params body =
         if IdentSet.mem id need_boxed then Printf.printf " (need_boxed)";
         Printf.printf "\n%!"
       ) ids;
-*)
+
     let unboxed_id_tbl = ref Ident.empty in
     let create_unboxed_id id =
       let unboxed_id = Ident.create (Ident.name id ^ "_unboxed") in
@@ -1740,10 +1744,8 @@ let transl_with_unboxing name params body =
         let body = subst body in
         List.fold_left
           (fun body id ->
-            if IdentSet.mem id ids then
-              Clet(get_unboxed_id id, Cop(Cload Double_u, [Cvar id]), body)
-            else
-              body
+            if IdentSet.mem id ids then do_unbox id (get_unboxed_id id) body
+            else body
           )
           body params
       end
