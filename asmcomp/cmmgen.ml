@@ -229,7 +229,9 @@ let rec unbox_float = function
   | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_float e1, unbox_float e2)
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float e1, id, unbox_float e2)
   | Cvar id as c ->
-      unboxed_ids := IdentSet.add id !unboxed_ids;
+      (* lzarg identifier introducing by Matching.inline_lazy_force_switch *)
+      if Ident.name id <> "lzarg" then
+        unboxed_ids := IdentSet.add id !unboxed_ids;
       Cop(Cload Double_u, [c])
   | Cconst_symbol lbl as c ->
       begin try
