@@ -1613,7 +1613,6 @@ let transl_with_unboxing name params body =
   let rec loop body =
     if IdentSet.is_empty !unboxed_ids then body
     else let ids = !unboxed_ids in
-(*    Printf.printf "unboxing function [%s]\n%!" name; *)
     unboxed_ids := IdentSet.empty;
     (* Traverse the body to find out, for each id:
        - whether it is assigned;
@@ -1652,7 +1651,7 @@ let transl_with_unboxing name params body =
     check body;
     let assigned = !assigned and need_boxed = !need_boxed in
 (*
-    Printf.printf "Candidates:\n%!";
+    Printf.printf "Float variables in function %s:\n%!" name;
     IdentSet.iter
       (fun id ->
         Printf.printf "Ident: %s" (Ident.unique_name id);
@@ -1672,6 +1671,9 @@ let transl_with_unboxing name params body =
       with Not_found ->
         fatal_error (Printf.sprintf "Cannot find unboxed id for %s" (Ident.unique_name id))
     in
+    let do_unbox id unboxed_id body =
+      Clet(unboxed_id, Cop(Cload Double_u, [Cvar id]), body)
+    in
     let rec subst = function
       | Cvar id when IdentSet.mem id ids && IdentSet.mem id assigned ->
           let unboxed_id = get_unboxed_id id in
@@ -1687,7 +1689,7 @@ let transl_with_unboxing name params body =
             let unboxed_id = create_unboxed_id id in
             let body = subst body in
             if IdentSet.mem id need_boxed then
-              Clet(id, arg, Clet(unboxed_id, Cop(Cload Double_u, [Cvar id]), body))
+              Clet(id, arg, do_unbox id unboxed_id body)
             else
               Clet(unboxed_id, unbox_float arg, body)
           else
@@ -1701,7 +1703,7 @@ let transl_with_unboxing name params body =
       | Ctuple argv -> Ctuple(List.map subst argv)
       | (Cop(Cload _, [Cvar id]) | Cop(Cload _, [Cop(Cadda, [Cvar id; _])])) as e ->
           if IdentSet.mem id ids then
-            Cvar (get_unboxed_id id )
+            Cvar (get_unboxed_id id)
           else
             e
       | Cop(op, argv) -> Cop(op, List.map subst argv)
@@ -1710,8 +1712,20 @@ let transl_with_unboxing name params body =
       | Cswitch(arg, index, cases) ->
           Cswitch(subst arg, index, Array.map subst cases)
       | Cloop e -> Cloop(subst e)
-      | Ccatch(nfail, ids, e1, e2) -> Ccatch(nfail, ids, subst e1, subst e2)
+      | Ccatch(nfail, bound_ids, body, handler) ->
+          let body = subst body in
+          let rec loop = function
+            | [] -> subst handler
+            | id :: rest when IdentSet.mem id ids ->
+                let unboxed_id = create_unboxed_id id in
+                do_unbox id unboxed_id (loop rest)
+            | id :: rest ->
+                loop rest
+          in
+          Ccatch(nfail, bound_ids, body, loop bound_ids)
       | Cexit (nfail, el) -> Cexit (nfail, List.map subst el)
+            (* TODO: avoid boxing of exit-arguments if the boxed
+               version is not needed *)
       | Ctrywith(e1, id, e2) -> Ctrywith(subst e1, id, subst e2)
       | (Cvar _ | Cconst_natpointer _ |Cconst_pointer _ |Cconst_symbol _ |Cconst_float _ | Cconst_natint _ |Cconst_int _) as e -> e
     in
