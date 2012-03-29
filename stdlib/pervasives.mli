@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -229,7 +229,7 @@ external ( asr ) : int -> int -> int = "%asrint"
 
 (** {6 Floating-point arithmetic}
 
-   Caml's floating-point numbers follow the
+   OCaml's floating-point numbers follow the
    IEEE 754 standard, using double precision (64 bits) numbers.
    Floating-point operations never raise an exception on overflow,
    underflow, division by zero, etc.  Instead, special IEEE numbers
@@ -310,9 +310,17 @@ external atan : float -> float = "caml_atan_float" "atan" "float"
     Result is in radians and is between [-pi/2] and [pi/2]. *)
 
 external atan2 : float -> float -> float = "caml_atan2_float" "atan2" "float"
-(** [atan x y] returns the arc tangent of [y /. x].  The signs of [x]
+(** [atan2 y x] returns the arc tangent of [y /. x].  The signs of [x]
     and [y] are used to determine the quadrant of the result.
     Result is in radians and is between [-pi] and [pi]. *)
+
+external hypot : float -> float -> float
+               = "caml_hypot_float" "caml_hypot" "float"
+(** [hypot x y] returns [sqrt(x *. x + y *. y)], that is, the length
+  of the hypotenuse of a right-angled triangle with sides of length
+  [x] and [y], or, equivalently, the distance of the point [(x,y)]
+  to origin.
+  @since 4.00.0  *)
 
 external cosh : float -> float = "caml_cosh_float" "cosh" "float"
 (** Hyperbolic cosine.  Argument is in radians. *)
@@ -336,6 +344,14 @@ external floor : float -> float = "caml_floor_float" "floor" "float"
 
 external abs_float : float -> float = "%absfloat"
 (** [abs_float f] returns the absolute value of [f]. *)
+
+external copysign : float -> float -> float
+                  = "caml_copysign_float" "caml_copysign" "float"
+(** [copysign x y] returns a float whose absolute value is that of [x]
+  and whose sign is that of [y].  If [x] is [nan], returns [nan].
+  If [y] is [nan], returns either [x] or [-. x], but it is not
+  specified which.
+  @since 4.00.0  *)
 
 external mod_float : float -> float -> float = "caml_fmod_float" "fmod" "float"
 (** [mod_float a b] returns the remainder of [a] with respect to
@@ -445,7 +461,9 @@ external ignore : 'a -> unit = "%ignore"
 (** {6 String conversion functions} *)
 
 val string_of_bool : bool -> string
-(** Return the string representation of a boolean. *)
+(** Return the string representation of a boolean. As the returned values
+   may be shared, the user should not modify them directly.
+*)
 
 val bool_of_string : string -> bool
 (** Convert the given string to a boolean.
@@ -505,7 +523,7 @@ val stdout : out_channel
 (** The standard output for the process. *)
 
 val stderr : out_channel
-(** The standard error ouput for the process. *)
+(** The standard error output for the process. *)
 
 
 (** {7 Output functions on standard output} *)
@@ -642,7 +660,7 @@ val output_binary_int : out_channel -> int -> unit
    The given integer is taken modulo 2{^32}.
    The only reliable way to read it back is through the
    {!Pervasives.input_binary_int} function. The format is compatible across
-   all machines for a given version of Objective Caml. *)
+   all machines for a given version of OCaml. *)
 
 val output_value : out_channel -> 'a -> unit
 (** Write the representation of a structured value of any type
@@ -855,12 +873,17 @@ external decr : int ref -> unit = "%decr"
 (** Format strings have a general and highly polymorphic type
     [('a, 'b, 'c, 'd, 'e, 'f) format6]. Type [format6] is built in.
     The two simplified types, [format] and [format4] below are
-    included for backward compatibility with earlier releases of Objective
-    Caml.
+    included for backward compatibility with earlier releases of OCaml.
     ['a] is the type of the parameters of the format,
-    ['c] is the result type for the "printf"-style function,
-    and ['b] is the type of the first argument given to
-    [%a] and [%t] printing functions. *)
+    ['b] is the type of the first argument given to
+         [%a] and [%t] printing functions,
+    ['c] is the type of the result of the [%a] and [%t] functions, and
+         also the type of the argument transmitted to the first argument
+         of [kprintf]-style functions,
+    ['d] is the result type for the [scanf]-style functions,
+    ['e] is the type of the receiver function for the [scanf]-style functions,
+    ['f] is the result type for the [printf]-style function.
+ *)
 type ('a, 'b, 'c, 'd) format4 = ('a, 'b, 'c, 'c, 'c, 'd) format6
 
 type ('a, 'b, 'c) format = ('a, 'b, 'c, 'c) format4
@@ -888,7 +911,7 @@ val exit : int -> 'a
 (** Terminate the process, returning the given status code
    to the operating system: usually 0 to indicate no errors,
    and a small positive integer to indicate failure.
-   All open output channels are flushed with flush_all.
+   All open output channels are flushed with [flush_all].
    An implicit [exit 0] is performed each time a program
    terminates normally.  An implicit [exit 2] is performed if the program
    terminates early because of an uncaught exception. *)
@@ -903,8 +926,7 @@ val at_exit : (unit -> unit) -> unit
 
 (**/**)
 
-
-(** {6 For system use only, not for the casual user} *)
+(* The following is for system use only. Do not call directly. *)
 
 val valid_float_lexem : string -> string
 

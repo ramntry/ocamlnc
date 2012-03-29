@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*         Xavier Leroy, projet Cristal, INRIA Rocquencourt            *)
 (*                                                                     *)
@@ -12,6 +12,10 @@
 (***********************************************************************)
 
 (* $Id$ *)
+
+(** Run-time support for recursive modules.
+    All functions in this module are for system use only, not for the
+    casual user. *)
 
 type shape =
   | Function

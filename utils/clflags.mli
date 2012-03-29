@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -36,6 +36,7 @@ val use_vmthreads : bool ref
 val noassert : bool ref
 val verbose : bool ref
 val noprompt : bool ref
+val nopromptcont : bool ref
 val init_file : string option ref
 val use_prims : string ref
 val use_runtime : string ref
@@ -50,9 +51,11 @@ val no_auto_link : bool ref
 val dllpaths : string list ref
 val make_package : bool ref
 val for_package : string option ref
+val error_size : int ref
 val dump_parsetree : bool ref
 val dump_rawlambda : bool ref
 val dump_lambda : bool ref
+val dump_clambda : bool ref
 val dump_instr : bool ref
 val keep_asm_file : bool ref
 val optimize_for_speed : bool ref
@@ -76,3 +79,4 @@ val std_include_flag : string -> string
 val std_include_dir : unit -> string list
 val shared : bool ref
 val dlcode : bool ref
+val runtime_variant : string ref

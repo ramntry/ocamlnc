@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -51,9 +51,13 @@ val need_send_fun: int -> unit
         (* Record the need of a currying (resp. application,
            message sending) function with the given arity *)
 
+val new_const_symbol : unit -> string
+val new_const_label : unit -> int
+val new_structured_constant : Lambda.structured_constant -> bool -> string
+val structured_constants : unit -> (string * bool * Lambda.structured_constant) list
 
 val read_unit_info: string -> unit_infos * Digest.t
-        (* Read infos and CRC from a [.cmx] file. *)
+        (* Read infos and MD5 from a [.cmx] file. *)
 val write_unit_info: unit_infos -> string -> unit
         (* Save the given infos in the given file *)
 val save_unit_info: string -> unit

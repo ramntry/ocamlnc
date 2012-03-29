@@ -1,3 +1,20 @@
+(****************************************************************************)
+(*                                                                          *)
+(*                                   OCaml                                  *)
+(*                                                                          *)
+(*                            INRIA Rocquencourt                            *)
+(*                                                                          *)
+(*  Copyright  2007   Institut National de Recherche  en  Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed under   *)
+(*  the terms of the GNU Library General Public License, with the special   *)
+(*  exception on linking described in LICENSE at the top of the OCaml       *)
+(*  source tree.                                                            *)
+(*                                                                          *)
+(****************************************************************************)
+
+(* Note: when you modify these types you must increment
+   ast magic numbers defined in Camlp4_config.ml. *)
+
   type loc = Loc.t
    and meta_bool =
     [ BTrue
@@ -61,9 +78,12 @@
     | TyObj of loc and ctyp and row_var_flag
     | TyOlb of loc and string and ctyp (* ?s:t *)
     | TyPol of loc and ctyp and ctyp (* ! t . t *) (* ! 'a . list 'a -> 'a *)
+    | TyTypePol of loc and ctyp and ctyp (* type t . t *) (* type a . list a -> a *)
     | TyQuo of loc and string (* 's *)
     | TyQuP of loc and string (* +'s *)
     | TyQuM of loc and string (* -'s *)
+    | TyAnP of loc (* +_ *)
+    | TyAnM of loc (* -_ *)
     | TyVrn of loc and string (* `s *)
     | TyRec of loc and ctyp (* { t } *) (* { foo : int ; bar : mutable string } *)
     | TyCol of loc and ctyp and ctyp (* t : t *)
@@ -198,6 +218,8 @@
     | MtSig of loc and sig_item
       (* mt with wc *)
     | MtWit of loc and module_type and with_constr
+      (* module type of m *)
+    | MtOf of loc and module_expr
     | MtAnt of loc and string (* $s$ *) ]
   and sig_item =
     [ SgNil of loc

@@ -1,6 +1,6 @@
 ;(***********************************************************************)
 ;(*                                                                     *)
-;(*                           Objective Caml                            *)
+;(*                                OCaml                                *)
 ;(*                                                                     *)
 ;(*                   Xavier Leroy and Jacques Garrigue                 *)
 ;(*                                                                     *)
@@ -12,7 +12,7 @@
 
 ;(* $Id$ *)
 
-;;; inf-caml.el --- run the Caml toplevel in an Emacs buffer
+;;; inf-caml.el --- run the OCaml toplevel in an Emacs buffer
 
 ;; Xavier Leroy, july 1993.
 
@@ -37,14 +37,14 @@
   (setq inferior-caml-mode-map
         (copy-keymap comint-mode-map)))
 
-;; Augment Caml mode, so you can process Caml code in the source files.
+;; Augment Caml mode, so you can process OCaml code in the source files.
 
 (defvar inferior-caml-program "ocaml"
-  "*Program name for invoking an inferior Caml from Emacs.")
+  "*Program name for invoking an inferior OCaml from Emacs.")
 
 (defun inferior-caml-mode ()
-  "Major mode for interacting with an inferior Caml process.
-Runs a Caml toplevel as a subprocess of Emacs, with I/O through an
+  "Major mode for interacting with an inferior OCaml process.
+Runs an OCaml toplevel as a subprocess of Emacs, with I/O through an
 Emacs buffer. A history of input phrases is maintained. Phrases can
 be sent from another buffer in Caml mode.
 
@@ -95,7 +95,7 @@ be sent from another buffer in Caml mode.
 
 (defun inferior-caml-mode-output-hook ()
   (set-variable 'comint-output-filter-functions
-        (list (function inferior-caml-signal-output)) 
+        (list (function inferior-caml-signal-output))
         t))
 (add-hook 'inferior-caml-mode-hooks 'inferior-caml-mode-output-hook)
 
@@ -106,7 +106,7 @@ be sent from another buffer in Caml mode.
     (if (not cmd)
         (if (comint-check-proc inferior-caml-buffer-name)
             (setq cmd inferior-caml-program)
-          (setq cmd (read-from-minibuffer "Caml toplevel to run: "
+          (setq cmd (read-from-minibuffer "OCaml toplevel to run: "
                                           inferior-caml-program))))
     (setq inferior-caml-program cmd)
     (let ((cmdlist (inferior-caml-args-to-list cmd))
@@ -124,11 +124,11 @@ be sent from another buffer in Caml mode.
 ;;  caml-run-process-when-needed
 
 (defun run-caml (&optional cmd)
-  "Run an inferior Caml process.
+  "Run an inferior OCaml process.
 Input and output via buffer `*inferior-caml*'."
   (interactive
    (list (if (not (comint-check-proc inferior-caml-buffer-name))
-             (read-from-minibuffer "Caml toplevel to run: "
+             (read-from-minibuffer "OCaml toplevel to run: "
                                    inferior-caml-program))))
   (caml-run-process-if-needed cmd)
   (switch-to-buffer-other-window inferior-caml-buffer-name))
@@ -163,7 +163,7 @@ Input and output via buffer `*inferior-caml*'."
       (setq count (+ count 1)))
     (if  (equal (buffer-name (current-buffer))
                 inferior-caml-buffer-name)
-        (end-of-buffer))
+        (goto-char (point-max)))
     (while
         (> count 0)
       (previous-multiframe-window)
@@ -174,7 +174,7 @@ Input and output via buffer `*inferior-caml*'."
 ;; patched by Didier to move cursor after evaluation
 
 (defun inferior-caml-eval-region (start end)
-  "Send the current region to the inferior Caml process."
+  "Send the current region to the inferior OCaml process."
   (interactive "r")
   (save-excursion (caml-run-process-if-needed))
   (save-excursion
@@ -201,7 +201,7 @@ Input and output via buffer `*inferior-caml*'."
                   (re-search-backward
                    (concat comint-prompt-regexp
                            "[ \t]*Characters[ \t]+\\([0-9]+\\)-[0-9]+:$"))
-                  (string-to-int (match-string 1))))))
+                  (caml-string-to-int (match-string 1))))))
     (goto-char loc)))
 
 
@@ -265,8 +265,8 @@ should lies."
           (cond ((re-search-forward
                   " *Characters \\([01-9][01-9]*\\)-\\([1-9][01-9]*\\):\n[^W]"
                   (point-max) t)
-                 (setq beg (string-to-int (caml-match-string 1)))
-                 (setq end (string-to-int (caml-match-string 2)))
+                 (setq beg (caml-string-to-int (caml-match-string 1)))
+                 (setq end (caml-string-to-int (caml-match-string 2)))
                  (switch-to-buffer buf)
                  (goto-char orig)
                  (forward-byte end)
@@ -330,7 +330,7 @@ should lies."
                (beep) (if wait (read-event) (caml-sit-for 60)))
            (delete-overlay caml-error-overlay)))))
 
-;; wait some amount for ouput, that is, until inferior-caml-output is set
+;; wait some amount for output, that is, until inferior-caml-output is set
 ;; to true. Hence, interleaves sitting for shorts delays and checking the
 ;; flag. Give up after some time. Typing into the source buffer will cancel
 ;; waiting, i.e. may report 'No result yet'

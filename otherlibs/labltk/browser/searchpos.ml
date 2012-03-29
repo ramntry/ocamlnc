@@ -1,6 +1,6 @@
 (*************************************************************************)
 (*                                                                       *)
-(*                Objective Caml LablTk library                          *)
+(*                         OCaml LablTk library                          *)
 (*                                                                       *)
 (*            Jacques Garrigue, Kyoto University RIMS                    *)
 (*                                                                       *)
@@ -170,7 +170,7 @@ let search_pos_type_decl td ~pos ~env =
       Ptype_abstract -> ()
     | Ptype_variant dl ->
         List.iter dl
-          ~f:(fun (_, tl, _) -> List.iter tl ~f:(search_pos_type ~pos ~env))
+          ~f:(fun (_, tl, _, _) -> List.iter tl ~f:(search_pos_type ~pos ~env))
     | Ptype_record dl ->
         List.iter dl ~f:(fun (_, _, t, _) -> search_pos_type t ~pos ~env) in
     search_tkind td.ptype_kind;
@@ -397,6 +397,7 @@ let rec view_signature ?title ?path ?(env = !start_env) ?(detach=false) sign =
           match e with
             Syntaxerr.Unclosed(l,_,_,_) -> l
           | Syntaxerr.Applicative_path l -> l
+          | Syntaxerr.Variable_in_scope(l,_) -> l
           | Syntaxerr.Other l -> l
         in
         Jg_text.tag_and_see  tw ~start:(tpos l.loc_start.Lexing.pos_cnum)
@@ -495,7 +496,8 @@ and view_expr_type ?title ?path ?env ?(name="noname") t =
     | Some path -> parent_path path, ident_of_path path ~default:name
   in
   view_signature ~title ?path ?env
-    [Tsig_value (id, {val_type = t; val_kind = Val_reg})]
+    [Tsig_value (id, {val_type = t; val_kind = Val_reg;
+                      val_loc = Location.none})]
 
 and view_decl lid ~kind ~env =
   match kind with
@@ -692,13 +694,6 @@ and search_pos_class_structure ~pos cls =
       | Cf_val (_, _, Some exp, _) -> search_pos_expr exp ~pos
       | Cf_val _ -> ()
       | Cf_meth (_, exp) -> search_pos_expr exp ~pos
-      | Cf_let (_, pel, iel) ->
-          List.iter pel ~f:
-            begin fun (pat, exp) ->
-              search_pos_pat pat ~pos ~env:exp.exp_env;
-              search_pos_expr exp ~pos
-            end;
-          List.iter iel ~f:(fun (_,exp) -> search_pos_expr exp ~pos)
       | Cf_init exp -> search_pos_expr exp ~pos
     end
 

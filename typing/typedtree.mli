@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -23,7 +23,7 @@ type pattern =
   { pat_desc: pattern_desc;
     pat_loc: Location.t;
     pat_type: type_expr;
-    pat_env: Env.t }
+    mutable pat_env: Env.t }
 
 and pattern_desc =
     Tpat_any
@@ -112,8 +112,6 @@ and class_field =
   | Cf_val of string * Ident.t * expression option * bool
         (* None = virtual, true = override *)
   | Cf_meth of string * expression
-  | Cf_let of rec_flag * (pattern * expression) list *
-              (Ident.t * expression) list
   | Cf_init of expression
 
 (* Value expressions for the module language *)
@@ -163,6 +161,7 @@ val map_pattern_desc : (pattern -> pattern) -> pattern_desc -> pattern_desc
 
 val let_bound_idents: (pattern * expression) list -> Ident.t list
 val rev_let_bound_idents: (pattern * expression) list -> Ident.t list
+val pat_bound_idents: pattern -> Ident.t list
 
 (* Alpha conversion of patterns *)
 val alpha_pat : (Ident.t * Ident.t) list -> pattern -> pattern

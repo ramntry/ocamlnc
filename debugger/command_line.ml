@@ -1,9 +1,9 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*          Jerome Vouillon, projet Cristal, INRIA Rocquencourt        *)
-(*          Objective Caml port by John Malecki and Xavier Leroy       *)
+(*          OCaml port by John Malecki and Xavier Leroy                *)
 (*                                                                     *)
 (*  Copyright 1996 Institut National de Recherche en Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed    *)
@@ -230,6 +230,22 @@ let instr_shell ppf lexbuf =
   if (err != 0) then
     eprintf "Shell command %S failed with exit code %d\n%!" cmd err
 
+let instr_env ppf lexbuf =
+  let cmdarg = argument_list_eol argument lexbuf in
+  let cmdarg = string_trim (String.concat " " cmdarg) in
+  if cmdarg <> "" then
+    try
+      if (String.index cmdarg '=') > 0 then
+	Debugger_config.environment := cmdarg :: !Debugger_config.environment
+      else
+	eprintf "Environment variables should not have an empty name\n%!"
+    with Not_found ->
+      eprintf "Environment variables should have the \"name=value\" format\n%!"
+  else
+    List.iter
+      (printf "%s\n%!")
+      (List.rev !Debugger_config.environment)
+
 let instr_pwd ppf lexbuf =
   eol lexbuf;
   fprintf ppf "%s@." (Sys.getcwd ())
@@ -454,7 +470,7 @@ let instr_help ppf lexbuf =
           fprintf ppf "Ambiguous command \"%s\" : %a@." x pr_instrs l
       end
   | None ->
-      fprintf ppf "List of commands :%a@." pr_instrs !instruction_list
+      fprintf ppf "List of commands : %a@." pr_instrs !instruction_list
 
 (* Printing values *)
 
@@ -962,6 +978,9 @@ With no argument, reset the search path." };
      { instr_name = "shell"; instr_prio = false;
        instr_action = instr_shell; instr_repeat = true; instr_help =
 "Execute a given COMMAND thru the system shell." };
+     { instr_name = "environment"; instr_prio = false;
+       instr_action = instr_env; instr_repeat = false; instr_help =
+"environment variable to give to program being debugged when it is started." };
       (* Displacements *)
      { instr_name = "run"; instr_prio = true;
        instr_action = instr_run; instr_repeat = true; instr_help =
@@ -1008,10 +1027,10 @@ Argument N means do this N times (or till program stops for another reason)." };
      (* Breakpoints *)
      { instr_name = "break"; instr_prio = false;
        instr_action = instr_break; instr_repeat = false; instr_help =
-"Set breakpoint at specified line or function.\n\
-Syntax: break function-name\n\
-        break @ [module] linenum\n\
-        break @ [module] # characternum" };
+"Set breakpoint at specified line or function.\
+\nSyntax: break function-name\
+\n        break @ [module] linenum\
+\n        break @ [module] # characternum" };
      { instr_name = "delete"; instr_prio = false;
        instr_action = instr_delete; instr_repeat = false; instr_help =
 "delete some breakpoints.\n\

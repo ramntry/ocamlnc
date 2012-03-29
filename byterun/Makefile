@@ -1,6 +1,6 @@
 #########################################################################
 #                                                                       #
-#                            Objective Caml                             #
+#                                 OCaml                                 #
 #                                                                       #
 #            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
 #                                                                       #
@@ -53,16 +53,20 @@ install::
 clean::
 	rm -f libcamlrun_shared.so
 
-
 .SUFFIXES: .d.o .pic.o
 
 .c.d.o:
 	ln -s -f $*.c $*.d.c
 	$(CC) -c $(DFLAGS) $*.d.c
+	rm $*.d.c
 
 .c.pic.o:
 	ln -s -f $*.c $*.pic.c
 	$(CC) -c $(CFLAGS) $(SHAREDCCCOMPOPTS) $*.pic.c
+	rm $*.pic.c
+
+clean::
+	rm -f *.pic.c *.d.c
 
 depend : prims.c opnames.h jumptbl.h version.h
 	-gcc -MM $(BYTECCCOMPOPTS) *.c > .depend

@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*         Jerome Vouillon, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -142,15 +142,7 @@ let rec build_object_init cl_table obj params inh_init obj_init cl =
                    (inh_init, obj_init, has_init)
                | Cf_init _ ->
                    (inh_init, obj_init, true)
-               | Cf_let (rec_flag, defs, vals) ->
-                   (inh_init,
-                    Translcore.transl_let rec_flag defs
-                      (List.fold_right
-                         (fun (id, expr) rem ->
-                            lsequence (Lifused(id, set_inst_var obj id expr))
-                                      rem)
-                         vals obj_init),
-                    has_init))
+            )
             str.cl_field
             (inh_init, obj_init obj, false)
         in
@@ -292,11 +284,6 @@ let rec build_class_init cla cstr super inh_init cl_init msubst top cl =
                 (inh_init, cl_init,
                  Lvar (Meths.find name str.cl_meths) :: met_code @ methods,
                  values)
-            | Cf_let (rec_flag, defs, vals) ->
-                let vals =
-                  List.map (function (id, _) -> (Ident.name id, id)) vals
-                in
-                (inh_init, cl_init, methods, vals @ values)
             | Cf_init exp ->
                 (inh_init,
                  Lsequence(mkappl (oo_prim "add_initializer",
@@ -495,7 +482,7 @@ let rec builtin_meths self env env2 body =
         "var", [Lvar n]
     | Lprim(Pfield n, [Lvar e]) when Ident.same e env ->
         "env", [Lvar env2; Lconst(Const_pointer n)]
-    | Lsend(Self, met, Lvar s, []) when List.mem s self ->
+    | Lsend(Self, met, Lvar s, [], _) when List.mem s self ->
         "meth", [met]
     | _ -> raise Not_found
   in
@@ -510,15 +497,15 @@ let rec builtin_meths self env env2 body =
   | Lapply(f, [p; arg], _) when const_path f && const_path p ->
       let s, args = conv arg in
       ("app_const_"^s, f :: p :: args)
-  | Lsend(Self, Lvar n, Lvar s, [arg]) when List.mem s self ->
+  | Lsend(Self, Lvar n, Lvar s, [arg], _) when List.mem s self ->
       let s, args = conv arg in
       ("meth_app_"^s, Lvar n :: args)
-  | Lsend(Self, met, Lvar s, []) when List.mem s self ->
+  | Lsend(Self, met, Lvar s, [], _) when List.mem s self ->
       ("get_meth", [met])
-  | Lsend(Public, met, arg, []) ->
+  | Lsend(Public, met, arg, [], _) ->
       let s, args = conv arg in
       ("send_"^s, met :: args)
-  | Lsend(Cached, met, arg, [_;_]) ->
+  | Lsend(Cached, met, arg, [_;_], _) ->
       let s, args = conv arg in
       ("send_"^s, met :: args)
   | Lfunction (Curried, [x], body) ->

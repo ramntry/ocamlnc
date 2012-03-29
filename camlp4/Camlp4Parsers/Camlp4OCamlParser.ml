@@ -1,15 +1,15 @@
 open Camlp4;                                        (* -*- camlp4r -*- *)
 (****************************************************************************)
 (*                                                                          *)
-(*                              Objective Caml                              *)
+(*                                   OCaml                                  *)
 (*                                                                          *)
 (*                            INRIA Rocquencourt                            *)
 (*                                                                          *)
 (*  Copyright 2002-2006 Institut National de Recherche en Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed under   *)
 (*  the terms of the GNU Library General Public License, with the special   *)
-(*  exception on linking described in LICENSE at the top of the Objective   *)
-(*  Caml source tree.                                                       *)
+(*  exception on linking described in LICENSE at the top of the OCaml       *)
+(*  source tree.                                                            *)
 (*                                                                          *)
 (****************************************************************************)
 
@@ -72,6 +72,49 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
       match Stream.peek strm with
       [ Some (KEYWORD ("."|"("),_) -> raise Stream.Failure
       | _ -> () ]);
+
+  (* horrible hacks to be able to parse class_types *)
+
+  value test_ctyp_minusgreater =
+    Gram.Entry.of_parser "test_ctyp_minusgreater"
+      (fun strm ->
+        let rec skip_simple_ctyp n =
+          match stream_peek_nth n strm with
+          [ Some (KEYWORD "->") -> n
+          | Some (KEYWORD ("[" | "[<")) ->
+              skip_simple_ctyp (ignore_upto "]" (n + 1) + 1)
+          | Some (KEYWORD "(") -> skip_simple_ctyp (ignore_upto ")" (n + 1) + 1)
+          | Some
+              (KEYWORD
+                ("as" | "'" | ":" | "*" | "." | "#" | "<" | ">" | ".." | ";" |
+                "_" | "?")) ->
+              skip_simple_ctyp (n + 1)
+          | Some (LIDENT _ | UIDENT _) ->
+              skip_simple_ctyp (n + 1)
+          | Some _ | None -> raise Stream.Failure ]
+        and ignore_upto end_kwd n =
+          match stream_peek_nth n strm with
+          [ Some (KEYWORD prm) when prm = end_kwd -> n
+          | Some (KEYWORD ("[" | "[<")) ->
+              ignore_upto end_kwd (ignore_upto "]" (n + 1) + 1)
+          | Some (KEYWORD "(") -> ignore_upto end_kwd (ignore_upto ")" (n + 1) + 1)
+          | Some _ -> ignore_upto end_kwd (n + 1)
+          | None -> raise Stream.Failure ]
+        in
+        match Stream.peek strm with
+        [ Some ((KEYWORD "[" | LIDENT _ | UIDENT _), _) -> skip_simple_ctyp 1
+        | Some (KEYWORD "object", _) -> raise Stream.Failure
+        | _ -> 1 ])
+  ;
+
+  value lident_colon =	 
+     Gram.Entry.of_parser "lident_colon"	 
+       (fun strm ->	 
+         match Stream.npeek 2 strm with	 
+         [ [(LIDENT i, _); (KEYWORD ":", _)] ->	 
+             do { Stream.junk strm; Stream.junk strm; i }	 
+         | _ -> raise Stream.Failure ])	 
+   ;
 
   value rec is_ident_constr_call =
     fun
@@ -387,8 +430,8 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
       ] ]
     ;
     package_type_cstr:
-      [ [ "type"; i = a_LIDENT; "="; ty = ctyp ->
-            <:with_constr< type $lid:i$ = $ty$ >>
+      [ [ "type"; i = ident; "="; ty = ctyp ->
+            <:with_constr< type $id:i$ = $ty$ >>
       ] ]
     ;
     package_type_cstrs:
@@ -402,15 +445,15 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
         | t = ctyp -> t ] ]
     ;
     class_type_plus:
-      [ [ i = TRY [i = a_LIDENT; ":" -> i]; t = ctyp LEVEL "star"; "->"; ct = SELF ->
+      [ [ i = lident_colon; t = ctyp LEVEL "star"; "->"; ct = SELF ->
             <:class_type< [ ~ $i$ : $t$ ] -> $ct$ >>
         | "?"; i = a_LIDENT; ":"; t = ctyp LEVEL "star"; "->"; ct = SELF ->
             <:class_type< [ ? $i$ : $t$ ] -> $ct$ >>
         | i = OPTLABEL (* FIXME inline a_OPTLABEL *); t = ctyp LEVEL "star"; "->"; ct = SELF ->
             <:class_type< [ ? $i$ : $t$ ] -> $ct$ >>
-        | t = TRY [t = ctyp LEVEL "star"; "->" -> t]; ct = SELF ->
+        | test_ctyp_minusgreater; t = ctyp LEVEL "star"; "->"; ct = SELF ->
             <:class_type< [ $t$ ] -> $ct$ >>
-        | ct = TRY class_type -> ct ] ]
+        | ct = class_type -> ct ] ]
     ;
     class_type_longident_and_param:
       [ [ "["; t = comma_ctyp; "]"; i = class_type_longident ->
@@ -519,17 +562,35 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
         | t = type_parameter -> fun acc -> <:ctyp< $acc$ $t$ >>
       ] ]
     ;
+
+    optional_type_parameter:
+      [ [ `ANTIQUOT (""|"typ"|"anti" as n) s -> <:ctyp< $anti:mk_anti n s$ >>
+        | `QUOTATION x -> Quotation.expand _loc x Quotation.DynAst.ctyp_tag
+        | "+"; "_" -> Ast.TyAnP _loc 
+        | "+"; "'"; i = a_ident -> <:ctyp< +'$lid:i$ >>
+        | "-"; "_" -> Ast.TyAnM _loc
+        | "-"; "'"; i = a_ident -> <:ctyp< -'$lid:i$ >>
+        | "_" -> Ast.TyAny _loc
+        | "'"; i = a_ident -> <:ctyp< '$lid:i$ >>
+
+ ] ]
+    ;
+
     type_ident_and_parameters:
-      [ [ "("; tpl = LIST1 type_parameter SEP ","; ")"; i = a_LIDENT -> (i, tpl)
-        | t = type_parameter; i = a_LIDENT -> (i, [t])
+      [ [ "("; tpl = LIST1 optional_type_parameter SEP ","; ")"; i = a_LIDENT -> (i, tpl)
+        | t = optional_type_parameter; i = a_LIDENT -> (i, [t])
         | i = a_LIDENT -> (i, [])
       ] ]
     ;
     type_kind:
       [ [ "private"; tk = type_kind -> <:ctyp< private $tk$ >>
-        | t = TRY [OPT "|"; t = constructor_declarations;
-                   test_not_dot_nor_lparen -> t] ->
-            <:ctyp< [ $t$ ] >>
+        | (x, t) = TRY [x = OPT "|"; t = constructor_declarations;
+                        test_not_dot_nor_lparen -> (x, t)] ->
+            (* If there is no "|" and [t] is an antiquotation,
+               then it is not a sum type. *)
+            match (x, t) with
+            [ (None, Ast.TyAnt _) -> t
+            | _ -> <:ctyp< [ $t$ ] >> ]
         | t = TRY ctyp -> <:ctyp< $t$ >>
         | t = TRY ctyp; "="; "private"; tk = type_kind ->
             <:ctyp< $t$ == private $tk$ >>
@@ -539,6 +600,13 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
             <:ctyp< $t1$ == [ $t2$ ] >>
         | "{"; t = label_declaration_list; "}" ->
             <:ctyp< { $t$ } >> ] ]
+    ;
+    ctyp_quot:
+      [ [ "private"; t = ctyp_quot -> <:ctyp< private $t$ >>
+        | "|"; t = constructor_declarations -> <:ctyp< [ $t$ ] >>
+        | x = more_ctyp; "="; y = ctyp_quot -> <:ctyp< $x$ == $y$ >>
+        | "{"; t = label_declaration_list; "}" -> <:ctyp< { $t$ } >>
+      ] ]
     ;
     module_expr: LEVEL "apply"
       [ [ i = SELF; "("; j = SELF; ")" -> <:module_expr< $i$ $j$ >> ] ]
@@ -587,6 +655,8 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
             <:patt< ~ $i$ : ($lid:i$ : $t$) >>
         | i = a_OPTLABEL; j = a_LIDENT -> (* ?a:b <> ?a : b *)
             <:patt< ? $i$ : ($lid:j$) >>
+        | i = a_OPTLABEL; "_" ->
+            <:patt< ? $i$ : (_) >>
         | i = a_OPTLABEL; "("; p = patt; ")" ->
             <:patt< ? $i$ : ($p$) >>
         | i = a_OPTLABEL; "("; p = patt; "="; e = expr; ")" ->

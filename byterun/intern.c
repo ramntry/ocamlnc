@@ -1,6 +1,6 @@
 /***********************************************************************/
 /*                                                                     */
-/*                           Objective Caml                            */
+/*                                OCaml                                */
 /*                                                                     */
 /*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
 /*                                                                     */
@@ -18,12 +18,15 @@
 /* The interface of this file is "intext.h" */
 
 #include <string.h>
+#include <stdio.h>
 #include "alloc.h"
+#include "callback.h"
 #include "custom.h"
 #include "fail.h"
 #include "gc.h"
 #include "intext.h"
 #include "io.h"
+#include "md5.h"
 #include "memory.h"
 #include "mlvalues.h"
 #include "misc.h"
@@ -62,6 +65,14 @@ static header_t intern_header;
 static value intern_block;
 /* Point to the heap block allocated as destination block.
    Meaningful only if intern_extra_block is NULL. */
+
+static value * camlinternaloo_last_id = NULL;
+/* Pointer to a reference holding the last object id.
+   -1 means not available (CamlinternalOO not loaded). */
+
+static char * intern_resolve_code_pointer(unsigned char digest[16],
+                                          asize_t offset);
+static void intern_bad_code_pointer(unsigned char digest[16]) Noreturn;
 
 #define Sign_extend_shift ((sizeof(intnat) - 1) * 8)
 #define Sign_extend(x) (((intnat)(x) << Sign_extend_shift) >> Sign_extend_shift)
@@ -119,8 +130,9 @@ static void intern_rec(value *dest)
   value v, clos;
   asize_t ofs;
   header_t header;
-  char cksum[16];
+  unsigned char digest[16];
   struct custom_operations * ops;
+  char * codeptr;
 
  tailcall:
   code = read8u();
@@ -139,6 +151,22 @@ static void intern_rec(value *dest)
         dest = (value *) (intern_dest + 1);
         *intern_dest = Make_header(size, tag, intern_color);
         intern_dest += 1 + size;
+        /* For objects, we need to freshen the oid */
+        if (tag == Object_tag && camlinternaloo_last_id != (value*)-1) {
+          intern_rec(dest++);
+          intern_rec(dest++);
+          if (camlinternaloo_last_id == NULL)
+            camlinternaloo_last_id = caml_named_value("CamlinternalOO.last_id");
+          if (camlinternaloo_last_id == NULL)
+            camlinternaloo_last_id = (value*)-1;
+          else {
+            value id = Field(*camlinternaloo_last_id,0);
+            Field(dest,-1) = id;
+            Field(*camlinternaloo_last_id,0) = id + 2;
+          }
+          size -= 2;
+          if (size == 0) return;
+        }
         for(/*nothing*/; size > 1; size--, dest++)
           intern_rec(dest);
         goto tailcall;
@@ -288,12 +316,20 @@ static void intern_rec(value *dest)
         goto read_double_array;
       case CODE_CODEPOINTER:
         ofs = read32u();
-        readblock(cksum, 16);
-        if (memcmp(cksum, caml_code_checksum(), 16) != 0) {
-          intern_cleanup();
-          caml_failwith("input_value: code mismatch");
+        readblock(digest, 16);
+        codeptr = intern_resolve_code_pointer(digest, ofs);
+        if (codeptr != NULL) {
+          v = (value) codeptr;
+        } else {
+          value * function_placeholder =
+            caml_named_value ("Debugger.function_placeholder");
+          if (function_placeholder != NULL) {
+            v = *function_placeholder;
+          } else {
+            intern_cleanup();
+            intern_bad_code_pointer(digest);
+          }
         }
-        v = (value) (caml_code_area_start + ofs);
         break;
       case CODE_INFIXPOINTER:
         ofs = read32u();
@@ -328,6 +364,8 @@ static void intern_alloc(mlsize_t whsize, mlsize_t num_objects)
 {
   mlsize_t wosize;
 
+  if (camlinternaloo_last_id == (value*)-1)
+    camlinternaloo_last_id = NULL; /* Reset ignore flag */
   if (whsize == 0) {
     intern_obj_table = NULL;
     intern_extra_block = NULL;
@@ -551,39 +589,38 @@ CAMLprim value caml_marshal_data_size(value buff, value ofs)
   return Val_long(block_len);
 }
 
-/* Return an MD5 checksum of the code area */
+/* Resolution of code pointers */
 
-#ifdef NATIVE_CODE
-
-#include "md5.h"
-
-unsigned char * caml_code_checksum(void)
+static char * intern_resolve_code_pointer(unsigned char digest[16],
+                                          asize_t offset)
 {
-  static unsigned char checksum[16];
-  static int checksum_computed = 0;
-
-  if (! checksum_computed) {
-    struct MD5Context ctx;
-    caml_MD5Init(&ctx);
-    caml_MD5Update(&ctx,
-                   (unsigned char *) caml_code_area_start,
-                   caml_code_area_end - caml_code_area_start);
-    caml_MD5Final(checksum, &ctx);
-    checksum_computed = 1;
+  int i;
+  for (i = caml_code_fragments_table.size - 1; i >= 0; i--) {
+    struct code_fragment * cf = caml_code_fragments_table.contents[i];
+    if (! cf->digest_computed) {
+      caml_md5_block(cf->digest, cf->code_start, cf->code_end - cf->code_start);
+      cf->digest_computed = 1;
+    }
+    if (memcmp(digest, cf->digest, 16) == 0) {
+      if (cf->code_start + offset < cf->code_end)
+        return cf->code_start + offset;
+      else
+        return NULL;
+    }
   }
-  return checksum;
+  return NULL;
 }
 
-#else
-
-#include "fix_code.h"
-
-unsigned char * caml_code_checksum(void)
+static void intern_bad_code_pointer(unsigned char digest[16])
 {
-  return caml_code_md5;
+  char msg[256];
+  sprintf(msg, "input_value: unknown code module %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
+          digest[0], digest[1], digest[2], digest[3],
+          digest[4], digest[5], digest[6], digest[7],
+          digest[8], digest[9], digest[10], digest[11],
+          digest[12], digest[13], digest[14], digest[15]);
+  caml_failwith(msg);
 }
-
-#endif
 
 /* Functions for writing user-defined marshallers */
 

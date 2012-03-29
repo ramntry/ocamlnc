@@ -1,15 +1,15 @@
 open Camlp4;                                        (* -*- camlp4r -*- *)
 (****************************************************************************)
 (*                                                                          *)
-(*                              Objective Caml                              *)
+(*                                   OCaml                                  *)
 (*                                                                          *)
 (*                            INRIA Rocquencourt                            *)
 (*                                                                          *)
 (*  Copyright 2002-2006 Institut National de Recherche en Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed under   *)
 (*  the terms of the GNU Library General Public License, with the special   *)
-(*  exception on linking described in LICENSE at the top of the Objective   *)
-(*  Caml source tree.                                                       *)
+(*  exception on linking described in LICENSE at the top of the OCaml       *)
+(*  source tree.                                                            *)
 (*                                                                          *)
 (****************************************************************************)
 
@@ -33,19 +33,19 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
   value help_sequences () =
     do {
       Printf.eprintf "\
-New syntax:\n\
-    (e1; e2; ... ; en) OR begin e1; e2; ... ; en end\n\
-    while e do e1; e2; ... ; en done\n\
-    for v = v1 to/downto v2 do e1; e2; ... ; en done\n\
-Old syntax (still supported):\n\
-    do {e1; e2; ... ; en}\n\
-    while e do {e1; e2; ... ; en}\n\
-    for v = v1 to/downto v2 do {e1; e2; ... ; en}\n\
-Very old (no more supported) syntax:\n\
-    do e1; e2; ... ; en-1; return en\n\
-    while e do e1; e2; ... ; en; done\n\
-    for v = v1 to/downto v2 do e1; e2; ... ; en; done\n\
-  ";
+New syntax:\
+\n    (e1; e2; ... ; en) OR begin e1; e2; ... ; en end\
+\n    while e do e1; e2; ... ; en done\
+\n    for v = v1 to/downto v2 do e1; e2; ... ; en done\
+\nOld syntax (still supported):\
+\n    do {e1; e2; ... ; en}\
+\n    while e do {e1; e2; ... ; en}\
+\n    for v = v1 to/downto v2 do {e1; e2; ... ; en}\
+\nVery old (no more supported) syntax:\
+\n    do e1; e2; ... ; en-1; return en\
+\n    while e do e1; e2; ... ; en; done\
+\n    for v = v1 to/downto v2 do e1; e2; ... ; en; done\
+\n";
       flush stderr;
       exit 1
     }
@@ -361,7 +361,7 @@ Very old (no more supported) syntax:\n\
     parser
     [ [: `((KEYWORD "(", _) as tok); xs :] ->
         match xs with parser
-        [ [: `(KEYWORD ("mod"|"land"|"lor"|"lxor"|"lsl"|"lsr"|"asr" as i), _loc);
+        [ [: `(KEYWORD ("or"|"mod"|"land"|"lor"|"lxor"|"lsl"|"lsr"|"asr" as i), _loc);
              `(KEYWORD ")", _); xs :] ->
                 [: `(LIDENT i, _loc); infix_kwds_filter xs :]
         | [: xs :] ->
@@ -462,7 +462,7 @@ Very old (no more supported) syntax:\n\
             <:str_item< module $i$ = $mb$ >>
         | "module"; "rec"; mb = module_binding ->
             <:str_item< module rec $mb$ >>
-        | "module"; "type"; i = a_UIDENT; "="; mt = module_type ->
+        | "module"; "type"; i = a_ident; "="; mt = module_type ->
             <:str_item< module type $i$ = $mt$ >>
         | "open"; i = module_longident -> <:str_item< open $i$ >>
         | "type"; td = type_declaration ->
@@ -520,7 +520,9 @@ Very old (no more supported) syntax:\n\
         | `QUOTATION x -> Quotation.expand _loc x Quotation.DynAst.module_type_tag
         | i = module_longident_with_app -> <:module_type< $id:i$ >>
         | "'"; i = a_ident -> <:module_type< ' $i$ >>
-        | "("; mt = SELF; ")" -> <:module_type< $mt$ >> ] ]
+        | "("; mt = SELF; ")" -> <:module_type< $mt$ >>
+        | "module"; "type"; "of"; me = module_expr ->
+            <:module_type< module type of $me$ >> ] ]
     ;
     sig_item:
       [ "top"
@@ -536,9 +538,9 @@ Very old (no more supported) syntax:\n\
             <:sig_item< module $i$ : $mt$ >>
         | "module"; "rec"; mb = module_rec_declaration ->
             <:sig_item< module rec $mb$ >>
-        | "module"; "type"; i = a_UIDENT; "="; mt = module_type ->
+        | "module"; "type"; i = a_ident; "="; mt = module_type ->
             <:sig_item< module type $i$ = $mt$ >>
-        | "module"; "type"; i = a_UIDENT ->
+        | "module"; "type"; i = a_ident ->
             <:sig_item< module type $i$ >>
         | "open"; i = module_longident -> <:sig_item< open $i$ >>
         | "type"; t = type_declaration ->
@@ -781,9 +783,9 @@ Very old (no more supported) syntax:\n\
       [ RIGHTA
         [ TRY ["("; "type"]; i = a_LIDENT; ")"; e = SELF ->
             <:expr< fun (type $i$) -> $e$ >>
-        | p = TRY labeled_ipatt; e = SELF ->
+        | bi = TRY cvalue_binding -> bi
+        | p = labeled_ipatt; e = SELF ->
             <:expr< fun $p$ -> $e$ >>
-        | bi = cvalue_binding -> bi
       ] ]
     ;
     match_case:
@@ -982,6 +984,8 @@ Very old (no more supported) syntax:\n\
     ;
     label_ipatt_list:
       [ [ p1 = label_ipatt; ";"; p2 = SELF -> <:patt< $p1$ ; $p2$ >>
+        | p1 = label_ipatt; ";"; "_"       -> <:patt< $p1$ ; _ >>
+        | p1 = label_ipatt; ";"; "_"; ";"  -> <:patt< $p1$ ; _ >>
         | p1 = label_ipatt; ";"            -> p1
         | p1 = label_ipatt                 -> p1
       ] ];
@@ -1015,7 +1019,7 @@ Very old (no more supported) syntax:\n\
       [ [ t = ctyp -> t ] ]
     ;
     type_ident_and_parameters:
-      [ [ i = a_LIDENT; tpl = LIST0 type_parameter -> (i, tpl) ] ]
+      [ [ i = a_LIDENT; tpl = LIST0 optional_type_parameter -> (i, tpl) ] ]
     ;
     type_longident_and_parameters:
       [ [ i = type_longident; tpl = type_parameters -> tpl <:ctyp< $id:i$ >>
@@ -1028,6 +1032,7 @@ Very old (no more supported) syntax:\n\
         | -> fun t -> t
       ] ]
     ;
+
     type_parameter:
       [ [ `ANTIQUOT (""|"typ"|"anti" as n) s -> <:ctyp< $anti:mk_anti n s$ >>
         | `QUOTATION x -> Quotation.expand _loc x Quotation.DynAst.ctyp_tag
@@ -1035,6 +1040,20 @@ Very old (no more supported) syntax:\n\
         | "+"; "'"; i = a_ident -> <:ctyp< +'$lid:i$ >>
         | "-"; "'"; i = a_ident -> <:ctyp< -'$lid:i$ >> ] ]
     ;
+    optional_type_parameter:
+      [ [ `ANTIQUOT (""|"typ"|"anti" as n) s -> <:ctyp< $anti:mk_anti n s$ >>
+        | `QUOTATION x -> Quotation.expand _loc x Quotation.DynAst.ctyp_tag
+        | "'"; i = a_ident -> <:ctyp< '$lid:i$ >>
+        | "+"; "'"; i = a_ident -> <:ctyp< +'$lid:i$ >>
+        | "-"; "'"; i = a_ident -> <:ctyp< -'$lid:i$ >>
+        | "+"; "_" -> Ast.TyAnP _loc 
+        | "-"; "_" -> Ast.TyAnM _loc
+        | "_" -> Ast.TyAny _loc
+
+ ] ]
+    ;
+
+
     ctyp:
       [ "==" LEFTA
         [ t1 = SELF; "=="; t2 = SELF -> <:ctyp< $t1$ == $t2$ >> ]
@@ -1116,8 +1135,14 @@ Very old (no more supported) syntax:\n\
             <:ctyp< $t1$ | $t2$ >>
         | s = a_UIDENT; "of"; t = constructor_arg_list ->
             <:ctyp< $uid:s$ of $t$ >>
+        | s = a_UIDENT; ":"; t = constructor_arg_list ; "->" ; ret = ctyp ->
+            <:ctyp< $uid:s$ : ($t$ -> $ret$) >>
+        | s = a_UIDENT; ":"; ret = constructor_arg_list ->
+ 	    match Ast.list_of_ctyp ret [] with 
+ 		[ [c] -> <:ctyp<  $uid:s$ : $c$ >>
+ 		| _ -> raise (Stream.Error "invalid generalized constructor type") ] 
         | s = a_UIDENT ->
-            <:ctyp< $uid:s$ >>
+	  <:ctyp< $uid:s$ >>
       ] ]
     ;
     constructor_declaration:
@@ -1369,6 +1394,9 @@ Very old (no more supported) syntax:\n\
     ;
     cvalue_binding:
       [ [ "="; e = expr -> e
+        | ":"; "type"; t1 = unquoted_typevars; "." ; t2 = ctyp ; "="; e = expr -> 
+	let u = Ast.TyTypePol _loc t1 t2 in
+	<:expr< ($e$ : $u$) >>
         | ":"; t = poly_type; "="; e = expr -> <:expr< ($e$ : $t$) >>
         | ":"; t = poly_type; ":>"; t2 = ctyp; "="; e = expr ->
             match t with
@@ -1455,7 +1483,7 @@ Very old (no more supported) syntax:\n\
             <:rec_binding< $anti:mk_anti ~c:"rec_binding" n s$ >>
         | `ANTIQUOT ("list" as n) s ->
             <:rec_binding< $anti:mk_anti ~c:"rec_binding" n s$ >>
-        | l = label; "="; e = expr -> <:rec_binding< $lid:l$ = $e$ >> ] ]
+        | l = label; "="; e = expr LEVEL "top" -> <:rec_binding< $lid:l$ = $e$ >> ] ]
     ;
     meth_list:
       [ [ m = meth_decl; ";"; (ml, v) = SELF  -> (<:ctyp< $m$; $ml$ >>, v)
@@ -1489,6 +1517,16 @@ Very old (no more supported) syntax:\n\
         | "'"; i = a_ident -> <:ctyp< '$lid:i$ >>
       ] ]
     ;
+    unquoted_typevars:
+      [ LEFTA
+        [ t1 = SELF; t2 = SELF -> <:ctyp< $t1$ $t2$ >>
+        | `ANTIQUOT (""|"typ" as n) s ->
+            <:ctyp< $anti:mk_anti ~c:"ctyp" n s$ >>
+        | `QUOTATION x -> Quotation.expand _loc x Quotation.DynAst.ctyp_tag
+        | i = a_ident -> <:ctyp< $lid:i$ >>
+      ] ]
+    ;
+
     row_field:
       [ [ `ANTIQUOT (""|"typ" as n) s ->
             <:ctyp< $anti:mk_anti ~c:"ctyp" n s$ >>
@@ -1740,19 +1778,25 @@ Very old (no more supported) syntax:\n\
     more_ctyp:
       [ [ "mutable"; x = SELF -> <:ctyp< mutable $x$ >>
         | "`"; x = a_ident -> <:ctyp< `$x$ >>
-        | x = type_kind -> x
+        | x = ctyp -> x
         | x = type_parameter -> x
       ] ]
     ;
     str_item_quot:
       [ [ "#"; n = a_LIDENT; dp = opt_expr -> <:str_item< # $n$ $dp$ >>
-        | st1 = str_item; semi; st2 = SELF -> <:str_item< $st1$; $st2$ >>
+        | st1 = str_item; semi; st2 = SELF ->
+            match st2 with
+            [ <:str_item<>> -> st1
+            | _ -> <:str_item< $st1$; $st2$ >> ]
         | st = str_item -> st
         | -> <:str_item<>> ] ]
     ;
     sig_item_quot:
       [ [ "#"; n = a_LIDENT; dp = opt_expr -> <:sig_item< # $n$ $dp$ >>
-        | sg1 = sig_item; semi; sg2 = SELF -> <:sig_item< $sg1$; $sg2$ >>
+        | sg1 = sig_item; semi; sg2 = SELF ->
+            match sg2 with
+            [ <:sig_item<>> -> sg1
+            | _ -> <:sig_item< $sg1$; $sg2$ >> ]
         | sg = sig_item -> sg
         | -> <:sig_item<>> ] ]
     ;
@@ -1837,12 +1881,17 @@ Very old (no more supported) syntax:\n\
     ;
     class_str_item_quot:
       [ [ x1 = class_str_item; semi; x2 = SELF ->
-          <:class_str_item< $x1$; $x2$ >>
+          match x2 with
+          [ <:class_str_item<>> -> x1
+          | _ -> <:class_str_item< $x1$; $x2$ >> ]
         | x = class_str_item -> x
         | -> <:class_str_item<>> ] ]
     ;
     class_sig_item_quot:
-      [ [ x1 = class_sig_item; semi; x2 = SELF -> <:class_sig_item< $x1$; $x2$ >>
+      [ [ x1 = class_sig_item; semi; x2 = SELF ->
+          match x2 with
+          [ <:class_sig_item<>> -> x1
+          | _ -> <:class_sig_item< $x1$; $x2$ >> ]
         | x = class_sig_item -> x
         | -> <:class_sig_item<>> ] ]
     ;

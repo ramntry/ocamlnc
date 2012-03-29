@@ -1,6 +1,6 @@
 #########################################################################
 #                                                                       #
-#                            Objective Caml                             #
+#                                 OCaml                                 #
 #                                                                       #
 #            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
 #                                                                       #
@@ -34,12 +34,18 @@ OBJS=$(COBJS) $(ASMOBJS)
 DOBJS=$(COBJS:.o=.d.o) $(ASMOBJS)
 POBJS=$(COBJS:.o=.p.o) $(ASMOBJS:.o=.p.o)
 
-all: libasmrun.a all-$(PROFILING)
+all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING)
 
 libasmrun.a: $(OBJS)
 	rm -f libasmrun.a
 	ar rc libasmrun.a $(OBJS)
 	$(RANLIB) libasmrun.a
+
+all-noruntimed:
+.PHONY: all-noruntimed
+
+all-runtimed: libasmrund.a
+.PHONY: all-runtimed
 
 libasmrund.a: $(DOBJS)
 	rm -f libasmrund.a
@@ -55,11 +61,19 @@ libasmrunp.a: $(POBJS)
 	ar rc libasmrunp.a $(POBJS)
 	$(RANLIB) libasmrunp.a
 
-install: install-default install-$(PROFILING)
+install: install-default install-$(RUNTIMED) install-$(PROFILING)
 
 install-default:
 	cp libasmrun.a $(LIBDIR)/libasmrun.a
 	cd $(LIBDIR); $(RANLIB) libasmrun.a
+
+install-noruntimed:
+.PHONY: install-noruntimed
+
+install-runtimed:
+	cp libasmrund.a $(LIBDIR)/libasmrund.a
+	cd $(LIBDIR); $(RANLIB) libasmrund.a
+.PHONY: install-runtimed
 
 install-noprof:
 	rm -f $(LIBDIR)/libasmrunp.a; ln -s libasmrun.a $(LIBDIR)/libasmrunp.a
@@ -166,10 +180,12 @@ clean::
 .c.d.o:
 	ln -s -f $*.c $*.d.c
 	$(CC) -c $(DFLAGS) $*.d.c
+	rm -f $*.d.c
 
 .c.p.o:
 	ln -s -f $*.c $*.p.c
 	$(CC) -c $(PFLAGS) $*.p.c
+	rm -f $*.p.c
 
 .s.o:
 	$(ASPP) -DSYS_$(SYSTEM) -o $*.o $*.s

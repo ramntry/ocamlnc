@@ -1,6 +1,6 @@
 (*************************************************************************)
 (*                                                                       *)
-(*                Objective Caml LablTk library                          *)
+(*                         OCaml LablTk library                          *)
 (*                                                                       *)
 (*            Jacques Garrigue, Kyoto University RIMS                    *)
 (*                                                                       *)
@@ -60,8 +60,7 @@ let parse_pp ~parse ~wrap ~ext text =
       let ic = open_in_bin tmpfile in
       let ast =
         try
-          let buffer = String.create (String.length ast_magic) in
-          really_input ic buffer 0 (String.length ast_magic);
+          let buffer = Misc.input_bytes ic (String.length ast_magic) in
           if buffer = ast_magic then begin
             ignore (input_value ic);
             wrap (input_value ic)
@@ -73,7 +72,7 @@ let parse_pp ~parse ~wrap ~ext text =
           Outdated_version ->
             close_in ic;
             Sys.remove tmpfile;
-            failwith "Ocaml and preprocessor have incompatible versions"
+            failwith "OCaml and preprocessor have incompatible versions"
         | _ ->
             seek_in ic 0;
             let buffer = Lexing.from_channel ic in
@@ -140,6 +139,7 @@ let f txt =
           begin match err with
             Syntaxerr.Unclosed(l,_,_,_) -> l
           | Syntaxerr.Applicative_path l -> l
+          | Syntaxerr.Variable_in_scope(l,_) -> l
           | Syntaxerr.Other l -> l
           end
       | Typecore.Error (l,err) ->

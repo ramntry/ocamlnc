@@ -1,9 +1,22 @@
+(*************************************************************************)
+(*                                                                       *)
+(*                                 OCaml                                 *)
+(*                                                                       *)
+(*         Nicolas Pouillard, projet Gallium, INRIA Rocquencourt         *)
+(*                                                                       *)
+(*   Copyright 2007 Institut National de Recherche en Informatique et    *)
+(*   en Automatique.  All rights reserved.  This file is distributed     *)
+(*   under the terms of the Q Public License version 1.0.                *)
+(*                                                                       *)
+(*************************************************************************)
+
 val prefix : string
 val bindir : string
 val libdir : string
 val manext : string
 val ranlib : string
 val ranlibcmd : string
+val arcmd : string
 val sharpbangscripts : bool
 val bng_arch : string
 val bng_asm_level : string
@@ -11,8 +24,6 @@ val pthread_link : string
 val x11_includes : string
 val x11_link : string
 val tk_link : string
-val dbm_includes : string
-val dbm_link : string
 val bytecc : string
 val bytecccompopts : string
 val bytecclinkopts : string

@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -25,5 +25,8 @@ val binding_time: t -> int
 
 val nopos: int
 
-val name: t -> string
+val name: ?paren:(string -> bool) -> t -> string
+    (* [paren] tells whether a path suffix needs parentheses *)
 val head: t -> Ident.t
+
+val last: t -> string

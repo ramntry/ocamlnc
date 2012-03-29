@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*  Xavier Leroy and Pascal Cuoq, projet Cristal, INRIA Rocquencourt   *)
 (*                                                                     *)
@@ -170,6 +170,7 @@ type open_flag =
   | O_DSYNC
   | O_SYNC
   | O_RSYNC
+  | O_SHARE_DELETE
 
 type file_perm = int
 
@@ -407,9 +408,7 @@ external localtime : float -> tm = "unix_localtime"
 external mktime : tm -> float * tm = "unix_mktime"
 let alarm n = invalid_arg "Unix.alarm not implemented"
 external sleep : int -> unit = "unix_sleep"
-let times () =
-  { tms_utime = Sys.time(); tms_stime = 0.0;
-    tms_cutime = 0.0; tms_cstime = 0.0 }
+external times: unit -> process_times = "unix_times"
 external utimes : string -> float -> float -> unit = "unix_utimes"
 
 type interval_timer =

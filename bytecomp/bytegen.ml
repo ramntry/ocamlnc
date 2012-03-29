@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -413,12 +413,10 @@ let rec comp_expr env exp sz cont =
   | Lapply(func, args, loc) ->
       let nargs = List.length args in
       if is_tailcall cont then begin
-        Stypes.record (Stypes.An_call (loc, Annot.Tail));
         comp_args env args sz
           (Kpush :: comp_expr env func (sz + nargs)
             (Kappterm(nargs, sz + nargs) :: discard_dead_code cont))
       end else begin
-        Stypes.record (Stypes.An_call (loc, Annot.Stack));
         if nargs < 4 then
           comp_args env args sz
             (Kpush :: comp_expr env func (sz + nargs) (Kapply nargs :: cont))
@@ -430,7 +428,7 @@ let rec comp_expr env exp sz cont =
                       (Kapply nargs :: cont1))
         end
       end
-  | Lsend(kind, met, obj, args) ->
+  | Lsend(kind, met, obj, args, _) ->
       let args = if kind = Cached then List.tl args else args in
       let nargs = List.length args + 1 in
       let getmethod, args' =
@@ -526,6 +524,10 @@ let rec comp_expr env exp sz cont =
       comp_expr env arg sz cont
   | Lprim(Pignore, [arg]) ->
       comp_expr env arg sz (add_const_unit cont)
+  | Lprim(Pdirapply loc, [func;arg])
+  | Lprim(Prevapply loc, [arg;func]) ->
+      let exp = Lapply(func, [arg], loc) in
+      comp_expr env exp sz cont
   | Lprim(Pnot, [arg]) ->
       let newcont =
         match cont with
@@ -746,9 +748,9 @@ let rec comp_expr env exp sz cont =
       | Lev_after ty ->
           let info =
             match lam with
-              Lapply(_, args, _)   -> Event_return (List.length args)
-            | Lsend(_, _, _, args) -> Event_return (List.length args + 1)
-            | _                 -> Event_other
+              Lapply(_, args, _)      -> Event_return (List.length args)
+            | Lsend(_, _, _, args, _) -> Event_return (List.length args + 1)
+            | _                       -> Event_other
           in
           let ev = event (Event_after ty) info in
           let cont1 = add_event ev cont in

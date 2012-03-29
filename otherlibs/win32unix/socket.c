@@ -1,6 +1,6 @@
 /***********************************************************************/
 /*                                                                     */
-/*                           Objective Caml                            */
+/*                                OCaml                                */
 /*                                                                     */
 /*  Xavier Leroy and Pascal Cuoq, projet Cristal, INRIA Rocquencourt   */
 /*                                                                     */
@@ -17,7 +17,7 @@
 #include "unixsupport.h"
 
 int socket_domain_table[] = {
-  PF_UNIX, PF_INET
+  PF_UNIX, PF_INET /*, PF_INET6 */
 };
 
 int socket_type_table[] = {
@@ -28,25 +28,16 @@ CAMLprim value unix_socket(domain, type, proto)
      value domain, type, proto;
 {
   SOCKET s;
-  int oldvalue, oldvaluelen, newvalue, retcode;
 
-  oldvaluelen = sizeof(oldvalue);
-  retcode = getsockopt(INVALID_SOCKET, SOL_SOCKET, SO_OPENTYPE,
-                       (char *) &oldvalue, &oldvaluelen);
-  if (retcode == 0) {
-    /* Set sockets to synchronous mode */
-    newvalue = SO_SYNCHRONOUS_NONALERT;
-    setsockopt(INVALID_SOCKET, SOL_SOCKET, SO_OPENTYPE,
-               (char *) &newvalue, sizeof(newvalue));
+  /* IPv6 requires WinSock2, we must raise an error on PF_INET6 */
+  if (Int_val(domain) >= sizeof(socket_domain_table)/sizeof(int)) {
+    win32_maperr(WSAEPFNOSUPPORT);
+    uerror("socket", Nothing);
   }
+
   s = socket(socket_domain_table[Int_val(domain)],
                    socket_type_table[Int_val(type)],
                    Int_val(proto));
-  if (retcode == 0) {
-    /* Restore initial mode */
-    setsockopt(INVALID_SOCKET, SOL_SOCKET, SO_OPENTYPE,
-               (char *) &oldvalue, oldvaluelen);
-  }
   if (s == INVALID_SOCKET) {
     win32_maperr(WSAGetLastError());
     uerror("socket", Nothing);

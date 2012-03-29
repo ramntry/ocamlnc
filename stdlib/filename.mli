@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -59,17 +59,19 @@ val chop_extension : string -> string
 
 val basename : string -> string
 (** Split a file name into directory name / base file name.
-   [concat (dirname name) (basename name)] returns a file name
-   which is equivalent to [name]. Moreover, after setting the
-   current directory to [dirname name] (with {!Sys.chdir}),
+   If [name] is a valid file name, then [concat (dirname name) (basename name)]
+   returns a file name which is equivalent to [name]. Moreover,
+   after setting the current directory to [dirname name] (with {!Sys.chdir}),
    references to [basename name] (which is a relative file name)
    designate the same file as [name] before the call to {!Sys.chdir}.
 
-   The result is not specified if the argument is not a valid file name
-   (for example, under Unix if there is a NUL character in the string). *)
+   This function conforms to the specification of POSIX.1-2008 for the
+   [basename] utility. *)
 
 val dirname : string -> string
-(** See {!Filename.basename}. *)
+(** See {!Filename.basename}.
+   This function conforms to the specification of POSIX.1-2008 for the
+   [dirname] utility. *)
 
 val temp_file : ?temp_dir: string -> string -> string -> string
 (** [temp_file prefix suffix] returns the name of a
@@ -77,11 +79,12 @@ val temp_file : ?temp_dir: string -> string -> string -> string
    The base name of the temporary file is formed by concatenating
    [prefix], then a suitably chosen integer number, then [suffix].
    The optional argument [temp_dir] indicates the temporary directory
-   to use, defaulting to {!Filename.temp_dir_name}.
+   to use, defaulting to the current result of {!Filename.get_temp_dir_name}.
    The temporary file is created empty, with permissions [0o600]
    (readable and writable only by the file owner).  The file is
    guaranteed to be different from any other file that existed when
    [temp_file] was called.
+   Raise [Sys_error] if the file could not be created.
    @before 3.11.2 no ?temp_dir optional argument
 *)
 
@@ -95,15 +98,34 @@ val open_temp_file :
    [mode] is a list of additional flags to control the opening of the file.
    It can contain one or several of [Open_append], [Open_binary],
    and [Open_text].  The default is [[Open_text]] (open in text mode).
+   Raise [Sys_error] if the file could not be opened.
    @before 3.11.2 no ?temp_dir optional argument
 *)
 
-val temp_dir_name : string
+val get_temp_dir_name : unit -> string
 (** The name of the temporary directory:
     Under Unix, the value of the [TMPDIR] environment variable, or "/tmp"
     if the variable is not set.
     Under Windows, the value of the [TEMP] environment variable, or "."
     if the variable is not set.
+    The temporary directory can be changed with {!Filename.set_temp_dir_name}.
+    @since 4.00.0
+*)
+
+val set_temp_dir_name : string -> unit
+(** Change the temporary directory returned by {!Filename.get_temp_dir_name}
+    and used by {!Filename.temp_file} and {!Filename.open_temp_file}.
+    @since 4.00.0
+*)
+
+val temp_dir_name : string
+(** @deprecated  The name of the initial temporary directory:
+    Under Unix, the value of the [TMPDIR] environment variable, or "/tmp"
+    if the variable is not set.
+    Under Windows, the value of the [TEMP] environment variable, or "."
+    if the variable is not set.
+    This function is deprecated; {!Filename.get_temp_dir_name} should be
+    used instead.
     @since 3.09.1
 *)
 

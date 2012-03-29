@@ -1,14 +1,14 @@
 (****************************************************************************)
 (*                                                                          *)
-(*                              Objective Caml                              *)
+(*                                   OCaml                                  *)
 (*                                                                          *)
 (*                            INRIA Rocquencourt                            *)
 (*                                                                          *)
 (*  Copyright  2006   Institut National de Recherche  en  Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed under   *)
 (*  the terms of the GNU Library General Public License, with the special   *)
-(*  exception on linking described in LICENSE at the top of the Objective   *)
-(*  Caml source tree.                                                       *)
+(*  exception on linking described in LICENSE at the top of the OCaml       *)
+(*  source tree.                                                            *)
 (*                                                                          *)
 (****************************************************************************)
 
@@ -34,9 +34,17 @@ module Make (Structure : Structure.S) = struct
   value drop_prev_loc = Tools.drop_prev_loc;
 
   value add_loc bp parse_fun strm =
+    let count1 = Stream.count strm in
     let x = parse_fun strm in
-    let ep = loc_ep strm in
-    let loc = Loc.merge bp ep in
+    let count2 = Stream.count strm in
+    let loc =
+      if count1 < count2 then
+        let ep = loc_ep strm in
+        Loc.merge bp ep
+      else
+        (* If nothing has been consumed, create a 0-length location. *)
+        Loc.join bp
+    in
     (x, loc);
 
   value stream_peek_nth strm n =

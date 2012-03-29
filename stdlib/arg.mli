@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*             Damien Doligez, projet Para, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -79,18 +79,20 @@ val parse :
     as their arguments appear on the command line.
 
     If an error occurs, [Arg.parse] exits the program, after printing
-    an error message as follows:
+    to standard error an error message as follows:
 -   The reason for the error: unknown option, invalid or missing argument, etc.
 -   [usage_msg]
 -   The list of options, each followed by the corresponding [doc] string.
+    Beware: options that have an empty [doc] string will not be included in the
+    list.
 
     For the user to be able to specify anonymous arguments starting with a
     [-], include for example [("-", String anon_fun, doc)] in [speclist].
 
     By default, [parse] recognizes two unit options, [-help] and [--help],
-    which will display [usage_msg] and the list of options, and exit
-    the program.  You can override this behaviour by specifying your
-    own [-help] and [--help] options in [speclist].
+    which will print to standard output [usage_msg] and the list of
+    options, and exit the program.  You can override this behaviour
+    by specifying your own [-help] and [--help] options in [speclist].
 *)
 
 val parse_argv : ?current: int ref -> string array ->
@@ -115,10 +117,14 @@ exception Bad of string
     [Arg.Bad] is also raised by [Arg.parse_argv] in case of an error. *)
 
 val usage : (key * spec * doc) list -> usage_msg -> unit
-(** [Arg.usage speclist usage_msg] prints an error message including
-    the list of valid options.  This is the same message that
-    {!Arg.parse} prints in case of error.
+(** [Arg.usage speclist usage_msg] prints to standard error
+    an error message that includes the list of valid options.  This is
+    the same message that {!Arg.parse} prints in case of error.
     [speclist] and [usage_msg] are the same as for [Arg.parse]. *)
+
+val usage_string : (key * spec * doc) list -> usage_msg -> string
+(** Returns the message that would have been printed by {!Arg.usage},
+    if provided with the same parameters. *)
 
 val align: (key * spec * doc) list -> (key * spec * doc) list;;
 (** Align the documentation strings by inserting spaces at the first

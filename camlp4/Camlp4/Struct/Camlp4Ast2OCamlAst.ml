@@ -1,15 +1,15 @@
 (* camlp4r *)
 (****************************************************************************)
 (*                                                                          *)
-(*                              Objective Caml                              *)
+(*                                   OCaml                                  *)
 (*                                                                          *)
 (*                            INRIA Rocquencourt                            *)
 (*                                                                          *)
 (*  Copyright 2002-2006 Institut National de Recherche en Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed under   *)
 (*  the terms of the GNU Library General Public License, with the special   *)
-(*  exception on linking described in LICENSE at the top of the Objective   *)
-(*  Caml source tree.                                                       *)
+(*  exception on linking described in LICENSE at the top of the OCaml       *)
+(*  source tree.                                                            *)
 (*                                                                          *)
 (****************************************************************************)
 
@@ -133,7 +133,9 @@ module Make (Ast : Sig.Camlp4Ast) = struct
 
     let rec self i acc =
       match i with
-      [ <:ident< $i1$.$i2$ >> ->
+      [ <:ident< $lid:"*predef*"$.$lid:"option"$ >> ->
+          (ldot (lident "*predef*") "option", `lident)
+      | <:ident< $i1$.$i2$ >> ->
           self i2 (Some (self i1 acc))
       | <:ident< $i1$ $i2$ >> ->
           let i' = Lapply (fst (self i1 None)) (fst (self i2 None)) in
@@ -204,6 +206,9 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | <:ctyp< '$s$ >> -> [s]
     | _ -> assert False ];
 
+  value predef_option loc =
+    TyId (loc, IdAcc (loc, IdLid (loc, "*predef*"), IdLid (loc, "option")));
+
   value rec ctyp =
     fun
     [ TyId loc i ->
@@ -226,7 +231,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | TyArr loc (TyLab _ lab t1) t2 ->
         mktyp loc (Ptyp_arrow lab (ctyp t1) (ctyp t2))
     | TyArr loc (TyOlb loc1 lab t1) t2 ->
-        let t1 = TyApp loc1 <:ctyp@loc1< option >> t1 in
+        let t1 = TyApp loc1 (predef_option loc1) t1 in
         mktyp loc (Ptyp_arrow ("?" ^ lab) (ctyp t1) (ctyp t2))
     | TyArr loc t1 t2 -> mktyp loc (Ptyp_arrow "" (ctyp t1) (ctyp t2))
     | <:ctyp@loc< < $fl$ > >> -> mktyp loc (Ptyp_object (meth_list fl []))
@@ -261,6 +266,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | TyAnt loc _ -> error loc "antiquotation not allowed here"
     | TyOfAmp _ _ _ |TyAmp _ _ _ |TySta _ _ _ |
       TyCom _ _ _ |TyVrn _ _ |TyQuM _ _ |TyQuP _ _ |TyDcl _ _ _ _ _ |
+	  TyAnP _ | TyAnM _ | TyTypePol _ _ _ |
       TyObj _ _ (RvAnt _) | TyNil _ | TyTup _ _ ->
         assert False ]
   and row_field = fun
@@ -285,8 +291,8 @@ module Make (Ast : Sig.Camlp4Ast) = struct
   and package_type_constraints wc acc =
     match wc with
     [ <:with_constr<>> -> acc
-    | <:with_constr< type $lid:id$ = $ct$ >> ->
-        [(id, ctyp ct) :: acc]
+    | <:with_constr< type $id:id$ = $ct$ >> ->
+        [(ident id, ctyp ct) :: acc]
     | <:with_constr< $wc1$ and $wc2$ >> ->
         package_type_constraints wc1 (package_type_constraints wc2 acc)
     | _ -> error (loc_of_with_constr wc) "unexpected `with constraint' for a package type" ]
@@ -319,9 +325,14 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | _ -> assert False (*FIXME*) ];
   value mkvariant =
     fun
-    [ <:ctyp@loc< $uid:s$ >> -> (conv_con s, [], mkloc loc)
+    [ <:ctyp@loc< $uid:s$ >> -> (conv_con s, [], None, mkloc loc)
     | <:ctyp@loc< $uid:s$ of $t$ >> ->
-        (conv_con s, List.map ctyp (list_of_ctyp t []), mkloc loc)
+        (conv_con s, List.map ctyp (list_of_ctyp t []), None, mkloc loc)
+    | <:ctyp@loc< $uid:s$ : ($t$ -> $u$) >> ->
+        (conv_con s, List.map ctyp (list_of_ctyp t []), Some (ctyp u), mkloc loc)
+    | <:ctyp@loc< $uid:s$ : $t$ >> ->
+        (conv_con s, [], Some (ctyp t), mkloc loc)
+
     | _ -> assert False (*FIXME*) ];
   value rec type_decl tl cl loc m pflag =
     fun
@@ -346,7 +357,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
         mktype loc tl cl Ptype_abstract (mkprivate' pflag) m ]
   ;
 
-  value type_decl tl cl t = type_decl tl cl (loc_of_ctyp t) None False t;
+  value type_decl tl cl t loc = type_decl tl cl loc None False t;
 
   value mkvalue_desc t p = {pval_type = ctyp t; pval_prim = p};
 
@@ -381,6 +392,17 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | <:ctyp< '$s$ >> -> [(s, (False, False)) :: acc]
     | _ -> assert False ];
 
+  value rec optional_type_parameters t acc =
+    match t with
+    [ <:ctyp< $t1$ $t2$ >> -> optional_type_parameters t1 (optional_type_parameters t2 acc)
+    | <:ctyp< +'$s$ >> -> [(Some s, (True, False)) :: acc]
+    | Ast.TyAnP _loc  -> [(None, (True, False)) :: acc]
+    | <:ctyp< -'$s$ >> -> [(Some s, (False, True)) :: acc]
+    | Ast.TyAnM _loc -> [(None, (False, True)) :: acc]
+    | <:ctyp< '$s$ >> -> [(Some s, (False, False)) :: acc]
+    | Ast.TyAny _loc -> [(None, (False, False)) :: acc]
+    | _ -> assert False ];
+
   value rec class_parameters t acc =
     match t with
     [ <:ctyp< $t1$, $t2$ >> -> class_parameters t1 (class_parameters t2 acc)
@@ -393,7 +415,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     match t with
     [ <:ctyp< $t1$ $t2$ >> ->
         type_parameters_and_type_name t1
-          (type_parameters t2 acc)
+          (optional_type_parameters t2 acc)
     | <:ctyp< $id:i$ >> -> (ident i, acc)
     | _ -> assert False ];
 
@@ -536,7 +558,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | <:patt@loc< ($tup:_$) >> -> error loc "singleton tuple pattern"
     | PaTyc loc p t -> mkpat loc (Ppat_constraint (patt p) (ctyp t))
     | PaTyp loc i -> mkpat loc (Ppat_type (long_type_ident i))
-    | PaVrn loc s -> mkpat loc (Ppat_variant s None)
+    | PaVrn loc s -> mkpat loc (Ppat_variant (conv_con s) None)
     | PaLaz loc p -> mkpat loc (Ppat_lazy (patt p))
     | PaMod loc m -> mkpat loc (Ppat_unpack m)
     | PaEq _ _ _ | PaSem _ _ _ | PaCom _ _ _ | PaNil _ as p ->
@@ -589,6 +611,55 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     match ot with
     [ <:ctyp<>> -> acc
     | t -> list_of_ctyp t acc ];
+
+value varify_constructors var_names = 
+  let rec loop t = 
+    let desc = 
+      match t.ptyp_desc with
+	  [
+       Ptyp_any -> Ptyp_any
+      | Ptyp_var x -> Ptyp_var x
+      | Ptyp_arrow label core_type core_type' ->
+	  Ptyp_arrow label (loop core_type) (loop core_type')
+      | Ptyp_tuple lst -> Ptyp_tuple (List.map loop lst)
+      | Ptyp_constr (Lident s) [] when List.mem s var_names ->
+	  Ptyp_var ("&" ^ s)
+      | Ptyp_constr longident lst ->
+	  Ptyp_constr longident (List.map loop lst) 
+      | Ptyp_object lst ->
+	  Ptyp_object (List.map loop_core_field lst)		    
+      | Ptyp_class longident lst lbl_list ->
+	  Ptyp_class (longident, List.map loop lst, lbl_list) 
+      | Ptyp_alias core_type string ->
+	  Ptyp_alias(loop core_type, string) 
+      | Ptyp_variant row_field_list flag lbl_lst_option -> 
+	  Ptyp_variant(List.map loop_row_field row_field_list, flag, lbl_lst_option) 
+      | Ptyp_poly string_lst core_type ->
+	  Ptyp_poly(string_lst, loop core_type) 
+      | Ptyp_package longident lst ->
+	  Ptyp_package(longident,List.map (fun (n,typ) -> (n,loop typ) ) lst)
+]
+    in
+    {(t) with ptyp_desc = desc}
+  and loop_core_field t = 
+    let desc = 
+      match t.pfield_desc with
+      [ Pfield(n,typ) ->
+	  Pfield(n,loop typ)
+      | Pfield_var ->
+	  Pfield_var]
+    in
+    { (t) with pfield_desc=desc}
+  and loop_row_field x  = 
+    match x with
+      [ Rtag(label,flag,lst) ->
+	  Rtag(label,flag,List.map loop lst) 
+      | Rinherit t ->
+	  Rinherit (loop t) ]
+  in
+  loop;
+
+
 
   value rec expr =
     fun
@@ -770,7 +841,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | <:expr@loc< $uid:s$ >> ->
         (* let ca = constructors_arity () in *)
         mkexp loc (Pexp_construct (lident (conv_con s)) None True)
-    | ExVrn loc s -> mkexp loc (Pexp_variant s None)
+    | ExVrn loc s -> mkexp loc (Pexp_variant (conv_con s) None)
     | ExWhi loc e1 el ->
         let e2 = ExSeq loc el in
         mkexp loc (Pexp_while (expr e1) (expr e2))
@@ -804,6 +875,32 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     match x with
     [ <:binding< $x$ and $y$ >> ->
          binding x (binding y acc)
+    | <:binding@_loc< $lid:bind_name$ = ($e$ : $TyTypePol _ vs ty$) >> ->
+      (* this code is not pretty because it is temporary *)
+      let rec id_to_string x = 
+	match x with 
+	    [ <:ctyp< $lid:x$ >> -> [x]
+	    | <:ctyp< $x$ $y$ >> -> (id_to_string x) @ (id_to_string y)
+	    | _ -> assert False]
+      in
+      let vars = id_to_string vs in
+      let ampersand_vars = List.map (fun x -> "&" ^ x) vars in
+      let ty' = varify_constructors vars (ctyp ty) in
+      let mkexp = mkexp _loc in
+      let mkpat = mkpat _loc in
+      let e = mkexp (Pexp_constraint (expr e) (Some (ctyp ty)) None) in
+      let rec mk_newtypes x = 
+	match x with
+	  [ [newtype :: []] -> mkexp (Pexp_newtype(newtype, e))
+	  | [newtype :: newtypes] ->
+	    mkexp(Pexp_newtype (newtype,mk_newtypes newtypes))
+	  | [] -> assert False]
+      in
+      let pat = 
+	mkpat (Ppat_constraint (mkpat (Ppat_var bind_name), mktyp _loc (Ptyp_poly ampersand_vars ty')))
+      in
+      let e = mk_newtypes vars in
+      [( pat, e) :: acc]
     | <:binding@_loc< $p$ = ($e$ : ! $vs$ . $ty$) >> ->
         [(patt <:patt< ($p$ : ! $vs$ . $ty$ ) >>, expr e) :: acc]
     | <:binding< $p$ = $e$ >> -> [(patt p, expr e) :: acc]
@@ -837,7 +934,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     match x with
     [ <:ctyp< $x$ and $y$ >> ->
          mktype_decl x (mktype_decl y acc)
-    | Ast.TyDcl _ c tl td cl ->
+    | Ast.TyDcl loc c tl td cl ->
         let cl =
           List.map
             (fun (t1, t2) ->
@@ -845,7 +942,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
               (ctyp t1, ctyp t2, mkloc loc))
             cl
         in
-        [(c, type_decl (List.fold_right type_parameters tl []) cl td) :: acc]
+        [(c, type_decl (List.fold_right optional_type_parameters tl []) cl td loc) :: acc]
     | _ -> assert False ]
   and module_type =
     fun
@@ -858,6 +955,8 @@ module Make (Ast : Sig.Camlp4Ast) = struct
         mkmty loc (Pmty_signature (sig_item sl []))
     | <:module_type@loc< $mt$ with $wc$ >> ->
         mkmty loc (Pmty_with (module_type mt) (mkwithc wc []))
+    | <:module_type@loc< module type of $me$ >> ->
+        mkmty loc (Pmty_typeof (module_expr me))
     | <:module_type< $anti:_$ >> -> assert False ]
   and sig_item s l =
     match s with
@@ -945,6 +1044,8 @@ module Make (Ast : Sig.Camlp4Ast) = struct
                       (List.map ctyp (list_of_ctyp t []))) :: l ]
     | <:str_item@loc< exception $uid:s$ = $i$ >> ->
         [mkstr loc (Pstr_exn_rebind (conv_con s) (ident i)) :: l ]
+    | <:str_item@loc< exception $uid:_$ of $_$ = $_$ >> ->
+        error loc "type in exception alias"
     | StExc _ _ _ -> assert False (*FIXME*)
     | StExp loc e -> [mkstr loc (Pstr_eval (expr e)) :: l]
     | StExt loc n t sl -> [mkstr loc (Pstr_primitive n (mkvalue_desc t (list_of_meta_list sl))) :: l]
@@ -967,7 +1068,7 @@ module Make (Ast : Sig.Camlp4Ast) = struct
     | CtFun loc (TyLab _ lab t) ct ->
         mkcty loc (Pcty_fun lab (ctyp t) (class_type ct))
     | CtFun loc (TyOlb loc1 lab t) ct ->
-        let t = TyApp loc1 <:ctyp@loc1< option >> t in
+        let t = TyApp loc1 (predef_option loc1) t in
         mkcty loc (Pcty_fun ("?" ^ lab) (ctyp t) (class_type ct))
     | CtFun loc t ct -> mkcty loc (Pcty_fun "" (ctyp t) (class_type ct))
     | CtSig loc t_o ctfl ->

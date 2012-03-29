@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -43,6 +43,7 @@ let incompatible o =
 
 module Options = Main_args.Make_bytecomp_options (struct
   let _a () = make_archive := true; option "-a" ()
+  let _absname = option "-absname"
   let _annot = option "-annot"
   let _c = option "-c"
   let _cc s = option_with_arg "-cc" s
@@ -73,6 +74,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _pp s = incompatible "-pp"
   let _principal = option "-principal"
   let _rectypes = option "-rectypes"
+  let _runtime_variant s = option_with_arg "-runtime-variant" s
   let _strict_sequence = option "-strict-sequence"
   let _thread () = option "-thread" ()
   let _vmthread () = option "-vmthread" ()

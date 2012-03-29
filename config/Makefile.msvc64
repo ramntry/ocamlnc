@@ -1,6 +1,6 @@
 #########################################################################
 #                                                                       #
-#                            Objective Caml                             #
+#                                 OCaml                                 #
 #                                                                       #
 #            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
 #                                                                       #
@@ -71,6 +71,7 @@ CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 CMXS=cmxs
 NATDYNLINK=true
+RUNTIMED=noruntimed
 
 ########## Configuration for the bytecode compiler
 
@@ -99,11 +100,11 @@ NATIVECCLIBS=advapi32.lib ws2_32.lib $(EXTRALIBS)
 CPP=cl /nologo /EP
 
 ### Flexlink
-FLEXLINK=flexlink -x64 -merge-manifest
+FLEXLINK=flexlink -x64 -merge-manifest -stack 33554432
 FLEXDIR=$(shell $(FLEXLINK) -where)
 IFLEXDIR=-I"$(FLEXDIR)"
 MKDLL=$(FLEXLINK)
-MKEXE=$(FLEXLINK) -exe -link /STACK:33554432
+MKEXE=$(FLEXLINK) -exe
 MKMAINDLL=$(FLEXLINK) -maindll
 
 ### How to build a static library
@@ -118,6 +119,9 @@ SYSLIB=$(1).lib
 ### The ranlib command
 RANLIB=echo
 RANLIBCMD=
+
+### The ar command
+ARCMD=
 
 ############# Configuration for the native-code compiler
 

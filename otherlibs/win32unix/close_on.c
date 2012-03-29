@@ -1,6 +1,6 @@
 /***********************************************************************/
 /*                                                                     */
-/*                           Objective Caml                            */
+/*                                OCaml                                */
 /*                                                                     */
 /*  Xavier Leroy and Pascal Cuoq, projet Cristal, INRIA Rocquencourt   */
 /*                                                                     */
@@ -19,17 +19,14 @@
 
 int win_set_inherit(value fd, BOOL inherit)
 {
-  HANDLE oldh, newh;
-
-  oldh = Handle_val(fd);
-  if (! DuplicateHandle(GetCurrentProcess(), oldh,
-                        GetCurrentProcess(), &newh,
-                        0L, inherit, DUPLICATE_SAME_ACCESS)) {
+  /* According to the MSDN, SetHandleInformation may not work
+     for console handles on WinNT4 and earlier versions. */
+  if (! SetHandleInformation(Handle_val(fd),
+			     HANDLE_FLAG_INHERIT,
+			     inherit ? HANDLE_FLAG_INHERIT : 0)) {
     win32_maperr(GetLastError());
     return -1;
   }
-  Handle_val(fd) = newh;
-  CloseHandle(oldh);
   return 0;
 }
 

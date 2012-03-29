@@ -1,6 +1,6 @@
 /***********************************************************************/
 /*                                                                     */
-/*                           Objective Caml                            */
+/*                                OCaml                                */
 /*                                                                     */
 /*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
 /*                                                                     */
@@ -44,7 +44,8 @@ static struct custom_operations win_handle_ops = {
   win_handle_compare,
   win_handle_hash,
   custom_serialize_default,
-  custom_deserialize_default
+  custom_deserialize_default,
+  custom_compare_ext_default
 };
 
 value win_alloc_handle(HANDLE h)
@@ -53,7 +54,7 @@ value win_alloc_handle(HANDLE h)
   Handle_val(res) = h;
   Descr_kind_val(res) = KIND_HANDLE;
   CRT_fd_val(res) = NO_CRT_FD;
-  Flags_fd_val(res) = 0;
+  Flags_fd_val(res) = FLAGS_FD_IS_BLOCKING;
   return res;
 }
 
@@ -63,7 +64,7 @@ value win_alloc_socket(SOCKET s)
   Socket_val(res) = s;
   Descr_kind_val(res) = KIND_SOCKET;
   CRT_fd_val(res) = NO_CRT_FD;
-  Flags_fd_val(res) = 0;
+  Flags_fd_val(res) = FLAGS_FD_IS_BLOCKING;
   return res;
 }
 

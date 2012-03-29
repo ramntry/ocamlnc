@@ -1,15 +1,15 @@
 (* -*- camlp4r -*- *)
 (****************************************************************************)
 (*                                                                          *)
-(*                              Objective Caml                              *)
+(*                                   OCaml                                  *)
 (*                                                                          *)
 (*                            INRIA Rocquencourt                            *)
 (*                                                                          *)
 (*  Copyright  2006   Institut National de Recherche  en  Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed under   *)
 (*  the terms of the GNU Library General Public License, with the special   *)
-(*  exception on linking described in LICENSE at the top of the Objective   *)
-(*  Caml source tree.                                                       *)
+(*  exception on linking described in LICENSE at the top of the OCaml       *)
+(*  source tree.                                                            *)
 (*                                                                          *)
 (****************************************************************************)
 
@@ -256,10 +256,6 @@ module Make (Structure : Structure.S) = struct
                 Some t
             | None -> None ]
       | LocAct _ _ | DeadEnd -> None ]
-    and insert_new =
-      fun
-      [ [s :: sl] -> Node {node = s; son = insert_new sl; brother = DeadEnd}
-      | [] -> LocAct action [] ]
     in
     insert gsymbols tree
   ;

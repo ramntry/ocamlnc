@@ -1,10 +1,22 @@
-\" $Id$
-
+.\"***********************************************************************
+.\"*                                                                     *
+.\"*                                OCaml                                *
+.\"*                                                                     *
+.\"*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *
+.\"*                                                                     *
+.\"*  Copyright 1996 Institut National de Recherche en Informatique et   *
+.\"*  en Automatique.  All rights reserved.  This file is distributed    *
+.\"*  under the terms of the Q Public License version 1.0.               *
+.\"*                                                                     *
+.\"***********************************************************************
+.\"
+.\" $Id$
+.\"
 .TH OCAMLOPT 1
 
 .SH NAME
 
-ocamlopt \- The Objective Caml native-code compiler
+ocamlopt \- The OCaml native-code compiler
 
 .SH SYNOPSIS
 
@@ -19,10 +31,10 @@ ocamlopt \- The Objective Caml native-code compiler
 
 .SH DESCRIPTION
 
-The Objective Caml high-performance
+The OCaml high-performance
 native-code compiler
 .BR ocamlopt (1)
-compiles Caml source files to native code object files and link these
+compiles OCaml source files to native code object files and link these
 object files to produce standalone executables.
 
 The
@@ -65,7 +77,7 @@ should always be referred to under the name
 .IR x .cmx
 (when given a .o file,
 .BR ocamlopt (1)
-assumes that it contains code compiled from C, not from Caml).
+assumes that it contains code compiled from C, not from OCaml).
 
 The implementation is checked against the interface file
 .IR x .mli
@@ -74,7 +86,7 @@ The implementation is checked against the interface file
 
 Arguments ending in .cmx are taken to be compiled object code.  These
 files are linked together, along with the object files obtained
-by compiling .ml arguments (if any), and the Caml Light standard
+by compiling .ml arguments (if any), and the OCaml standard
 library, to produce a native-code executable program. The order in
 which .cmx and .ml arguments are presented on the command line is
 relevant: compilation units are initialized in that order at
@@ -120,7 +132,7 @@ Thus, it behaves exactly like
 .BR ocamlopt ,
 but compiles faster.
 .B ocamlopt.opt
-is not available in all installations of Objective Caml.
+is not available in all installations of OCaml.
 
 .SH OPTIONS
 
@@ -157,6 +169,11 @@ type-checker before the error. The
 file can be used with the emacs commands given in
 .B emacs/caml\-types.el
 to display types and other annotations interactively.
+.TP
+.B \-dtypes
+Has been deprecated. Please use 
+.BI \-annot 
+instead.
 .TP
 .B \-c
 Compile only. Suppress the linking phase of the
@@ -318,9 +335,9 @@ option is given, specify the name of plugin file produced.
 .TP
 .B \-output\-obj
 Cause the linker to produce a C object file instead of an executable
-file. This is useful to wrap Caml code as a C library,
-callable from any C program. The name of the output object file is
-camlprog.o by default; it can be set with the
+file. This is useful to wrap OCaml code as a C library,
+callable from any C program. The name of the output object file 
+must be set with the
 .B \-o
 option.
 This option can also be used to produce a compiled shared/dynamic
@@ -378,7 +395,7 @@ Multiple levels of packing can be achieved by combining
 with
 .BR \-for\-pack .
 See
-.IR "The Objective Caml user's manual" ,
+.IR "The OCaml user's manual" ,
 chapter "Native-code compilation" for more details.
 .TP
 .BI \-pp \ command
@@ -403,6 +420,16 @@ only recursive types where the recursion goes through an object type
 are supported. Note that once you have created an interface using this
 flag, you must use it again for all dependencies.
 .TP
+.BI \-runtime\-variant \ suffix
+Add
+.I suffix
+to the name of the runtime library that will be used by the program.
+If OCaml was configured with option
+.BR \-with\-debug\-runtime ,
+then the
+.B d
+suffix is supported and gives a debug version of the runtime.
+.TP
 .B \-S
 Keep the assembly code produced during the compilation. The assembly
 code for the source file
@@ -417,21 +444,24 @@ the
 module. The name of the plugin must be
 set with the
 .B \-o
-option. A plugin can include a number of Caml
+option. A plugin can include a number of OCaml
 modules and libraries, and extra native objects (.o, .a files).
 Building native plugins is only supported for some
 operating system. Under some systems (currently,
-only Linux AMD 64), all the Caml code linked in a plugin must have
+only Linux AMD 64), all the OCaml code linked in a plugin must have
 been compiled without the
 .B \-nodynlink
 flag. Some constraints might also
 apply to the way the extra native objects have been compiled (under
 Linux AMD 64, they must contain only position-independent code).
 .TP
+.B \-strict\-sequence
+The left-hand part of a sequence must have type unit.
+.TP
 .B \-thread
 Compile or link multithreaded programs, in combination with the
 system threads library described in
-.IR "The Objective Caml user's manual" .
+.IR "The OCaml user's manual" .
 .TP
 .B \-unsafe
 Turn bound checking off for array and string accesses (the
@@ -486,14 +516,14 @@ sign (or a lowercase letter) turns them back into warnings, and a
 .B @
 sign both enables and marks the corresponding warnings.
 
-Note: it is not recommended to use warning sets (i.e. letters) as
-arguments to
+Note: it is not recommended to use the
 .B \-warn\-error
-in production code, because this can break your build when future versions
-of OCaml add some new warnings.
+option in production code, because it will almost certainly prevent
+compiling your program with later versions of OCaml when they add new
+warnings.
 
 The default setting is
-.B \-warn\-error\ +a
+.B \-warn\-error\ -a
 (none of the warnings is treated as an error).
 .TP
 .B \-where
@@ -559,5 +589,5 @@ SPARC processors.
 .SH SEE ALSO
 .BR ocamlc (1).
 .br
-.IR "The Objective Caml user's manual" ,
+.IR "The OCaml user's manual" ,
 chapter "Native-code compilation".

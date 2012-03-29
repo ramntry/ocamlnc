@@ -1,6 +1,6 @@
 #########################################################################
 #                                                                       #
-#                            Objective Caml                             #
+#                                 OCaml                                 #
 #                                                                       #
 #            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
 #                                                                       #
@@ -71,6 +71,7 @@ SYSTHREAD_SUPPORT=true
 EXTRALIBS=
 CMXS=cmxs
 NATDYNLINK=true
+RUNTIMED=noruntimed
 
 ########## Configuration for the bytecode compiler
 
@@ -94,11 +95,11 @@ NATIVECCLIBS=advapi32.lib ws2_32.lib
 CPP=cl /nologo /EP
 
 ### Flexlink
-FLEXLINK=flexlink -merge-manifest
+FLEXLINK=flexlink -merge-manifest -stack 16777216
 FLEXDIR=$(shell $(FLEXLINK) -where)
 IFLEXDIR=-I"$(FLEXDIR)"
 MKDLL=$(FLEXLINK)
-MKEXE=$(FLEXLINK) -exe -link /STACK:16777216
+MKEXE=$(FLEXLINK) -exe
 MKMAINDLL=$(FLEXLINK) -maindll
 
 ### How to build a static library
@@ -113,6 +114,9 @@ SYSLIB=$(1).lib
 ### The ranlib command
 RANLIB=echo
 RANLIBCMD=
+
+### The ar command
+ARCMD=
 
 ############# Configuration for the native-code compiler
 
@@ -136,6 +140,13 @@ NATIVECCLINKOPTS=
 
 ### Build partially-linked object file
 PACKLD=link /lib /nologo /out:# there must be no space after this '/out:'
+
+############# Configuration for camlp4
+
+# This variable controls whether camlp4 will be built.
+# If it is set to camlp4, then it will be built.
+# If it is set to the empty string, then it will not be built.
+CAMLP4=camlp4
 
 ############# Configuration for the contributed libraries
 

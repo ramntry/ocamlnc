@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -61,7 +61,7 @@ let process_file ppf name =
     raise(Arg.Bad("don't know what to do with " ^ name))
 
 let print_version_and_library () =
-  print_string "The Objective Caml compiler, version ";
+  print_string "The OCaml compiler, version ";
   print_string Config.version; print_newline();
   print_string "Standard library directory: ";
   print_string Config.standard_library; print_newline();
@@ -75,10 +75,12 @@ let print_standard_library () =
 
 let usage = "Usage: ocamlc <options> <files>\nOptions are:"
 
+let ppf = Format.err_formatter
+
 (* Error messages to standard error formatter *)
-let anonymous = process_file Format.err_formatter;;
-let impl = process_implementation_file Format.err_formatter;;
-let intf = process_interface_file Format.err_formatter;;
+let anonymous = process_file ppf;;
+let impl = process_implementation_file ppf;;
+let intf = process_interface_file ppf;;
 
 let show_config () =
   Config.print_config stdout;
@@ -89,6 +91,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let set r () = r := true
   let unset r () = r := false
   let _a = set make_archive
+  let _absname = set Location.absname
   let _annot = set annotations
   let _c = set compile_only
   let _cc s = c_compiler := Some s
@@ -119,6 +122,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _pp s = preprocessor := Some s
   let _principal = set principal
   let _rectypes = set recursive_types
+  let _runtime_variant s = runtime_variant := s
   let _strict_sequence = set strict_sequence
   let _thread = set use_threads
   let _vmthread = set use_vmthreads
@@ -165,16 +169,19 @@ let main () =
         fatal "Option -i is incompatible with -pack, -a, -output-obj"
       else
         fatal "Please specify at most one of -pack, -a, -c, -output-obj";
-
     if !make_archive then begin
       Compile.init_path();
-      Bytelibrarian.create_archive (List.rev !objfiles)
-                                   (extract_output !output_name)
+
+      Bytelibrarian.create_archive ppf  (List.rev !objfiles)
+                                   (extract_output !output_name);
+      Warnings.check_fatal ();
     end
     else if !make_package then begin
       Compile.init_path();
-      Bytepackager.package_files (List.rev !objfiles)
-                                 (extract_output !output_name)
+      let extracted_output = extract_output !output_name in
+      let revd = List.rev !objfiles in
+      Bytepackager.package_files ppf revd (extracted_output);
+      Warnings.check_fatal ();
     end
     else if not !compile_only && !objfiles <> [] then begin
       let target =
@@ -194,11 +201,12 @@ let main () =
           default_output !output_name
       in
       Compile.init_path();
-      Bytelink.link (List.rev !objfiles) target
+      Bytelink.link ppf (List.rev !objfiles) target;
+      Warnings.check_fatal ();
     end;
     exit 0
   with x ->
-    Errors.report_error Format.err_formatter x;
+    Errors.report_error ppf x;
     exit 2
 
 let _ = main ()

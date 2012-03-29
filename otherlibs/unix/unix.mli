@@ -1,6 +1,6 @@
 (***********************************************************************)
 (*                                                                     *)
-(*                           Objective Caml                            *)
+(*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
@@ -122,7 +122,7 @@ val environment : unit -> string array
 val getenv : string -> string
 (** Return the value associated to a variable in the process
    environment. Raise [Not_found] if the variable is unbound.
-   (This function is identical to [Sys.getenv].) *)
+   (This function is identical to {!Sys.getenv}.) *)
 
 val putenv : string -> string -> unit
 (** [Unix.putenv name value] sets the value associated to a
@@ -235,9 +235,14 @@ type open_flag =
   | O_TRUNC                     (** Truncate to 0 length if existing *)
   | O_EXCL                      (** Fail if existing *)
   | O_NOCTTY                    (** Don't make this dev a controlling tty *)
-  | O_DSYNC                     (** Writes complete as `Synchronised I/O data integrity completion' *)
-  | O_SYNC                      (** Writes complete as `Synchronised I/O file integrity completion' *)
-  | O_RSYNC                     (** Reads complete as writes (depending on O_SYNC/O_DSYNC) *)
+  | O_DSYNC                     (** Writes complete as `Synchronised I/O data
+                                   integrity completion' *)
+  | O_SYNC                      (** Writes complete as `Synchronised I/O file
+                                   integrity completion' *)
+  | O_RSYNC                     (** Reads complete as writes (depending on
+                                   O_SYNC/O_DSYNC) *)
+  | O_SHARE_DELETE              (** Windows only: allow the file to be deleted
+                                   while still open *)
 (** The flags to {!Unix.openfile}. *)
 
 
@@ -765,9 +770,11 @@ val utimes : string -> float -> float -> unit
 
 type interval_timer =
     ITIMER_REAL
-      (** decrements in real time, and sends the signal [SIGALRM] when expired.*)
+      (** decrements in real time, and sends the signal [SIGALRM] when
+         expired.*)
   | ITIMER_VIRTUAL
-      (**  decrements in process virtual time, and sends [SIGVTALRM] when expired. *)
+      (** decrements in process virtual time, and sends [SIGVTALRM]
+          when expired. *)
   | ITIMER_PROF
       (** (for profiling) decrements both when the process
          is running and when the system is running on behalf of the
@@ -911,7 +918,7 @@ type socket_domain =
   | PF_INET                     (** Internet domain (IPv4) *)
   | PF_INET6                    (** Internet domain (IPv6) *)
 (** The type of socket domains.  Not all platforms support
-    IPv6 sockets (type [PF_INET6]).  *)
+    IPv6 sockets (type [PF_INET6]). *)
 
 type socket_type =
     SOCK_STREAM                 (** Stream socket *)
@@ -921,7 +928,9 @@ type socket_type =
 (** The type of socket kinds, specifying the semantics of
    communications. *)
 
-type sockaddr = ADDR_UNIX of string | ADDR_INET of inet_addr * int
+type sockaddr =
+    ADDR_UNIX of string
+  | ADDR_INET of inet_addr * int
 (** The type of socket addresses. [ADDR_UNIX name] is a socket
    address in the Unix domain; [name] is a file name in the file
    system. [ADDR_INET(addr,port)] is a socket address in the Internet
@@ -1020,8 +1029,9 @@ type socket_int_option =
   | SO_RCVBUF      (** Size of received buffer *)
   | SO_ERROR       (** Deprecated.  Use {!Unix.getsockopt_error} instead. *)
   | SO_TYPE        (** Report the socket type *)
-  | SO_RCVLOWAT    (** Minimum number of bytes to process for input operations *)
-  | SO_SNDLOWAT    (** Minimum number of bytes to process for output operations *)
+  | SO_RCVLOWAT    (** Minimum number of bytes to process for input operations*)
+  | SO_SNDLOWAT    (** Minimum number of bytes to process for output
+                       operations *)
 (** The socket options that can be consulted with {!Unix.getsockopt_int}
    and modified with {!Unix.setsockopt_int}.  These options have an
    integer value. *)
@@ -1056,17 +1066,21 @@ val setsockopt_int : file_descr -> socket_int_option -> int -> unit
 (** Same as {!Unix.setsockopt} for an integer-valued socket option. *)
 
 val getsockopt_optint : file_descr -> socket_optint_option -> int option
-(** Same as {!Unix.getsockopt} for a socket option whose value is an [int option]. *)
+(** Same as {!Unix.getsockopt} for a socket option whose value is an
+   [int option]. *)
 
 val setsockopt_optint :
       file_descr -> socket_optint_option -> int option -> unit
-(** Same as {!Unix.setsockopt} for a socket option whose value is an [int option]. *)
+(** Same as {!Unix.setsockopt} for a socket option whose value is an
+   [int option]. *)
 
 val getsockopt_float : file_descr -> socket_float_option -> float
-(** Same as {!Unix.getsockopt} for a socket option whose value is a floating-point number. *)
+(** Same as {!Unix.getsockopt} for a socket option whose value is a
+   floating-point number. *)
 
 val setsockopt_float : file_descr -> socket_float_option -> float -> unit
-(** Same as {!Unix.setsockopt} for a socket option whose value is a floating-point number. *)
+(** Same as {!Unix.setsockopt} for a socket option whose value is a
+   floating-point number. *)
 
 val getsockopt_error : file_descr -> error option
 (** Return the error condition associated with the given socket,
@@ -1270,7 +1284,7 @@ val tcgetattr : file_descr -> terminal_io
    file descriptor. *)
 
 type setattr_when =
-  TCSANOW
+    TCSANOW
   | TCSADRAIN
   | TCSAFLUSH
 
