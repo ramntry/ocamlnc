@@ -1615,6 +1615,50 @@ and transl_letrec bindings cont =
         fill_blocks rem
   in init_blocks bsz
 
+let id_used id e =
+  let rec aux = function
+    | Cvar i | Cassign (i, _) when i = id -> raise Exit
+    | Clet (_, e1, e2) | Csequence (e1, e2)
+    | Ccatch (_,_, e1, e2) | Ctrywith (e1, _, e2) ->
+        aux e1; aux e2
+    | Cassign (_, e) | Cloop e -> aux e
+    | Ctuple el | Cop (_, el) | Cexit (_, el) -> List.iter aux el
+    | Cifthenelse (e1, e2, e3) -> aux e1; aux e2; aux e3
+    | Cswitch (e, _, ea) -> aux e; Array.iter aux ea
+    | _ -> ()
+  in
+  try aux e; false
+  with Exit -> true
+
+let really_unbox id unboxed_id body =
+  Clet(unboxed_id, Cop(Cload Double_u, [Cvar id]), body)
+
+(* Push the unboxing binding down the tree *)
+(* TODO: avoid repeated calls to id_used on the same branch *)
+let rec do_unbox id unboxed_id = function
+  | Cop (op, el) as body ->
+      let rec loop = function
+        | [] -> assert false
+        | [e] -> [do_unbox id unboxed_id e]
+        | e1 :: el when id_used unboxed_id e1 ->
+            if List.exists (id_used unboxed_id) el then raise Exit;
+            do_unbox id unboxed_id e1 :: el
+        | e1 :: el -> e1 :: loop el
+      in
+      begin try Cop (op, loop el)
+      with Exit -> really_unbox id unboxed_id body
+      end
+  | Clet(i, e1, e2) as body ->
+      if id_used unboxed_id e1 then
+        if id_used unboxed_id e2 then really_unbox id unboxed_id body
+        else Clet(i, do_unbox id unboxed_id e1, e2)
+      else
+        Clet(i, e1, do_unbox id unboxed_id e2)
+  | Cvar i when i = unboxed_id ->
+      Cop(Cload Double_u, [Cvar id])
+  | body ->
+      really_unbox id unboxed_id body
+
 let transl_with_unboxing name params body =
   let rec loop body =
     if IdentSet.is_empty !unboxed_ids then body
@@ -1676,9 +1720,6 @@ let transl_with_unboxing name params body =
       try Ident.find_same id !unboxed_id_tbl
       with Not_found ->
         fatal_error (Printf.sprintf "Cannot find unboxed id for %s" (Ident.unique_name id))
-    in
-    let do_unbox id unboxed_id body =
-      Clet(unboxed_id, Cop(Cload Double_u, [Cvar id]), body)
     in
     let rec subst = function
       | Cvar id when IdentSet.mem id ids && IdentSet.mem id assigned ->
