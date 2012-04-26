@@ -248,6 +248,10 @@ let view_defined ~env ?(show_all=false) modlid =
       let tl, tw, finish = Jg_message.formatted ~title:"Error!" () in
       Env.report_error Format.std_formatter err;
       finish ()
+  | Cmi_format.Error err ->
+      let tl, tw, finish = Jg_message.formatted ~title:"Error!" () in
+      Cmi_format.report_error Format.std_formatter err;
+      finish ()
 
 
 (* Manage toplevel windows *)

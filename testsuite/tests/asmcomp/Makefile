@@ -33,6 +33,7 @@ OTHEROBJS=\
   $(TOPDIR)/typing/subst.cmo \
   $(TOPDIR)/typing/predef.cmo \
   $(TOPDIR)/typing/datarepr.cmo \
+  $(TOPDIR)/typing/cmi_format.cmo \
   $(TOPDIR)/typing/env.cmo \
   $(TOPDIR)/typing/typedtree.cmo \
   $(TOPDIR)/typing/ctype.cmo \

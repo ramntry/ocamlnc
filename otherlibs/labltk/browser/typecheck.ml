@@ -156,6 +156,8 @@ let f txt =
           Includemod.report_error Format.std_formatter errl; Location.none
       | Env.Error err ->
           Env.report_error Format.std_formatter err; Location.none
+      | Cmi_format.Error err ->
+          Cmi_format.report_error Format.std_formatter err; Location.none
       | Ctype.Tags(l, l') ->
           Format.printf "In this program,@ variant constructors@ `%s and `%s@ have same hash value.@." l l';
           Location.none

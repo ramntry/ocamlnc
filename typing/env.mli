@@ -16,7 +16,83 @@
 
 open Types
 
-type t
+module EnvLazy : sig
+  type 'a t
+  type ('a,'b) maker
+
+  val force : 'a t -> 'a
+  val create : ('a,'b) maker -> 'a -> 'b t
+  val declare_maker : string -> ('a,'b) maker
+  val register_maker : ('a,'b) maker -> ('a -> 'b) -> unit
+
+  exception UnknownLazyMaker of string
+end
+
+type summary =
+    Env_empty
+  | Env_value of summary * Ident.t * value_description
+  | Env_type of summary * Ident.t * type_declaration
+  | Env_exception of summary * Ident.t * exception_declaration
+  | Env_module of summary * Ident.t * module_type
+  | Env_modtype of summary * Ident.t * modtype_declaration
+  | Env_class of summary * Ident.t * class_declaration
+  | Env_cltype of summary * Ident.t * cltype_declaration
+  | Env_open of summary * Path.t
+
+module EnvTbl : sig
+  type 'a t
+
+  val find_same_not_using : Ident.t -> 'a t -> 'a
+  val keys : 'a t -> Ident.t list
+end
+
+type t = {
+  values: (Path.t * value_description) EnvTbl.t;
+  annotations: (Path.t * Annot.ident) EnvTbl.t;
+  constrs: constructor_description EnvTbl.t;
+  labels: label_description EnvTbl.t;
+  constrs_by_path: (Path.t * (constructor_description list)) EnvTbl.t;
+  types: (Path.t * type_declaration) EnvTbl.t;
+  modules: (Path.t * module_type) EnvTbl.t;
+  modtypes: (Path.t * modtype_declaration) EnvTbl.t;
+  components: (Path.t * module_components) EnvTbl.t;
+  classes: (Path.t * class_declaration) EnvTbl.t;
+  cltypes: (Path.t * cltype_declaration) EnvTbl.t;
+  summary: summary;
+  local_constraints: bool;
+  gadt_instances: (int * Btype.TypeSet.t ref) list;
+  in_signature: bool;
+}
+
+and module_components = module_components_repr EnvLazy.t
+
+and module_components_repr =
+    Structure_comps of structure_components
+  | Functor_comps of functor_components
+
+and structure_components = {
+  mutable comp_values: (string, (value_description * int)) Tbl.t;
+  mutable comp_annotations: (string, (Annot.ident * int)) Tbl.t;
+  mutable comp_constrs: (string, (constructor_description * int)) Tbl.t;
+  mutable comp_labels: (string, (label_description * int)) Tbl.t;
+  mutable comp_constrs_by_path:
+      (string, (constructor_description list * int)) Tbl.t;
+  mutable comp_types: (string, (type_declaration * int)) Tbl.t;
+  mutable comp_modules: (string, (module_type EnvLazy.t * int)) Tbl.t;
+  mutable comp_modtypes: (string, (modtype_declaration * int)) Tbl.t;
+  mutable comp_components: (string, (module_components * int)) Tbl.t;
+  mutable comp_classes: (string, (class_declaration * int)) Tbl.t;
+  mutable comp_cltypes: (string, (cltype_declaration * int)) Tbl.t
+}
+
+and functor_components = {
+  fcomp_param: Ident.t;                 (* Formal parameter *)
+  fcomp_arg: module_type;               (* Argument signature *)
+  fcomp_res: module_type;               (* Result signature *)
+  fcomp_env: t;     (* Environment in which the result signature makes sense *)
+  fcomp_subst: Subst.t;  (* Prefixing substitution for the result signature *)
+  fcomp_cache: (Path.t, module_components) Hashtbl.t  (* For memoization *)
+}
 
 val empty: t
 val initial: t
@@ -124,25 +200,11 @@ val crc_units: Consistbl.t
 (* Summaries -- compact representation of an environment, to be
    exported in debugging information. *)
 
-type summary =
-    Env_empty
-  | Env_value of summary * Ident.t * value_description
-  | Env_type of summary * Ident.t * type_declaration
-  | Env_exception of summary * Ident.t * exception_declaration
-  | Env_module of summary * Ident.t * module_type
-  | Env_modtype of summary * Ident.t * modtype_declaration
-  | Env_class of summary * Ident.t * class_declaration
-  | Env_cltype of summary * Ident.t * cltype_declaration
-  | Env_open of summary * Path.t
-
 val summary: t -> summary
 
 (* Error report *)
 
 type error =
-    Not_an_interface of string
-  | Wrong_version_interface of string * string
-  | Corrupted_interface of string
   | Illegal_renaming of string * string
   | Inconsistent_import of string * string * string
   | Need_recursive_types of string * string

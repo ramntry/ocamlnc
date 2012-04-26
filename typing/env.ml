@@ -14,6 +14,7 @@
 
 (* Environment handling *)
 
+open Cmi_format
 open Config
 open Misc
 open Asttypes
@@ -49,9 +50,6 @@ let constructor_usages () =
 let used_constructors : (string * Location.t * string, (constructor_usage -> unit)) Hashtbl.t = Hashtbl.create 16
 
 type error =
-    Not_an_interface of string
-  | Wrong_version_interface of string * string
-  | Corrupted_interface of string
   | Illegal_renaming of string * string
   | Inconsistent_import of string * string * string
   | Need_recursive_types of string * string
@@ -276,8 +274,6 @@ let current_unit = ref ""
 
 (* Persistent structure descriptions *)
 
-type pers_flags = Rectypes
-
 type pers_struct =
   { ps_name: string;
     ps_sig: signature;
@@ -304,25 +300,12 @@ let check_consistency filename crcs =
 (* Reading persistent structures from .cmi files *)
 
 let read_pers_struct modname filename =
-  let ic = open_in_bin filename in
-  try
-    let buffer = Misc.input_bytes ic (String.length cmi_magic_number) in
-    if buffer <> cmi_magic_number then begin
-      close_in ic;
-      let pre_len = String.length cmi_magic_number - 3 in
-      if String.sub buffer 0 pre_len = String.sub cmi_magic_number 0 pre_len then
-      begin
-        let msg = if buffer < cmi_magic_number then "an older" else "a newer" in
-         raise (Error (Wrong_version_interface (filename, msg)))
-      end else begin
-        raise(Error(Not_an_interface filename))
-      end
-    end;
-    let (name, sign) = input_value ic in
-    let crcs = input_value ic in
-    let flags = input_value ic in
-    close_in ic;
-    let comps =
+  let cmi = read_cmi filename in
+  let name = cmi.cmi_name in
+  let sign = cmi.cmi_sign in
+  let crcs = cmi.cmi_crcs in
+  let flags = cmi.cmi_flags in
+  let comps =
       !components_of_module' empty Subst.identity
                              (Pident(Ident.create_persistent name))
                              (Tmty_signature sign) in
@@ -342,9 +325,6 @@ let read_pers_struct modname filename =
       ps.ps_flags;
     Hashtbl.add persistent_structures modname (Some ps);
     ps
-  with End_of_file | Failure _ ->
-    close_in ic;
-    raise(Error(Corrupted_interface(filename)))
 
 let find_pers_struct name =
   if name = "*predef*" then raise Not_found;
@@ -1211,14 +1191,13 @@ let save_signature_with_imports sg modname filename imports =
   let sg = Subst.signature (Subst.for_saving Subst.identity) sg in
   let oc = open_out_bin filename in
   try
-    output_string oc cmi_magic_number;
-    output_value oc (modname, sg);
-    flush oc;
-    let crc = Digest.file filename in
-    let crcs = (modname, crc) :: imports in
-    output_value oc crcs;
-    let flags = if !Clflags.recursive_types then [Rectypes] else [] in
-    output_value oc flags;
+    let cmi = {
+      cmi_name = modname;
+      cmi_sign = sg;
+      cmi_crcs = imports;
+      cmi_flags = if !Clflags.recursive_types then [Rectypes] else [];
+    } in
+    let crc = output_cmi filename oc cmi in
     close_out oc;
     (* Enter signature in persistent table so that imported_unit()
        will also return its crc *)
@@ -1229,9 +1208,9 @@ let save_signature_with_imports sg modname filename imports =
       { ps_name = modname;
         ps_sig = sg;
         ps_comps = comps;
-        ps_crcs = crcs;
+        ps_crcs = (cmi.cmi_name, crc) :: imports;
         ps_filename = filename;
-        ps_flags = flags } in
+        ps_flags = cmi.cmi_flags } in
     Hashtbl.add persistent_structures modname (Some ps);
     Consistbl.set crc_units modname crc filename
   with exn ->
@@ -1255,13 +1234,6 @@ let summary env = env.summary
 open Format
 
 let report_error ppf = function
-  | Not_an_interface filename -> fprintf ppf
-      "%a@ is not a compiled interface" Location.print_filename filename
-  | Wrong_version_interface (filename, older_newer) -> fprintf ppf
-      "%a@ is not a compiled interface for this version of OCaml.@.\
-       It seems to be for %s version of OCaml." Location.print_filename filename older_newer
-  | Corrupted_interface filename -> fprintf ppf
-      "Corrupted compiled interface@ %a" Location.print_filename filename
   | Illegal_renaming(modname, filename) -> fprintf ppf
       "Wrong file naming: %a@ contains the compiled interface for@ %s"
       Location.print_filename filename modname
