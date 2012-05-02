@@ -65,7 +65,9 @@ val copy_file_chunk: in_channel -> out_channel -> int -> unit
         (* [copy_file_chunk ic oc n] reads [n] bytes from [ic] and copies
            them to [oc]. It raises [End_of_file] when encountering
            EOF on [ic]. *)
-
+val string_of_file: in_channel -> string
+        (* [string_of_file ic] reads the contents of file [ic] and copies
+           them to a string. It stops when encountering EOF on [ic]. *)
 val input_bytes : in_channel -> int -> string;;
         (* [input_bytes ic n] reads [n] bytes from [ic] and returns them
            in a new string.  It raises [End_of_file] if EOF is encountered

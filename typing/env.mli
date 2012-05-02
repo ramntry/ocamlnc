@@ -36,7 +36,7 @@ type summary =
   | Env_module of summary * Ident.t * module_type
   | Env_modtype of summary * Ident.t * modtype_declaration
   | Env_class of summary * Ident.t * class_declaration
-  | Env_cltype of summary * Ident.t * cltype_declaration
+  | Env_cltype of summary * Ident.t * class_type_declaration
   | Env_open of summary * Path.t
 
 module EnvTbl : sig
@@ -46,18 +46,18 @@ module EnvTbl : sig
   val keys : 'a t -> Ident.t list
 end
 
-type t = {
+type t (* = {
   values: (Path.t * value_description) EnvTbl.t;
   annotations: (Path.t * Annot.ident) EnvTbl.t;
-  constrs: constructor_description EnvTbl.t;
-  labels: label_description EnvTbl.t;
+  constrs: (Path.t * constructor_description) EnvTbl.t;
+  labels: (Path.t * label_description) EnvTbl.t;
   constrs_by_path: (Path.t * (constructor_description list)) EnvTbl.t;
   types: (Path.t * type_declaration) EnvTbl.t;
   modules: (Path.t * module_type) EnvTbl.t;
   modtypes: (Path.t * modtype_declaration) EnvTbl.t;
   components: (Path.t * module_components) EnvTbl.t;
   classes: (Path.t * class_declaration) EnvTbl.t;
-  cltypes: (Path.t * cltype_declaration) EnvTbl.t;
+  cltypes: (Path.t * class_type_declaration) EnvTbl.t;
   summary: summary;
   local_constraints: bool;
   gadt_instances: (int * Btype.TypeSet.t ref) list;
@@ -82,7 +82,7 @@ and structure_components = {
   mutable comp_modtypes: (string, (modtype_declaration * int)) Tbl.t;
   mutable comp_components: (string, (module_components * int)) Tbl.t;
   mutable comp_classes: (string, (class_declaration * int)) Tbl.t;
-  mutable comp_cltypes: (string, (cltype_declaration * int)) Tbl.t
+  mutable comp_cltypes: (string, (class_type_declaration * int)) Tbl.t
 }
 
 and functor_components = {
@@ -93,6 +93,7 @@ and functor_components = {
   fcomp_subst: Subst.t;  (* Prefixing substitution for the result signature *)
   fcomp_cache: (Path.t, module_components) Hashtbl.t  (* For memoization *)
 }
+       *)
 
 val empty: t
 val initial: t
@@ -106,7 +107,7 @@ val find_constructors: Path.t -> t -> constructor_description list
 val find_module: Path.t -> t -> module_type
 val find_modtype: Path.t -> t -> modtype_declaration
 val find_class: Path.t -> t -> class_declaration
-val find_cltype: Path.t -> t -> cltype_declaration
+val find_cltype: Path.t -> t -> class_type_declaration
 
 val find_type_expansion:
     ?level:int -> Path.t -> t -> type_expr list * type_expr * int option
@@ -126,13 +127,13 @@ val add_gadt_instance_chain: t -> int -> type_expr -> unit
 
 val lookup_value: Longident.t -> t -> Path.t * value_description
 val lookup_annot: Longident.t -> t -> Path.t * Annot.ident
-val lookup_constructor: Longident.t -> t -> constructor_description
-val lookup_label: Longident.t -> t -> label_description
+val lookup_constructor: Longident.t -> t -> Path.t * constructor_description
+val lookup_label: Longident.t -> t -> Path.t * label_description
 val lookup_type: Longident.t -> t -> Path.t * type_declaration
 val lookup_module: Longident.t -> t -> Path.t * module_type
 val lookup_modtype: Longident.t -> t -> Path.t * modtype_declaration
 val lookup_class: Longident.t -> t -> Path.t * class_declaration
-val lookup_cltype: Longident.t -> t -> Path.t * cltype_declaration
+val lookup_cltype: Longident.t -> t -> Path.t * class_type_declaration
 
 (* Insertion by identifier *)
 
@@ -143,7 +144,7 @@ val add_exception: Ident.t -> exception_declaration -> t -> t
 val add_module: Ident.t -> module_type -> t -> t
 val add_modtype: Ident.t -> modtype_declaration -> t -> t
 val add_class: Ident.t -> class_declaration -> t -> t
-val add_cltype: Ident.t -> cltype_declaration -> t -> t
+val add_cltype: Ident.t -> class_type_declaration -> t -> t
 val add_local_constraint: Ident.t -> type_declaration -> int -> t -> t
 
 (* Insertion of all fields of a signature. *)
@@ -165,7 +166,7 @@ val enter_exception: string -> exception_declaration -> t -> Ident.t * t
 val enter_module: string -> module_type -> t -> Ident.t * t
 val enter_modtype: string -> modtype_declaration -> t -> Ident.t * t
 val enter_class: string -> class_declaration -> t -> Ident.t * t
-val enter_cltype: string -> cltype_declaration -> t -> Ident.t * t
+val enter_cltype: string -> class_type_declaration -> t -> Ident.t * t
 
 (* Initialize the cache of in-core module interfaces. *)
 val reset_cache: unit -> unit

@@ -141,6 +141,17 @@ let copy_file_chunk ic oc len =
     end
   in copy len
 
+let string_of_file ic =
+  let b = Buffer.create 0x10000 in
+  let buff = String.create 0x1000 in
+  let rec copy () =
+    let n = input ic buff 0 0x1000 in
+    if n = 0 then Buffer.contents b else
+      (Buffer.add_substring b buff 0 n; copy())
+  in copy()
+
+
+
 (* Reading from a channel *)
 
 let input_bytes ic n =
