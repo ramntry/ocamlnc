@@ -400,6 +400,8 @@ let find proj1 proj2 path env =
 
 let find_value =
   find (fun env -> env.values) (fun sc -> sc.comp_values)
+and find_annot =
+  find (fun env -> env.annotations) (fun sc -> sc.comp_annotations)
 and find_type =
   find (fun env -> env.types) (fun sc -> sc.comp_types)
 and find_constructors =

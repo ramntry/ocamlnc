@@ -102,6 +102,7 @@ val diff: t -> t -> Ident.t list
 (* Lookup by paths *)
 
 val find_value: Path.t -> t -> value_description
+val find_annot: Path.t -> t -> Annot.ident
 val find_type: Path.t -> t -> type_declaration
 val find_constructors: Path.t -> t -> constructor_description list
 val find_module: Path.t -> t -> module_type
