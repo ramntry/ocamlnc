@@ -104,9 +104,9 @@ let rec protect ppf restart loop =
             show_current_event ppf;
             restart ppf
           end)
-(*  | x ->
+  | x ->
       kill_program ();
-      raise x *)
+      raise x
 
 let execute_file_if_any () =
   let buffer = Buffer.create 128 in
@@ -230,5 +230,5 @@ let main () =
       eprintf "@]@.";
       exit 2
 
-let _ = main ()
-(*  Printexc.catch (Unix.handle_unix_error main) () *)
+let _ =
+  Printexc.catch (Unix.handle_unix_error main) ()

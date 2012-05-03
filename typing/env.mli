@@ -46,7 +46,7 @@ module EnvTbl : sig
   val keys : 'a t -> Ident.t list
 end
 
-type t (* = {
+type t = {
   values: (Path.t * value_description) EnvTbl.t;
   annotations: (Path.t * Annot.ident) EnvTbl.t;
   constrs: (Path.t * constructor_description) EnvTbl.t;
@@ -93,7 +93,7 @@ and functor_components = {
   fcomp_subst: Subst.t;  (* Prefixing substitution for the result signature *)
   fcomp_cache: (Path.t, module_components) Hashtbl.t  (* For memoization *)
 }
-       *)
+
 
 val empty: t
 val initial: t

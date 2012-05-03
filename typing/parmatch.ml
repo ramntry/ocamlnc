@@ -250,10 +250,10 @@ and pretty_lvals lbls ppf = function
   | [] -> ()
   | [_, _,lbl,v] ->
       let name = find_label lbl lbls in
-      fprintf ppf "%a=%a" Ident.print name pretty_val v
+      fprintf ppf "%s=%a" (Ident.name name) pretty_val v
   | (_, _, lbl,v)::rest ->
       let name = find_label lbl lbls in
-      fprintf ppf "%a=%a;@ %a" Ident.print name pretty_val v (pretty_lvals lbls) rest
+      fprintf ppf "%s=%a;@ %a" (Ident.name name) pretty_val v (pretty_lvals lbls) rest
 
 let top_pretty ppf v =
   fprintf ppf "@[%a@]@?" pretty_val v

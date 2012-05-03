@@ -406,7 +406,9 @@ let rec class_type_field env self_type meths (fields, val_sig, concr_meths, inhe
 and class_signature env sty sign loc =
   let meths = ref Meths.empty in
   let self_cty = transl_simple_type env false sty in
-  let self_type = self_cty.ctyp_type in
+  let self_cty = { self_cty with
+    ctyp_type = Ctype.expand_head env self_cty.ctyp_type } in
+  let self_type =  self_cty.ctyp_type in
 
   (* Check that the binder is a correct type, and introduce a dummy
      method preventing self type from being closed. *)

@@ -838,7 +838,7 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
         rp {
           pat_desc = Tpat_alias (p, TPat_constraint cty);
           pat_loc = loc;
-          pat_type = p.pat_type;
+          pat_type = ty;
           pat_env = p.pat_env }
   | Ppat_type lid ->
       let (path, p,ty) = build_or_pat !env loc lid.txt in
