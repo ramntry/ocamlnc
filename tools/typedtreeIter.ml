@@ -189,23 +189,19 @@ module MakeIterator(Iter : IteratorArgument) : sig
 
     and iter_pattern pat =
       Iter.enter_pattern pat;
+      List.iter (function
+              | TPat_type _ -> ()
+              | TPat_unpack -> ()
+              | TPat_constraint ct -> iter_core_type ct) pat.pat_constraints;
       begin
         match pat.pat_desc with
           Tpat_any -> ()
         | Tpat_var (id, _) -> ()
-        | Tpat_alias (pat1, kind) ->
-            iter_pattern pat1;
-            begin
-              match kind with
-                TPat_alias _ -> ()
-              | TPat_type _ -> ()
-              | TPat_unpack -> ()
-              | TPat_constraint ct -> iter_core_type ct
-            end
+        | Tpat_alias (pat1, _, _) -> iter_pattern pat1
         | Tpat_constant cst -> ()
         | Tpat_tuple list ->
             List.iter iter_pattern list
-        | Tpat_construct (path, _, _, args) ->
+        | Tpat_construct (path, _, _, args, _) ->
             List.iter iter_pattern args
         | Tpat_variant (label, pato, _) ->
             begin match pato with
@@ -220,8 +216,12 @@ module MakeIterator(Iter : IteratorArgument) : sig
       end;
       Iter.leave_pattern pat
 
+    and option f x = match x with None -> () | Some e -> f e
+
     and iter_expression exp =
       Iter.enter_expression exp;
+      List.iter (function (cty1, cty2) -> option iter_core_type cty1; option iter_core_type cty2)
+        exp.exp_constraints;
       begin
         match exp.exp_desc with
           Texp_ident (path, _, _) -> ()
@@ -246,7 +246,7 @@ module MakeIterator(Iter : IteratorArgument) : sig
             iter_bindings Nonrecursive list
         | Texp_tuple list ->
             List.iter iter_expression list
-        | Texp_construct (path, _, _, args) ->
+        | Texp_construct (path, _, _, args, _) ->
             List.iter iter_expression args
         | Texp_variant (label, expo) ->
             begin match expo with
@@ -320,10 +320,6 @@ module MakeIterator(Iter : IteratorArgument) : sig
             iter_expression exp
         | Texp_newtype (s, exp) ->
             iter_expression exp
-        | Texp_constraint (exp, cto1, cto2) ->
-            iter_expression exp;
-            may_iter iter_core_type cto1;
-            may_iter iter_core_type cto2
       end;
       Iter.leave_expression exp;
 

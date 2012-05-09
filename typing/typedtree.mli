@@ -25,15 +25,11 @@ type optional = Required | Optional
 type pattern =
   { pat_desc: pattern_desc;
     pat_loc: Location.t;
+    pat_constraints : pat_constraint list;
     pat_type: type_expr;
     mutable pat_env: Env.t }
 
-(* Instead of adding two new constructs (Tpat_constraint and Tpat_type),
-we chose to change Tpat_alias, so that we don't have to modify too much
-the pattern matching engine, and don't introduce bugs. *)
-
-and alias_kind =
-    TPat_alias of Ident.t * string loc
+and pat_constraint =
   | TPat_constraint of core_type
   | TPat_type of Path.t * Longident.t loc
   | TPat_unpack
@@ -41,10 +37,10 @@ and alias_kind =
 and pattern_desc =
     Tpat_any
   | Tpat_var of Ident.t * string loc
-  | Tpat_alias of pattern * alias_kind
+  | Tpat_alias of pattern * Ident.t * string loc
   | Tpat_constant of constant
   | Tpat_tuple of pattern list
-  | Tpat_construct of Path.t * Longident.t loc * constructor_description * pattern list
+  | Tpat_construct of Path.t * Longident.t loc * constructor_description * pattern list * bool
   | Tpat_variant of label * pattern option * row_desc ref
   | Tpat_record of ( Path.t * Longident.t loc * label_description * pattern) list * closed_flag
   | Tpat_array of pattern list
@@ -54,6 +50,7 @@ and pattern_desc =
 and expression =
   { exp_desc: expression_desc;
     exp_loc: Location.t;
+    exp_constraints : (core_type option * core_type option) list;
     exp_type: type_expr;
     exp_env: Env.t }
 
@@ -66,7 +63,7 @@ and expression_desc =
   | Texp_match of expression * (pattern * expression) list * partial
   | Texp_try of expression * (pattern * expression) list
   | Texp_tuple of expression list
-  | Texp_construct of Path.t * Longident.t loc * constructor_description * expression list
+  | Texp_construct of Path.t * Longident.t loc * constructor_description * expression list * bool
   | Texp_variant of label * expression option
   | Texp_record of (Path.t * Longident.t loc * label_description * expression) list * expression option
   | Texp_field of expression * Path.t * Longident.t loc * label_description
@@ -77,7 +74,6 @@ and expression_desc =
   | Texp_while of expression * expression
   | Texp_for of
       Ident.t * string loc * expression * expression * direction_flag * expression
-  | Texp_constraint of expression * core_type option * core_type option
   | Texp_when of expression * expression
   | Texp_send of expression * meth * expression option
   | Texp_new of Path.t * Longident.t loc * Types.class_declaration

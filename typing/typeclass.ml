@@ -859,7 +859,7 @@ and class_expr cl_num val_env met_env scl =
             (id, id_loc,
              {
               exp_desc = Texp_ident(path, mknoloc (Longident.Lident (Ident.name id)), vd);
-              exp_loc = Location.none;
+              exp_loc = Location.none; exp_constraints = [];
               exp_type = Ctype.instance val_env' vd.val_type;
               exp_env = val_env'
              })
@@ -874,7 +874,7 @@ and class_expr cl_num val_env met_env scl =
         Parmatch.check_partial pat.pat_loc
           [pat, (* Dummy expression *)
            {exp_desc = Texp_constant (Asttypes.Const_int 1);
-            exp_loc = Location.none;
+            exp_loc = Location.none; exp_constraints = [];
             exp_type = Ctype.none;
             exp_env = Env.empty }]
       in
@@ -994,7 +994,7 @@ and class_expr cl_num val_env met_env scl =
              let expr =
                {
                 exp_desc = Texp_ident(path, mknoloc (Longident.Lident (Ident.name id)), vd);
-                exp_loc = Location.none;
+                exp_loc = Location.none; exp_constraints = [];
                 exp_type = Ctype.instance val_env vd.val_type;
                 exp_env = val_env;
                }

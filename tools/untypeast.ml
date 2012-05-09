@@ -128,7 +128,14 @@ and untype_exception_declaration decl =
   List.map untype_core_type decl.exn_params
 
 and untype_pattern pat =
-  let desc = match pat.pat_desc with
+  let desc =
+  match pat with
+      { pat_constraints=[TPat_unpack]; pat_desc = Tpat_var (_,name) } -> Ppat_unpack name
+    | { pat_constraints=[TPat_type (path, lid)] } -> Ppat_type lid
+    | { pat_constraints= TPat_constraint ct :: rem } ->
+        Ppat_constraint (untype_pattern { pat with pat_constraints=rem }, untype_core_type ct)
+    | _ ->
+    match pat.pat_desc with
       Tpat_any -> Ppat_any
     | Tpat_var (id, name) ->
         begin
@@ -138,22 +145,19 @@ and untype_pattern pat =
           | _ ->
               Ppat_var name
         end
-    | Tpat_alias (pat, TPat_alias (id, name)) ->
+    | Tpat_alias (pat, id, name) ->
         Ppat_alias (untype_pattern pat, name)
-    | Tpat_alias ({ pat_desc = Tpat_var (_, s) }, TPat_unpack) ->
-        Ppat_unpack s
-    | Tpat_alias (_, TPat_unpack) -> assert false
     | Tpat_constant cst -> Ppat_constant cst
     | Tpat_tuple list ->
         Ppat_tuple (List.map untype_pattern list)
-    | Tpat_construct (path, lid, _, args) ->
+    | Tpat_construct (path, lid, _, args, explicit_arity) ->
         Ppat_construct (lid,
           (match args with
               [] -> None
             | args -> Some
                   { ppat_desc = Ppat_tuple (List.map untype_pattern args);
                   ppat_loc = pat.pat_loc; }
-          ), true)
+          ), explicit_arity)
     | Tpat_variant (label, pato, _) ->
         Ppat_variant (label, match pato with
             None -> None
@@ -164,17 +168,21 @@ and untype_pattern pat =
     | Tpat_array list -> Ppat_array (List.map untype_pattern list)
     | Tpat_or (p1, p2, _) -> Ppat_or (untype_pattern p1, untype_pattern p2)
     | Tpat_lazy p -> Ppat_lazy (untype_pattern p)
-    | Tpat_alias (p, TPat_constraint ct) ->
-        Ppat_constraint (untype_pattern p, untype_core_type ct)
-    | Tpat_alias (p, TPat_type (path, lid)) ->  Ppat_type (lid)
   in
   {
     ppat_desc = desc;
     ppat_loc = pat.pat_loc;
   }
 
+and option f x = match x with None -> None | Some e -> Some (f e)
+
 and untype_expression exp =
   let desc =
+  match exp.exp_constraints with
+      (cty1, cty2) :: rem ->
+        Pexp_constraint (untype_expression { exp with exp_constraints = rem },
+                         option untype_core_type cty1, option untype_core_type cty2)
+    | [] ->
     match exp.exp_desc with
       Texp_ident (path, lid, _) -> Pexp_ident (lid)
     | Texp_constant cst -> Pexp_constant cst
@@ -204,15 +212,14 @@ and untype_expression exp =
               untype_pattern pat, untype_expression exp) list)
     | Texp_tuple list ->
         Pexp_tuple (List.map untype_expression list)
-    | Texp_construct (path, lid, _, args) ->
+    | Texp_construct (path, lid, _, args, explicit_arity) ->
         Pexp_construct (lid,
           (match args with
               [] -> None
             | args -> Some
                   { pexp_desc = Pexp_tuple (List.map untype_expression args);
                   pexp_loc = exp.exp_loc; }
-          ), true)
-
+          ), explicit_arity)
     | Texp_variant (label, expo) ->
         Pexp_variant (label, match expo with
             None -> None
@@ -277,10 +284,6 @@ and untype_expression exp =
         Pexp_open (lid, untype_expression exp)
     | Texp_newtype (s, exp) ->
         Pexp_newtype (s, untype_expression exp)
-    | Texp_constraint (exp, cto1, cto2) ->
-        Pexp_constraint (untype_expression exp,
-          may_map untype_core_type cto1, may_map untype_core_type cto2)
-
   in
   { pexp_loc = exp.exp_loc;
     pexp_desc = desc;

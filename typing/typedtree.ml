@@ -26,11 +26,11 @@ type optional = Required | Optional
 type pattern =
   { pat_desc: pattern_desc;
     pat_loc: Location.t;
+    pat_constraints : pat_constraint list;
     pat_type: type_expr;
     mutable pat_env: Env.t }
 
-and alias_kind =
-    TPat_alias of Ident.t * string loc
+and pat_constraint =
   | TPat_constraint of core_type
   | TPat_type of Path.t * Longident.t loc
   | TPat_unpack
@@ -38,10 +38,10 @@ and alias_kind =
 and pattern_desc =
     Tpat_any
   | Tpat_var of Ident.t * string loc
-  | Tpat_alias of pattern * alias_kind
+  | Tpat_alias of pattern * Ident.t * string loc
   | Tpat_constant of constant
   | Tpat_tuple of pattern list
-  | Tpat_construct of Path.t * Longident.t loc * constructor_description * pattern list
+  | Tpat_construct of Path.t * Longident.t loc * constructor_description * pattern list * bool
   | Tpat_variant of label * pattern option * row_desc ref
   | Tpat_record of ( Path.t * Longident.t loc * label_description * pattern) list * closed_flag
   | Tpat_array of pattern list
@@ -51,6 +51,7 @@ and pattern_desc =
 and expression =
   { exp_desc: expression_desc;
     exp_loc: Location.t;
+    exp_constraints : (core_type option * core_type option) list;
     exp_type: type_expr;
     exp_env: Env.t }
 
@@ -63,7 +64,7 @@ and expression_desc =
   | Texp_match of expression * (pattern * expression) list * partial
   | Texp_try of expression * (pattern * expression) list
   | Texp_tuple of expression list
-  | Texp_construct of Path.t * Longident.t loc * constructor_description * expression list
+  | Texp_construct of Path.t * Longident.t loc * constructor_description * expression list * bool
   | Texp_variant of label * expression option
   | Texp_record of (Path.t * Longident.t loc * label_description * expression) list * expression option
   | Texp_field of expression * Path.t * Longident.t loc * label_description
@@ -74,7 +75,6 @@ and expression_desc =
   | Texp_while of expression * expression
   | Texp_for of
       Ident.t * string loc * expression * expression * direction_flag * expression
-  | Texp_constraint of expression * core_type option * core_type option
   | Texp_when of expression * expression
   | Texp_send of expression * meth * expression option
   | Texp_new of Path.t * Longident.t loc * Types.class_declaration
@@ -104,7 +104,7 @@ and class_expr =
     cl_env: Env.t }
 
 and class_expr_desc =
-    Tcl_ident of Path.t * Longident.t loc * core_type list
+    Tcl_ident of Path.t * Longident.t loc * core_type list (* Pcl_constr *)
   | Tcl_structure of class_structure
   | Tcl_fun of label * pattern * (Ident.t * string loc * expression) list * class_expr * partial
   | Tcl_apply of class_expr * (label * expression option * optional) list
@@ -360,9 +360,9 @@ and 'a class_infos =
 (* Auxiliary functions over the a.s.t. *)
 
 let iter_pattern_desc f = function
-  | Tpat_alias(p, id) -> f p
+  | Tpat_alias(p, _, _) -> f p
   | Tpat_tuple patl -> List.iter f patl
-  | Tpat_construct(_, _, cstr, patl) -> List.iter f patl
+  | Tpat_construct(_, _, cstr, patl, _) -> List.iter f patl
   | Tpat_variant(_, pat, _) -> may f pat
   | Tpat_record (lbl_pat_list, _) ->
       List.iter (fun (_, _, lbl, pat) -> f pat) lbl_pat_list
@@ -375,14 +375,14 @@ let iter_pattern_desc f = function
 
 let map_pattern_desc f d =
   match d with
-  | Tpat_alias (p1, id) ->
-      Tpat_alias (f p1, id)
+  | Tpat_alias (p1, id, s) ->
+      Tpat_alias (f p1, id, s)
   | Tpat_tuple pats ->
       Tpat_tuple (List.map f pats)
   | Tpat_record (lpats, closed) ->
       Tpat_record (List.map (fun ( lid, lid_loc, l,p) -> lid, lid_loc, l, f p) lpats, closed)
-  | Tpat_construct (lid, lid_loc, c,pats) ->
-      Tpat_construct (lid, lid_loc, c, List.map f pats)
+  | Tpat_construct (lid, lid_loc, c,pats, arity) ->
+      Tpat_construct (lid, lid_loc, c, List.map f pats, arity)
   | Tpat_array pats ->
       Tpat_array (List.map f pats)
   | Tpat_lazy p1 -> Tpat_lazy (f p1)
@@ -402,10 +402,8 @@ let idents = ref([]: (Ident.t * string loc) list)
 let rec bound_idents pat =
   match pat.pat_desc with
   | Tpat_var (id,s) -> idents := (id,s) :: !idents
-  | Tpat_alias(p, TPat_alias (id,s) ) ->
+  | Tpat_alias(p, id, s ) ->
       bound_idents p; idents := (id,s) :: !idents
-  | Tpat_alias(p, _) ->
-      bound_idents p
   | Tpat_or(p1, _, _) ->
       (* Invariant : both arguments binds the same variables *)
       bound_idents p1
@@ -432,10 +430,10 @@ let rec alpha_pat env p = match p.pat_desc with
     {p with pat_desc =
      try Tpat_var (alpha_var env id, s) with
      | Not_found -> Tpat_any}
-| Tpat_alias (p1, TPat_alias (id, s)) ->
+| Tpat_alias (p1, id, s) ->
     let new_p =  alpha_pat env p1 in
     begin try
-      {p with pat_desc = Tpat_alias (new_p, TPat_alias (alpha_var env id, s))}
+      {p with pat_desc = Tpat_alias (new_p, alpha_var env id, s)}
     with
     | Not_found -> new_p
     end

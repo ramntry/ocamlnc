@@ -771,7 +771,7 @@ and search_pos_expr ~pos exp =
         search_pos_expr exp ~pos
       end
   | Texp_tuple l -> List.iter l ~f:(search_pos_expr ~pos)
-  | Texp_construct (_, _, _, l) -> List.iter l ~f:(search_pos_expr ~pos)
+  | Texp_construct (_, _, _, l,_) -> List.iter l ~f:(search_pos_expr ~pos)
   | Texp_variant (_, None) -> ()
   | Texp_variant (_, Some exp) -> search_pos_expr exp ~pos
   | Texp_record (l, opt) ->
@@ -831,13 +831,13 @@ and search_pos_pat ~pos ~env pat =
   | Tpat_var (id, _) ->
       add_found_str (`Exp(`Val (Pident id), pat.pat_type))
         ~env ~loc:pat.pat_loc
-  | Tpat_alias (pat, _) -> search_pos_pat pat ~pos ~env
+  | Tpat_alias (pat, _, _) -> search_pos_pat pat ~pos ~env
   | Tpat_lazy pat -> search_pos_pat pat ~pos ~env
   | Tpat_constant _ ->
       add_found_str (`Exp(`Const, pat.pat_type)) ~env ~loc:pat.pat_loc
   | Tpat_tuple l ->
       List.iter l ~f:(search_pos_pat ~pos ~env)
-  | Tpat_construct (_, _, _, l) ->
+  | Tpat_construct (_, _, _, l, _) ->
       List.iter l ~f:(search_pos_pat ~pos ~env)
   | Tpat_variant (_, None, _) -> ()
   | Tpat_variant (_, Some pat, _) -> search_pos_pat pat ~pos ~env

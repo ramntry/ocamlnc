@@ -294,10 +294,10 @@ let transl_prim loc prim args =
          simplify_constant_constructor) =
       Hashtbl.find comparisons_table prim_name in
     begin match args with
-      [arg1; {exp_desc = Texp_construct(_, _, {cstr_tag = Cstr_constant _}, _)}]
+      [arg1; {exp_desc = Texp_construct(_, _, {cstr_tag = Cstr_constant _}, _, _)}]
       when simplify_constant_constructor ->
         intcomp
-    | [{exp_desc = Texp_construct(_, _, {cstr_tag = Cstr_constant _}, _)}; arg2]
+    | [{exp_desc = Texp_construct(_, _, {cstr_tag = Cstr_constant _}, _, _)}; arg2]
       when simplify_constant_constructor ->
         intcomp
     | [arg1; {exp_desc = Texp_variant(_, None)}]
@@ -461,7 +461,7 @@ let rec name_pattern default = function
   | (p, e) :: rem ->
       match p.pat_desc with
         Tpat_var (id, _) -> id
-      | Tpat_alias(p, TPat_alias (id, _)) -> id
+      | Tpat_alias(p, id, _) -> id
       | _ -> name_pattern default rem
 
 (* Push the default values under the functional abstractions *)
@@ -657,7 +657,7 @@ and transl_exp0 e =
       with Not_constant ->
         Lprim(Pmakeblock(0, Immutable), ll)
       end
-  | Texp_construct(_, _, cstr, args) ->
+  | Texp_construct(_, _, cstr, args, _) ->
       let ll = transl_list args in
       begin match cstr.cstr_tag with
         Cstr_constant n ->
@@ -785,7 +785,7 @@ and transl_exp0 e =
           ( Const_int _ | Const_char _ | Const_string _
           | Const_int32 _ | Const_int64 _ | Const_nativeint _ )
       | Texp_function(_, _, _)
-      | Texp_construct (_, _, {cstr_arity = 0}, _)
+      | Texp_construct (_, _, {cstr_arity = 0}, _, _)
         -> transl_exp e
       | Texp_constant(Const_float _) ->
           Lprim(Pmakeblock(Obj.forward_tag, Immutable), [transl_exp e])
@@ -836,7 +836,6 @@ and transl_exp0 e =
   | Texp_open (_, _, exp)
   | Texp_poly (exp, _ )
   | Texp_newtype (_, exp)
-  | Texp_constraint (exp, _, _)
     -> transl_exp exp
 
 and transl_list expr_list =
@@ -932,16 +931,6 @@ and transl_function loc untuplify_fn repr partial pat_expr_list =
        Matching.for_function loc repr (Lvar param)
          (transl_cases pat_expr_list) partial)
 
-(* we need to go recursively in patterns to extract identifiers, because bin-annot
-leads to deeper patterns for _unpack and _constraint *)
-and get_rec_id pat =
-  match pat.pat_desc with
-      Tpat_var (id, _) -> id
-    | Tpat_alias (p, (TPat_unpack | TPat_constraint _)) -> get_rec_id p
-    | Tpat_alias ({pat_desc=Tpat_any},TPat_alias (id, _)) -> id
-    | _ ->
-      raise(Error(pat.pat_loc, Illegal_letrec_pat))
-
 and transl_let rec_flag pat_expr_list body =
   match rec_flag with
     Nonrecursive | Default ->
@@ -954,7 +943,10 @@ and transl_let rec_flag pat_expr_list body =
   | Recursive ->
       let idlist =
         List.map
-          (fun (pat, expr) -> get_rec_id pat)
+          (fun (pat, expr) -> match pat.pat_desc with
+              Tpat_var (id,_) -> id
+            | Tpat_alias ({pat_desc=Tpat_any}, id,_) -> id
+            | _ -> raise(Error(pat.pat_loc, Illegal_letrec_pat)))
         pat_expr_list in
       let transl_case (pat, expr) id =
         let lam = transl_exp expr in

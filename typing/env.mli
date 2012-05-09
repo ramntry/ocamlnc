@@ -17,15 +17,10 @@
 open Types
 
 module EnvLazy : sig
-  type 'a t
-  type ('a,'b) maker
+  type ('a,'b) t
 
-  val force : 'a t -> 'a
-  val create : ('a,'b) maker -> 'a -> 'b t
-  val declare_maker : string -> ('a,'b) maker
-  val register_maker : ('a,'b) maker -> ('a -> 'b) -> unit
-
-  exception UnknownLazyMaker of string
+  val force : ('a -> 'b) -> ('a,'b) t -> 'b
+  val create : 'a -> ('a,'b) t
 end
 
 type summary =
@@ -64,7 +59,7 @@ type t = {
   in_signature: bool;
 }
 
-and module_components = module_components_repr EnvLazy.t
+and module_components = (t * Subst.t * Path.t * Types.module_type,module_components_repr) EnvLazy.t
 
 and module_components_repr =
     Structure_comps of structure_components
@@ -78,7 +73,7 @@ and structure_components = {
   mutable comp_constrs_by_path:
       (string, (constructor_description list * int)) Tbl.t;
   mutable comp_types: (string, (type_declaration * int)) Tbl.t;
-  mutable comp_modules: (string, (module_type EnvLazy.t * int)) Tbl.t;
+  mutable comp_modules: (string, ( (Subst.t * Types.module_type,module_type) EnvLazy.t * int)) Tbl.t;
   mutable comp_modtypes: (string, (modtype_declaration * int)) Tbl.t;
   mutable comp_components: (string, (module_components * int)) Tbl.t;
   mutable comp_classes: (string, (class_declaration * int)) Tbl.t;

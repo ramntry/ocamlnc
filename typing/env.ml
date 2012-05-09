@@ -56,62 +56,38 @@ type error =
 
 exception Error of error
 
+
 module EnvLazy : sig
-  type 'a t
-  type ('a,'b) maker
+  type ('a,'b) t
 
-  val force : 'a t -> 'a
-  val create : ('a,'b) maker -> 'a -> 'b t
-  val declare_maker : string -> ('a,'b) maker
-  val register_maker : ('a,'b) maker -> ('a -> 'b) -> unit
-
-  exception UnknownLazyMaker of string
+  val force : ('a -> 'b) -> ('a,'b) t -> 'b
+  val create : 'a -> ('a,'b) t
 
 end  = struct
 
-  exception UnknownLazyMaker of string
+  type ('a,'b) t = ('a,'b) eval ref
 
-  module StringMap = Map.Make(String)
-
-  type 'a t = 'a eval ref
-
-  and 'a eval =
-      Done of 'a
+  and ('a,'b) eval =
+      Done of 'b
     | Raise of exn
-    | Thunk of string * Obj.t
+    | Thunk of 'a
 
-  type ('a,'b) maker = string
-
-  let makers = ref (StringMap.empty : (Obj.t -> Obj.t) StringMap.t)
-
-  let force : 'a . 'a t -> 'a = function x ->
+  let force f x =
     match !x with
         Done x -> x
       | Raise e -> raise e
-      | Thunk (name, args) ->
-          let maker = try
-            StringMap.find name !makers
-          with Not_found ->
-            raise (UnknownLazyMaker name)
-          in
+      | Thunk e ->
           try
-            let y = Obj.magic (maker args) in
+            let y = f e in
             x := Done y;
             y
           with e ->
             x := Raise e;
             raise e
 
-  let create maker args =
-    let x = ref (Thunk (Obj.magic maker, Obj.magic args)) in
+  let create x =
+    let x = ref (Thunk x) in
     x
-
-  let declare_maker name =
-    if name = "" then invalid_arg "EnvLazy.maker cannot by \"\"";
-    Obj.magic name
-
-  let register_maker maker f =
-    makers := StringMap.add (Obj.magic maker) (Obj.magic f) !makers
 
 end
 
@@ -180,7 +156,7 @@ type t = {
   in_signature: bool;
 }
 
-and module_components = module_components_repr EnvLazy.t
+and module_components = (t * Subst.t * Path.t * Types.module_type, module_components_repr) EnvLazy.t
 
 and module_components_repr =
     Structure_comps of structure_components
@@ -194,7 +170,7 @@ and structure_components = {
   mutable comp_constrs_by_path:
       (string, (constructor_description list * int)) Tbl.t;
   mutable comp_types: (string, (type_declaration * int)) Tbl.t;
-  mutable comp_modules: (string, (module_type EnvLazy.t * int)) Tbl.t;
+  mutable comp_modules: (string, ((Subst.t * Types.module_type,module_type) EnvLazy.t * int)) Tbl.t;
   mutable comp_modtypes: (string, (modtype_declaration * int)) Tbl.t;
   mutable comp_components: (string, (module_components * int)) Tbl.t;
   mutable comp_classes: (string, (class_declaration * int)) Tbl.t;
@@ -210,12 +186,8 @@ and functor_components = {
   fcomp_cache: (Path.t, module_components) Hashtbl.t  (* For memoization *)
 }
 
-let lazy_Subst__modtype = EnvLazy.declare_maker "Subst_modtype"
-let lazy_components_of_module = EnvLazy.declare_maker "components_of_module_maker"
 
-let _ =
-  EnvLazy.register_maker lazy_Subst__modtype
-    (fun (subst, mty) -> Subst.modtype subst mty)
+let subst_modtype_maker (subst, mty) = Subst.modtype subst mty
 
 let empty = {
   values = EnvTbl.empty; annotations = EnvTbl.empty; constrs = EnvTbl.empty;
@@ -255,6 +227,9 @@ let diff env1 env2 =
 let components_of_module' =
   ref ((fun env sub path mty -> assert false) :
           t -> Subst.t -> Path.t -> module_type -> module_components)
+let components_of_module_maker' =
+  ref ((fun (env, sub, path, mty) -> assert false) :
+          t * Subst.t * Path.t * module_type -> module_components_repr)
 let components_of_functor_appl' =
   ref ((fun f p1 p2 -> assert false) :
           functor_components -> Path.t -> Path.t -> module_components)
@@ -368,7 +343,7 @@ let rec find_module_descr path env =
         else raise Not_found
       end
   | Pdot(p, s, pos) ->
-      begin match EnvLazy.force(find_module_descr p env) with
+      begin match EnvLazy.force !components_of_module_maker' (find_module_descr p env) with
         Structure_comps c ->
           let (descr, pos) = Tbl.find s c.comp_components in
           descr
@@ -376,7 +351,7 @@ let rec find_module_descr path env =
          raise Not_found
       end
   | Papply(p1, p2) ->
-      begin match EnvLazy.force(find_module_descr p1 env) with
+      begin match EnvLazy.force !components_of_module_maker' (find_module_descr p1 env) with
         Functor_comps f ->
           !components_of_functor_appl' f p1 p2
       | Structure_comps c ->
@@ -389,7 +364,7 @@ let find proj1 proj2 path env =
       let (p, data) = EnvTbl.find_same id (proj1 env)
       in data
   | Pdot(p, s, pos) ->
-      begin match EnvLazy.force(find_module_descr p env) with
+      begin match EnvLazy.force !components_of_module_maker' (find_module_descr p env) with
         Structure_comps c ->
           let (data, pos) = Tbl.find s (proj2 c) in data
       | Functor_comps f ->
@@ -459,9 +434,9 @@ let find_module path env =
         else raise Not_found
       end
   | Pdot(p, s, pos) ->
-      begin match EnvLazy.force (find_module_descr p env) with
+      begin match EnvLazy.force !components_of_module_maker' (find_module_descr p env) with
         Structure_comps c ->
-          let (data, pos) = Tbl.find s c.comp_modules in EnvLazy.force data
+          let (data, pos) = Tbl.find s c.comp_modules in EnvLazy.force subst_modtype_maker data
       | Functor_comps f ->
           raise Not_found
       end
@@ -482,7 +457,7 @@ let rec lookup_module_descr lid env =
       end
   | Ldot(l, s) ->
       let (p, descr) = lookup_module_descr l env in
-      begin match EnvLazy.force descr with
+      begin match EnvLazy.force !components_of_module_maker' descr with
         Structure_comps c ->
           let (descr, pos) = Tbl.find s c.comp_components in
           (Pdot(p, s, pos), descr)
@@ -492,7 +467,7 @@ let rec lookup_module_descr lid env =
   | Lapply(l1, l2) ->
       let (p1, desc1) = lookup_module_descr l1 env in
       let (p2, mty2) = lookup_module l2 env in
-      begin match EnvLazy.force desc1 with
+      begin match EnvLazy.force !components_of_module_maker' desc1 with
         Functor_comps f ->
           !check_modtype_inclusion env mty2 p2 f.fcomp_arg;
           (Papply(p1, p2), !components_of_functor_appl' f p1 p2)
@@ -512,10 +487,10 @@ and lookup_module lid env =
       end
   | Ldot(l, s) ->
       let (p, descr) = lookup_module_descr l env in
-      begin match EnvLazy.force descr with
+      begin match EnvLazy.force !components_of_module_maker' descr with
         Structure_comps c ->
           let (data, pos) = Tbl.find s c.comp_modules in
-          (Pdot(p, s, pos), EnvLazy.force data)
+          (Pdot(p, s, pos), EnvLazy.force subst_modtype_maker data)
       | Functor_comps f ->
           raise Not_found
       end
@@ -523,7 +498,7 @@ and lookup_module lid env =
       let (p1, desc1) = lookup_module_descr l1 env in
       let (p2, mty2) = lookup_module l2 env in
       let p = Papply(p1, p2) in
-      begin match EnvLazy.force desc1 with
+      begin match EnvLazy.force !components_of_module_maker' desc1 with
         Functor_comps f ->
           !check_modtype_inclusion env mty2 p2 f.fcomp_arg;
           (p, Subst.modtype (Subst.add_module f.fcomp_param p2 f.fcomp_subst)
@@ -538,7 +513,7 @@ let lookup proj1 proj2 lid env =
       EnvTbl.find_name s (proj1 env)
   | Ldot(l, s) ->
       let (p, desc) = lookup_module_descr l env in
-      begin match EnvLazy.force desc with
+      begin match EnvLazy.force !components_of_module_maker' desc with
         Structure_comps c ->
           let (data, pos) = Tbl.find s (proj2 c) in
           (Pdot(p, s, pos), data)
@@ -554,7 +529,7 @@ let lookup_simple proj1 proj2 lid env =
       EnvTbl.find_name s (proj1 env)
   | Ldot(l, s) ->
       let (p, desc) = lookup_module_descr l env in
-      begin match EnvLazy.force desc with
+      begin match EnvLazy.force !components_of_module_maker' desc with
         Structure_comps c ->
           let (data, pos) = Tbl.find s (proj2 c) in
           data
@@ -798,7 +773,7 @@ let rec prefix_idents root pos sub = function
 (* Compute structure descriptions *)
 
 let rec components_of_module env sub path mty =
-  EnvLazy.create lazy_components_of_module (env, sub, path, mty)
+  EnvLazy.create (env, sub, path, mty)
 
 and components_of_module_maker (env, sub, path, mty) =
   (match scrape_modtype mty env with
@@ -853,7 +828,7 @@ and components_of_module_maker (env, sub, path, mty) =
               Tbl.add (Ident.name id) (cstr, !pos) c.comp_constrs;
             incr pos
         | Sig_module(id, mty, _) ->
-            let mty' = EnvLazy.create lazy_Subst__modtype (sub, mty) in
+            let mty' = EnvLazy.create (sub, mty) in
             c.comp_modules <-
               Tbl.add (Ident.name id) (mty', !pos) c.comp_modules;
             let comps = components_of_module !env sub path mty in
@@ -1052,7 +1027,7 @@ let components_of_functor_appl f p1 p2 =
 let _ =
   components_of_module' := components_of_module;
   components_of_functor_appl' := components_of_functor_appl;
-  EnvLazy.register_maker lazy_components_of_module components_of_module_maker
+  components_of_module_maker' := components_of_module_maker
 
 (* Insertion of bindings by identifier *)
 

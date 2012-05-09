@@ -95,11 +95,8 @@ module ForIterator = struct
     let enter_pattern pat =
       match pat.pat_desc with
       | Tpat_var (id, _)
-      | Tpat_alias (_, TPat_alias (id,_))
-
+      | Tpat_alias (_, id,_)
         -> add_variable pat id
-
-      | Tpat_alias (_, (TPat_constraint _ | TPat_type _ | TPat_unpack) )
       | Tpat_any -> ()
       | Tpat_constant _
       | Tpat_tuple _
