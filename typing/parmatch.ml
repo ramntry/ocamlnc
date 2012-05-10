@@ -24,7 +24,7 @@ open Typedtree
 (*************************************)
 
 let make_pat desc ty tenv =
-  {pat_desc = desc; pat_loc = Location.none; pat_constraints = [];
+  {pat_desc = desc; pat_loc = Location.none; pat_extra = [];
    pat_type = ty ; pat_env = tenv }
 
 let omega = make_pat Tpat_any Ctype.none Env.empty
@@ -168,15 +168,15 @@ let is_cons tag v  = match get_constr_name tag v.pat_type v.pat_env with
 
 
 let rec pretty_val ppf v =
-  match v.pat_constraints with
-      cstr :: rem ->
+  match v.pat_extra with
+      (cstr,_) :: rem ->
         begin match cstr with
-          | TPat_unpack ->
-            fprintf ppf "@[(module %a)@]" pretty_val { v with pat_constraints = rem }
-          | TPat_constraint ctyp ->
-            fprintf ppf "@[(%a : _)@]" pretty_val { v with pat_constraints = rem }
-          | TPat_type _ ->
-            fprintf ppf "@[(# %a)@]" pretty_val { v with pat_constraints = rem }
+          | Tpat_unpack ->
+            fprintf ppf "@[(module %a)@]" pretty_val { v with pat_extra = rem }
+          | Tpat_constraint ctyp ->
+            fprintf ppf "@[(%a : _)@]" pretty_val { v with pat_extra = rem }
+          | Tpat_type _ ->
+            fprintf ppf "@[(# %a)@]" pretty_val { v with pat_extra = rem }
         end
     | [] ->
   match v.pat_desc with
@@ -936,9 +936,6 @@ let build_other_gadt ext env =
      1- for all ps in pss ps # es (ps and es are not compatible)
      2- qs <= es                  (es matches qs)
 *)
-
-let snd3 (_,x,_) = x
-let thd4 (_,_,x,_) = x
 
 let rec has_instance p = match p.pat_desc with
   | Tpat_variant (l,_,r) when is_absent l r -> false

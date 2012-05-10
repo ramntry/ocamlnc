@@ -130,10 +130,10 @@ and untype_exception_declaration decl =
 and untype_pattern pat =
   let desc =
   match pat with
-      { pat_constraints=[TPat_unpack]; pat_desc = Tpat_var (_,name) } -> Ppat_unpack name
-    | { pat_constraints=[TPat_type (path, lid)] } -> Ppat_type lid
-    | { pat_constraints= TPat_constraint ct :: rem } ->
-        Ppat_constraint (untype_pattern { pat with pat_constraints=rem }, untype_core_type ct)
+      { pat_extra=[Tpat_unpack, _]; pat_desc = Tpat_var (_,name) } -> Ppat_unpack name
+    | { pat_extra=[Tpat_type (path, lid), _] } -> Ppat_type lid
+    | { pat_extra= (Tpat_constraint ct, _) :: rem } ->
+        Ppat_constraint (untype_pattern { pat with pat_extra=rem }, untype_core_type ct)
     | _ ->
     match pat.pat_desc with
       Tpat_any -> Ppat_any
@@ -178,10 +178,12 @@ and option f x = match x with None -> None | Some e -> Some (f e)
 
 and untype_expression exp =
   let desc =
-  match exp.exp_constraints with
-      (cty1, cty2) :: rem ->
-        Pexp_constraint (untype_expression { exp with exp_constraints = rem },
+  match exp.exp_extra with
+      (Texp_constraint (cty1, cty2), _) :: rem ->
+        Pexp_constraint (untype_expression { exp with exp_extra = rem },
                          option untype_core_type cty1, option untype_core_type cty2)
+    | (Texp_open (path, lid, _), _) :: rem ->
+        Pexp_open (lid, untype_expression { exp with exp_extra = rem} )
     | [] ->
     match exp.exp_desc with
       Texp_ident (path, lid, _) -> Pexp_ident (lid)
@@ -280,8 +282,6 @@ and untype_expression exp =
     | Texp_poly (exp, None) -> Pexp_poly(untype_expression exp, None)
     | Texp_poly (exp, Some ct) ->
         Pexp_poly (untype_expression exp, Some (untype_core_type ct))
-    | Texp_open (path, lid, exp) ->
-        Pexp_open (lid, untype_expression exp)
     | Texp_newtype (s, exp) ->
         Pexp_newtype (s, untype_expression exp)
   in

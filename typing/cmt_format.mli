@@ -55,6 +55,7 @@ type cmt_infos = {
   cmt_loadpath : string list;
   cmt_packed : string list;
   cmt_source_digest : string option;
+  cmt_initial_env : Env.t;
 (* TODO
   cmt_crcs : (string * Digest.t) list;
   cmt_flags : Env.pers_flags list;
@@ -79,10 +80,10 @@ val read : string -> Cmi_format.cmi_infos option * cmt_infos option
 val read_cmt : string -> cmt_infos
 val read_cmi : string -> Cmi_format.cmi_infos
 
-(** [save_cmt modname filename binary_annots sourcefile packed_modules sg]
+(** [save_cmt modname filename binary_annots sourcefile packed_modules initial_env sg]
     writes a cmt(i) file.  *)
 val save_cmt :
-  string -> string -> binary_annots -> string option -> string list ->
+  string -> string -> binary_annots -> string option -> string list -> Env.t ->
   (Types.signature_item list * (string * Digest.t) list) option ->
   unit
 

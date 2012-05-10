@@ -25,14 +25,14 @@ type optional = Required | Optional
 type pattern =
   { pat_desc: pattern_desc;
     pat_loc: Location.t;
-    pat_constraints : pat_constraint list;
+    pat_extra : (pat_extra * Location.t) list;
     pat_type: type_expr;
     mutable pat_env: Env.t }
 
-and pat_constraint =
-  | TPat_constraint of core_type
-  | TPat_type of Path.t * Longident.t loc
-  | TPat_unpack
+and pat_extra =
+  | Tpat_constraint of core_type
+  | Tpat_type of Path.t * Longident.t loc
+  | Tpat_unpack
 
 and pattern_desc =
     Tpat_any
@@ -50,9 +50,13 @@ and pattern_desc =
 and expression =
   { exp_desc: expression_desc;
     exp_loc: Location.t;
-    exp_constraints : (core_type option * core_type option) list;
+    exp_extra : (exp_extra * Location.t) list;
     exp_type: type_expr;
     exp_env: Env.t }
+
+and exp_extra =
+    Texp_constraint of core_type option * core_type option
+  | Texp_open of Path.t * Longident.t loc * Env.t
 
 and expression_desc =
     Texp_ident of Path.t * Longident.t loc * Types.value_description
@@ -88,7 +92,6 @@ and expression_desc =
   | Texp_object of class_structure * string list
   | Texp_newtype of string * expression
   | Texp_pack of module_expr
-  | Texp_open of Path.t * Longident.t loc * expression
 
 and meth =
     Tmeth_name of string
@@ -163,6 +166,7 @@ and module_expr_desc =
 and structure = {
   str_items : structure_item list;
   str_type : Types.signature;
+  str_final_env : Env.t;
 }
 
 and structure_item =
@@ -208,6 +212,7 @@ and module_type_desc =
 and signature = {
   sig_items : signature_item list;
   sig_type : Types.signature;
+  sig_final_env : Env.t;
 }
 
 and signature_item =

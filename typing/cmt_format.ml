@@ -52,6 +52,7 @@ type cmt_infos = {
   cmt_loadpath : string list;
   cmt_packed : string list;
   cmt_source_digest : string option;
+  cmt_initial_env : Env.t;
 (* TODO
   cmt_crcs : (string * Digest.t) list;
   cmt_flags : Env.pers_flags list;
@@ -120,7 +121,7 @@ let add_saved_type b = saved_types := b :: !saved_types
 let get_saved_types () = !saved_types
 let set_saved_types l = saved_types := l
 
-let save_cmt modname filename binary_annots sourcefile packed_modules sg =
+let save_cmt modname filename binary_annots sourcefile packed_modules initial_env sg =
   if !Clflags.binary_annotations && not !Clflags.print_types then begin
     let oc = open_out filename in
     begin
@@ -150,6 +151,7 @@ let save_cmt modname filename binary_annots sourcefile packed_modules sg =
       cmt_loadpath = !Config.load_path;
       cmt_packed = packed_modules;
       cmt_source_digest = source_digest;
+      cmt_initial_env = initial_env;
 (* TODO
       cmt_crcs = crcs;
       cmt_flags = [];

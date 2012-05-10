@@ -21,8 +21,6 @@ open Location
 open Misc
 open Parsetree
 
-let thd3 (_,_,x) = x
-
 (* User programs must not use identifiers that start with these prefixes. *)
 let idprefix = "__ocaml_prof_";;
 let modprefix = "OCAML__prof_";;

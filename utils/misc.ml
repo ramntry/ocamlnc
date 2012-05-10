@@ -216,3 +216,12 @@ let rev_split_words s =
 let get_ref r =
   let v = !r in
   r := []; v
+
+let fst3 (x, _, _) = x
+let snd3 (_,x,_) = x
+let thd3 (_,_,x) = x
+
+let fst4 (x, _, _, _) = x
+let snd4 (_,x,_, _) = x
+let thd4 (_,_,x,_) = x
+

@@ -27,9 +27,6 @@ open Translobj
 open Translcore
 open Translclass
 
-let fst3 (x, _, _) = x
-let fst4 (x, _, _, _) = x
-
 type error =
   Circular_dependency of Ident.t
 

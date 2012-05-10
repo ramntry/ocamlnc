@@ -79,11 +79,12 @@ let interface ppf sourcefile outputprefix =
   check_unit_name ppf sourcefile modulename;
   Env.set_unit_name modulename;
   let inputfile = Pparse.preprocess sourcefile in
+  let initial_env = initial_env () in
   try
     let ast =
       Pparse.file ppf inputfile Parse.interface ast_intf_magic_number in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
-    let sg = Typemod.transl_signature (initial_env()) ast in
+    let sg = Typemod.transl_signature initial_env ast in
     if !Clflags.print_types then
       fprintf std_formatter "%a@." Printtyp.signature
                                    (Typemod.simplify_signature sg.sig_type);
@@ -92,7 +93,7 @@ let interface ppf sourcefile outputprefix =
       Env.save_signature sg.sig_type modulename
         (outputprefix ^ ".cmi");
       Typemod.save_signature modulename sg outputprefix sourcefile
-        (sg.sig_type, Env.imported_units()) ;
+       initial_env (sg.sig_type, Env.imported_units()) ;
     end;
     Pparse.remove_preprocessed inputfile
   with e ->

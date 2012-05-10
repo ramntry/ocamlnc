@@ -10,6 +10,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(*
+TODO:
+ - 2012/05/10: Follow camlp4 way of building map and iter using classes
+     and inheritance ?
+*)
+
 open Asttypes
 open Typedtree
 
@@ -189,10 +195,10 @@ module MakeIterator(Iter : IteratorArgument) : sig
 
     and iter_pattern pat =
       Iter.enter_pattern pat;
-      List.iter (function
-              | TPat_type _ -> ()
-              | TPat_unpack -> ()
-              | TPat_constraint ct -> iter_core_type ct) pat.pat_constraints;
+      List.iter (fun (cstr, _) -> match cstr with
+              | Tpat_type _ -> ()
+              | Tpat_unpack -> ()
+              | Tpat_constraint ct -> iter_core_type ct) pat.pat_extra;
       begin
         match pat.pat_desc with
           Tpat_any -> ()
@@ -220,8 +226,11 @@ module MakeIterator(Iter : IteratorArgument) : sig
 
     and iter_expression exp =
       Iter.enter_expression exp;
-      List.iter (function (cty1, cty2) -> option iter_core_type cty1; option iter_core_type cty2)
-        exp.exp_constraints;
+      List.iter (function (cstr, _) ->
+        match cstr with
+            Texp_constraint (cty1, cty2) -> option iter_core_type cty1; option iter_core_type cty2
+        | Texp_open (path, _, _) -> ())
+        exp.exp_extra;
       begin
         match exp.exp_desc with
           Texp_ident (path, _, _) -> ()
@@ -316,8 +325,6 @@ module MakeIterator(Iter : IteratorArgument) : sig
         | Texp_poly (exp, None) -> iter_expression exp
         | Texp_poly (exp, Some ct) ->
             iter_expression exp; iter_core_type ct
-        | Texp_open (path, _, exp) ->
-            iter_expression exp
         | Texp_newtype (s, exp) ->
             iter_expression exp
       end;

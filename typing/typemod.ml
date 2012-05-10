@@ -442,7 +442,7 @@ and transl_signature env sg =
   let rec transl_sig env sg =
     Ctype.init_def(Ident.current_time());
     match sg with
-      [] -> [], []
+      [] -> [], [], env
     | item :: srem ->
 	let loc = item.psig_loc in
         match item.psig_desc with
@@ -450,33 +450,37 @@ and transl_signature env sg =
             let tdesc = Typedecl.transl_value_decl env item.psig_loc sdesc in
             let desc = tdesc.val_val in
             let (id, newenv) = Env.enter_value ~check:(fun s -> Warnings.Unused_value_declaration s) name.txt desc env in
-            let (trem,rem) = transl_sig newenv srem in
+            let (trem,rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_value (id, name, tdesc)) env loc :: trem,
-            if List.exists (Ident.equal id) (get_values rem) then rem
-            else Sig_value(id, desc) :: rem
+            (if List.exists (Ident.equal id) (get_values rem) then rem
+            else Sig_value(id, desc) :: rem),
+              final_env
         | Psig_type sdecls ->
             List.iter
               (fun (name, decl) -> check "type" item.psig_loc type_names name.txt)
               sdecls;
             let (decls, newenv) = Typedecl.transl_type_decl env sdecls in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_type decls) env loc :: trem,
             map_rec'' (fun rs (id, _, info) ->
-                Sig_type(id, info.typ_type, rs)) decls rem
+                Sig_type(id, info.typ_type, rs)) decls rem,
+            final_env
         | Psig_exception(name, sarg) ->
             let arg = Typedecl.transl_exception env item.psig_loc sarg in
             let (id, newenv) = Env.enter_exception name.txt arg.exn_exn env in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_exception (id, name, arg)) env loc :: trem,
-            Sig_exception(id, arg.exn_exn) :: rem
+            Sig_exception(id, arg.exn_exn) :: rem,
+            final_env
         | Psig_module(name, smty) ->
             check "module" item.psig_loc module_names name.txt;
             let tmty = transl_modtype env smty in
             let mty = tmty.mty_type in
             let (id, newenv) = Env.enter_module name.txt mty env in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_module (id, name, tmty)) env loc :: trem,
-            Sig_module(id, mty, Trec_not) :: rem
+            Sig_module(id, mty, Trec_not) :: rem,
+            final_env
         | Psig_recmodule sdecls ->
             List.iter
               (fun (name, smty) ->
@@ -484,20 +488,22 @@ and transl_signature env sg =
               sdecls;
             let (decls, newenv) =
               transl_recmodule_modtypes item.psig_loc env sdecls in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_recmodule decls) env loc :: trem,
-            map_rec (fun rs (id, _, tmty) -> Sig_module(id, tmty.mty_type, rs)) decls rem
+            map_rec (fun rs (id, _, tmty) -> Sig_module(id, tmty.mty_type, rs)) decls rem,
+            final_env
         | Psig_modtype(name, sinfo) ->
             check "module type" item.psig_loc modtype_names name.txt;
             let (tinfo, info) = transl_modtype_info env sinfo in
             let (id, newenv) = Env.enter_modtype name.txt info env in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_modtype (id, name, tinfo)) env loc :: trem,
-            Sig_modtype(id, info) :: rem
+            Sig_modtype(id, info) :: rem,
+            final_env
         | Psig_open lid ->
             let (path, newenv) = type_open env item.psig_loc lid in
-            let (trem, rem) = transl_sig newenv srem in
-            mksig (Tsig_open (path,lid)) env loc :: trem, rem
+            let (trem, rem, final_env) = transl_sig newenv srem in
+            mksig (Tsig_open (path,lid)) env loc :: trem, rem, final_env
         | Psig_include smty ->
             let tmty = transl_modtype env smty in
             let mty = tmty.mty_type in
@@ -508,16 +514,16 @@ and transl_signature env sg =
                               item.psig_loc)
               sg;
             let newenv = Env.add_signature sg env in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_include (tmty, sg)) env loc :: trem,
-            remove_values (get_values rem) sg @ rem
+            remove_values (get_values rem) sg @ rem, final_env
         | Psig_class cl ->
             List.iter
               (fun {pci_name = name} ->
                  check "type" item.psig_loc type_names name.txt )
               cl;
             let (classes, newenv) = Typeclass.class_descriptions env cl in
-            let (trem, rem) = transl_sig newenv srem in
+            let (trem, rem, final_env) = transl_sig newenv srem in
               mksig (Tsig_class (List.map2 (fun pcl tcl ->
 				       let (_, _, _, _, _, _, _, _, _, _, _, tcl) = tcl in
 					 tcl
@@ -529,14 +535,15 @@ and transl_signature env sg =
                      Sig_class_type(i', d', rs);
                      Sig_type(i'', d'', rs);
                      Sig_type(i''', d''', rs)])
-               classes [rem])
+               classes [rem]),
+            final_env
         | Psig_class_type cl ->
             List.iter
               (fun {pci_name = name} ->
                  check "type" item.psig_loc type_names name.txt)
               cl;
             let (classes, newenv) = Typeclass.class_type_declarations env cl in
-            let (trem,rem) = transl_sig newenv srem in
+            let (trem,rem, final_env) = transl_sig newenv srem in
             mksig (Tsig_class_type (List.map2 (fun pcl tcl ->
 	      let (_, _, _, _, _, _, _, tcl) = tcl in
 	      tcl
@@ -547,11 +554,12 @@ and transl_signature env sg =
                    [Sig_class_type(i, d, rs);
                     Sig_type(i', d', rs);
                     Sig_type(i'', d'', rs)])
-                 classes [rem])
+                 classes [rem]),
+            final_env
   in
   let previous_saved_types = Cmt_format.get_saved_types () in
-  let (trem, rem) = transl_sig (Env.in_signature env) sg in
-  let sg = { sig_items = trem; sig_type =  rem } in
+  let (trem, rem, final_env) = transl_sig (Env.in_signature env) sg in
+  let sg = { sig_items = trem; sig_type =  rem; sig_final_env = final_env } in
   Cmt_format.set_saved_types ( (Cmt_format.Partial_signature sg) :: previous_saved_types );
   sg
 
@@ -1077,10 +1085,10 @@ and type_structure funct_body anchor env sstr scope =
   if !Clflags.annotations
   then List.iter (function {pstr_loc = l} -> Stypes.record_phrase l) sstr; (* moved to genannot *)
   let previous_saved_types = Cmt_format.get_saved_types () in
-  let (items, sg, finalenv) = type_struct env sstr in
-  let str = { str_items = items; str_type = sg } in
+  let (items, sg, final_env) = type_struct env sstr in
+  let str = { str_items = items; str_type = sg; str_final_env = final_env } in
   Cmt_format.set_saved_types (( Cmt_format.Partial_structure str) :: previous_saved_types);
-  str, sg, finalenv
+  str, sg, final_env
 
 let type_module = type_module true false None
 let type_structure = type_structure false None
@@ -1229,7 +1237,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       (* It is important to run these checks after the inclusion test above,
          so that value declarations which are not used internally but exported
          are not reported as being unused. *)
-      Cmt_format.save_cmt modulename (outputprefix ^ ".cmt") (Cmt_format.Implementation str) (Some sourcefile) [] None;
+      Cmt_format.save_cmt modulename (outputprefix ^ ".cmt") (Cmt_format.Implementation str) (Some sourcefile) [] initial_env None;
       (str, coercion)
     end else begin
       check_nongen_schemes finalenv str.str_items;
@@ -1243,7 +1251,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
          declarations like "let x = true;; let x = 1;;", because in this
          case, the inferred signature contains only the last declaration. *)
         Cmt_format.save_cmt modulename (outputprefix ^ ".cmt") (Cmt_format.Implementation str)
-          (Some sourcefile) [] (Some (str.str_type, Env.imported_units()));
+          (Some sourcefile) [] initial_env (Some (str.str_type, Env.imported_units()));
       if not !Clflags.dont_write_files then
         Env.save_signature simple_sg modulename (outputprefix ^ ".cmi");
       (str, coercion)
@@ -1252,13 +1260,13 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
   with e ->
     Cmt_format.save_cmt modulename (outputprefix ^ ".cmt")
       (Cmt_format.Partial_implementation (Array.of_list (Cmt_format.get_saved_types ())))
-      (Some sourcefile) [] None;
+      (Some sourcefile) [] initial_env None;
     raise e
 
 
-let save_signature modname tsg outputprefix source_file cmi =
+let save_signature modname tsg outputprefix source_file initial_env cmi =
   Cmt_format.save_cmt modname (outputprefix ^ ".cmti")
-    (Cmt_format.Interface tsg) (Some source_file) [] (Some cmi)
+    (Cmt_format.Interface tsg) (Some source_file) [] initial_env (Some cmi)
 
 (* "Packaging" of several compilation units into one unit
    having them as sub-modules.  *)
@@ -1297,7 +1305,7 @@ let package_units objfiles cmifile modulename =
     end;
     let dclsig = Env.read_signature modulename cmifile in
     Cmt_format.save_cmt modulename (prefix ^ ".cmt")
-      (Cmt_format.Packed (sg, objfiles)) None objfiles None ;
+      (Cmt_format.Packed (sg, objfiles)) None objfiles Env.initial None ;
     Includemod.compunit "(obtained by packing)" sg mlifile dclsig
   end else begin
     (* Determine imports *)
@@ -1310,7 +1318,7 @@ let package_units objfiles cmifile modulename =
     if not !Clflags.dont_write_files then
       Env.save_signature_with_imports sg modulename (prefix ^ ".cmi") imports;
     Cmt_format.save_cmt modulename (prefix ^ ".cmt")
-      (Cmt_format.Packed (sg, objfiles)) None objfiles (Some (sg, imports));
+      (Cmt_format.Packed (sg, objfiles)) None objfiles Env.initial (Some (sg, imports));
     Tcoerce_none
   end
 
