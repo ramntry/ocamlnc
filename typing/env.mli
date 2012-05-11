@@ -231,3 +231,36 @@ val check_modtype_inclusion:
       (t -> module_type -> Path.t -> module_type -> unit) ref
 (* Forward declaration to break mutual recursion with Typecore. *)
 val add_delayed_check_forward: ((unit -> unit) -> unit) ref
+
+(** Folding over all identifiers (for analysis purpose) *)
+
+val fold_values:
+  (string -> Path.t -> Types.value_description -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+val fold_types:
+  (string -> Path.t -> Types.type_declaration -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+val fold_constructors:
+  (string -> Path.t -> Types.constructor_description -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+val fold_labels:
+  (string -> Path.t -> Types.label_description -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+
+(** Persistent structures are only traversed if they are already loaded. *)
+val fold_modules:
+  (string -> Path.t -> Types.module_type -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+
+val fold_modtypes:
+  (string -> Path.t -> Types.modtype_declaration -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+val fold_classs:
+  (string -> Path.t -> Types.class_declaration -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+val fold_cltypes:
+  (string -> Path.t -> Types.class_type_declaration -> 'a -> 'a) ->
+  Longident.t option -> t -> 'a -> 'a
+
+
+

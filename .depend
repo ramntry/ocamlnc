@@ -94,7 +94,7 @@ typing/predef.cmi : typing/types.cmi typing/path.cmi typing/ident.cmi
 typing/primitive.cmi :
 typing/printtyp.cmi : typing/types.cmi typing/path.cmi \
     typing/outcometree.cmi parsing/longident.cmi typing/ident.cmi
-typing/printtyped.cmi : parsing/parsetree.cmi
+typing/printtyped.cmi : typing/typedtree.cmi
 typing/stypes.cmi : typing/typedtree.cmi parsing/location.cmi \
     typing/annot.cmi
 typing/subst.cmi : typing/types.cmi typing/path.cmi typing/ident.cmi

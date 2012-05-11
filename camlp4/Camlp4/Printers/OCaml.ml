@@ -106,7 +106,8 @@ module Make (Syntax : Sig.Camlp4Syntax) = struct
           "Cannot print %S this identifier does not respect OCaml lexing rules (%s)"
           str (Lexer.Error.to_string exn)) ];
 
-  value ocaml_char x = x;
+  value ocaml_char x =
+      match x with [ "'" -> "\\'" | c -> c ];
 
   value rec get_expr_args a al =
     match a with

@@ -1203,6 +1203,75 @@ let save_signature_with_imports sg modname filename imports =
 let save_signature sg modname filename =
   save_signature_with_imports sg modname filename (imported_units())
 
+(* Folding on environments *)
+let ident_tbl_fold f t acc =
+  List.fold_right
+    (fun key acc -> f key (EnvTbl.find_same_not_using key t) acc)
+    (EnvTbl.keys t)
+    acc
+
+let find_all proj1 proj2 f lid env acc =
+  match lid with
+    | None ->
+      ident_tbl_fold
+        (fun id (p, data) acc -> f (Ident.name id) p data acc)
+        (proj1 env) acc
+    | Some l ->
+      let p, desc = lookup_module_descr l env in
+      begin match EnvLazy.force components_of_module_maker desc with
+          Structure_comps c ->
+            Tbl.fold
+              (fun s (data, pos) acc -> f s (Pdot (p, s, pos)) data acc)
+              (proj2 c) acc
+        | Functor_comps _ ->
+          raise Not_found
+      end
+
+let fold_modules f lid env acc =
+  match lid with
+    | None ->
+      let acc =
+        ident_tbl_fold
+          (fun id (p, data) acc -> f (Ident.name id) p data acc)
+          env.modules
+          acc
+      in
+      Hashtbl.fold
+        (fun name ps acc ->
+          match ps with
+              None -> acc
+            | Some ps ->
+              f name (Pident(Ident.create_persistent name)) (Mty_signature ps.ps_sig) acc)
+        persistent_structures
+        acc
+    | Some l ->
+      let p, desc = lookup_module_descr l env in
+      begin match EnvLazy.force components_of_module_maker desc with
+          Structure_comps c ->
+            Tbl.fold
+              (fun s (data, pos) acc -> f s (Pdot (p, s, pos)) (EnvLazy.force subst_modtype_maker data) acc)
+              c.comp_modules
+              acc
+        | Functor_comps _ ->
+          raise Not_found
+      end
+
+let fold_values f =
+  find_all (fun env -> env.values) (fun sc -> sc.comp_values) f
+and fold_constructors f =
+  find_all (fun env -> env.constrs) (fun sc -> sc.comp_constrs) f
+and fold_labels f =
+  find_all (fun env -> env.labels) (fun sc -> sc.comp_labels) f
+and fold_types f =
+  find_all (fun env -> env.types) (fun sc -> sc.comp_types) f
+and fold_modtypes f =
+  find_all (fun env -> env.modtypes) (fun sc -> sc.comp_modtypes) f
+and fold_classs f =
+  find_all (fun env -> env.classes) (fun sc -> sc.comp_classes) f
+and fold_cltypes f =
+  find_all (fun env -> env.cltypes) (fun sc -> sc.comp_cltypes) f
+
+
 (* Make the initial environment *)
 
 let initial = Predef.build_initial_env add_type add_exception empty
