@@ -63,6 +63,7 @@ let read_cmi filename =
       raise (Error e)
 
 let output_cmi filename oc cmi =
+(* beware: the provided signature must have been substituted for saving *)
   output_string oc Config.cmi_magic_number;
   output_value oc (cmi.cmi_name, cmi.cmi_sign);
   flush oc;

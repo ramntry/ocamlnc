@@ -47,16 +47,13 @@ type cmt_infos = {
   cmt_annots : binary_annots;
   cmt_comments : (string * Location.t) list;
   cmt_args : string array;
-  cmt_sourcefile : string;
+  cmt_sourcefile : string option;
   cmt_builddir : string;
   cmt_loadpath : string list;
-  cmt_packed : string list;
-  cmt_source_digest : string option;
+  cmt_source_digest : Digest.t option;
   cmt_initial_env : Env.t;
-(* TODO
-  cmt_crcs : (string * Digest.t) list;
-  cmt_flags : Env.pers_flags list;
-*)
+  cmt_imports : (string * Digest.t) list;
+  cmt_interface_digest : Digest.t option;
 }
 
 type error =
@@ -121,13 +118,14 @@ let add_saved_type b = saved_types := b :: !saved_types
 let get_saved_types () = !saved_types
 let set_saved_types l = saved_types := l
 
-let save_cmt modname filename binary_annots sourcefile packed_modules initial_env sg =
+let save_cmt filename modname binary_annots sourcefile initial_env sg =
   if !Clflags.binary_annotations && not !Clflags.print_types then begin
+    let imports = Env.imported_units () in
     let oc = open_out filename in
-    begin
+    let this_crc =
       match sg with
-          None -> ()
-        | Some (sg, imports) ->
+          None -> None
+        | Some (sg) ->
           let cmi =
                 {
                   cmi_name = modname;
@@ -137,25 +135,21 @@ let save_cmt modname filename binary_annots sourcefile packed_modules initial_en
                   cmi_crcs = imports;
                 }
           in
-          let _crc = output_cmi filename oc cmi in
-          () (* don't need this crc ? *)
-    end;
+          Some (output_cmi filename oc cmi)
+    in
     let source_digest = match sourcefile with Some f -> Some (Digest.file f) | None -> None in
     let cmt = {
       cmt_modname = modname;
       cmt_annots = binary_annots;
       cmt_comments = Lexer.comments ();
       cmt_args = Sys.argv;
-      cmt_sourcefile = (match sourcefile with Some f -> f | None -> filename);
+      cmt_sourcefile = sourcefile;
       cmt_builddir =  Sys.getcwd ();
       cmt_loadpath = !Config.load_path;
-      cmt_packed = packed_modules;
       cmt_source_digest = source_digest;
       cmt_initial_env = initial_env;
-(* TODO
-      cmt_crcs = crcs;
-      cmt_flags = [];
-*)
+      cmt_imports = List.sort compare imports;
+      cmt_interface_digest = this_crc;
     } in
     output_cmt oc cmt;
     close_out oc;

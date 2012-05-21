@@ -81,21 +81,20 @@ let interface ppf sourcefile outputprefix =
     let ast =
       Pparse.file ppf inputfile Parse.interface ast_intf_magic_number in
     if !Clflags.dump_parsetree then fprintf ppf "%a@." Printast.interface ast;
-    let sg = Typemod.transl_signature initial_env ast in
+    let tsg = Typemod.transl_signature initial_env ast in
     if !Clflags.print_types then
       fprintf std_formatter "%a@." Printtyp.signature
-                                   (Typemod.simplify_signature sg.sig_type);
+                                   (Typemod.simplify_signature tsg.sig_type);
     Warnings.check_fatal ();
     if not !Clflags.print_types then begin
-      Env.save_signature sg.sig_type modulename (outputprefix ^ ".cmi");
-      Typemod.save_signature modulename sg outputprefix sourcefile initial_env
-        (sg.sig_type, Env.imported_units()) ;
+      let sg = Env.save_signature tsg.sig_type modulename (outputprefix ^ ".cmi") in
+      Typemod.save_signature modulename tsg outputprefix sourcefile initial_env sg ;
     end;
     Pparse.remove_preprocessed inputfile;
-    Stypes.dump (outputprefix ^ ".annot");
+    Stypes.dump (Some (outputprefix ^ ".annot"))
   with e ->
     Pparse.remove_preprocessed_if_ast inputfile;
-    Stypes.dump (outputprefix ^ ".annot");
+    Stypes.dump (Some (outputprefix ^ ".annot"));
     raise e
 
 (* Compile a .ml file *)
@@ -137,12 +136,12 @@ let implementation ppf sourcefile outputprefix =
     end;
     Warnings.check_fatal ();
     Pparse.remove_preprocessed inputfile;
-    Stypes.dump (outputprefix ^ ".annot");
+    Stypes.dump (Some (outputprefix ^ ".annot"));
   with x ->
     remove_file objfile;
     remove_file cmxfile;
     Pparse.remove_preprocessed_if_ast inputfile;
-    Stypes.dump (outputprefix ^ ".annot");
+    Stypes.dump (Some (outputprefix ^ ".annot"));
     raise x
 
 let c_file name =

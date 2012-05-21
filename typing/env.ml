@@ -1194,7 +1194,8 @@ let save_signature_with_imports sg modname filename imports =
         ps_filename = filename;
         ps_flags = cmi.cmi_flags } in
     Hashtbl.add persistent_structures modname (Some ps);
-    Consistbl.set crc_units modname crc filename
+    Consistbl.set crc_units modname crc filename;
+    sg
   with exn ->
     close_out oc;
     remove_file filename;

@@ -1237,7 +1237,7 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
       (* It is important to run these checks after the inclusion test above,
          so that value declarations which are not used internally but exported
          are not reported as being unused. *)
-      Cmt_format.save_cmt modulename (outputprefix ^ ".cmt") (Cmt_format.Implementation str) (Some sourcefile) [] initial_env None;
+      Cmt_format.save_cmt (outputprefix ^ ".cmt") modulename (Cmt_format.Implementation str) (Some sourcefile) initial_env None;
       (str, coercion)
     end else begin
       check_nongen_schemes finalenv str.str_items;
@@ -1250,23 +1250,24 @@ let type_implementation sourcefile outputprefix modulename initial_env ast =
          the value being exported. We can still capture unused
          declarations like "let x = true;; let x = 1;;", because in this
          case, the inferred signature contains only the last declaration. *)
-        Cmt_format.save_cmt modulename (outputprefix ^ ".cmt") (Cmt_format.Implementation str)
-          (Some sourcefile) [] initial_env (Some (str.str_type, Env.imported_units()));
-      if not !Clflags.dont_write_files then
-        Env.save_signature simple_sg modulename (outputprefix ^ ".cmi");
+      if not !Clflags.dont_write_files then begin
+        let sg = Env.save_signature simple_sg modulename (outputprefix ^ ".cmi") in
+        Cmt_format.save_cmt  (outputprefix ^ ".cmt") modulename (Cmt_format.Implementation str)
+          (Some sourcefile) initial_env (Some sg);
+      end;
       (str, coercion)
     end
     end
   with e ->
-    Cmt_format.save_cmt modulename (outputprefix ^ ".cmt")
+    Cmt_format.save_cmt  (outputprefix ^ ".cmt") modulename
       (Cmt_format.Partial_implementation (Array.of_list (Cmt_format.get_saved_types ())))
-      (Some sourcefile) [] initial_env None;
+      (Some sourcefile) initial_env None;
     raise e
 
 
 let save_signature modname tsg outputprefix source_file initial_env cmi =
-  Cmt_format.save_cmt modname (outputprefix ^ ".cmti")
-    (Cmt_format.Interface tsg) (Some source_file) [] initial_env (Some cmi)
+  Cmt_format.save_cmt  (outputprefix ^ ".cmti") modname
+    (Cmt_format.Interface tsg) (Some source_file) initial_env (Some cmi)
 
 (* "Packaging" of several compilation units into one unit
    having them as sub-modules.  *)
@@ -1304,8 +1305,8 @@ let package_units objfiles cmifile modulename =
       raise(Error(Location.in_file mlifile, Interface_not_compiled mlifile))
     end;
     let dclsig = Env.read_signature modulename cmifile in
-    Cmt_format.save_cmt modulename (prefix ^ ".cmt")
-      (Cmt_format.Packed (sg, objfiles)) None objfiles Env.initial None ;
+    Cmt_format.save_cmt  (prefix ^ ".cmt") modulename
+      (Cmt_format.Packed (sg, objfiles)) None Env.initial None ;
     Includemod.compunit "(obtained by packing)" sg mlifile dclsig
   end else begin
     (* Determine imports *)
@@ -1315,10 +1316,11 @@ let package_units objfiles cmifile modulename =
         (fun (name, crc) -> not (List.mem name unit_names))
         (Env.imported_units()) in
     (* Write packaged signature *)
-    if not !Clflags.dont_write_files then
-      Env.save_signature_with_imports sg modulename (prefix ^ ".cmi") imports;
-    Cmt_format.save_cmt modulename (prefix ^ ".cmt")
-      (Cmt_format.Packed (sg, objfiles)) None objfiles Env.initial (Some (sg, imports));
+    if not !Clflags.dont_write_files then begin
+      let sg = Env.save_signature_with_imports sg modulename (prefix ^ ".cmi") imports in
+      Cmt_format.save_cmt (prefix ^ ".cmt")  modulename
+        (Cmt_format.Packed (sg, objfiles)) None Env.initial (Some sg)
+    end;
     Tcoerce_none
   end
 

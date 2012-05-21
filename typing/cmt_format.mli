@@ -50,16 +50,13 @@ type cmt_infos = {
   cmt_annots : binary_annots;
   cmt_comments : (string * Location.t) list;
   cmt_args : string array;
-  cmt_sourcefile : string;
+  cmt_sourcefile : string option;
   cmt_builddir : string;
   cmt_loadpath : string list;
-  cmt_packed : string list;
   cmt_source_digest : string option;
   cmt_initial_env : Env.t;
-(* TODO
-  cmt_crcs : (string * Digest.t) list;
-  cmt_flags : Env.pers_flags list;
-*)
+  cmt_imports : (string * Digest.t) list;
+  cmt_interface_digest : Digest.t option;
 }
 
 type error =
@@ -80,11 +77,15 @@ val read : string -> Cmi_format.cmi_infos option * cmt_infos option
 val read_cmt : string -> cmt_infos
 val read_cmi : string -> Cmi_format.cmi_infos
 
-(** [save_cmt modname filename binary_annots sourcefile packed_modules initial_env sg]
+(** [save_cmt modname filename binary_annots sourcefile initial_env sg]
     writes a cmt(i) file.  *)
 val save_cmt :
-  string -> string -> binary_annots -> string option -> string list -> Env.t ->
-  (Types.signature_item list * (string * Digest.t) list) option ->
+  string ->  (* filename.cmt to generate *)
+  string ->  (* module name *)
+  binary_annots ->
+  string option ->  (* source file *)
+  Env.t -> (* initial env *)
+  Types.signature option -> (* if a .cmi was generated, the signature saved there *)
   unit
 
 (* Miscellaneous functions *)

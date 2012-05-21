@@ -33,7 +33,7 @@ val check_nongen_schemes:
 val simplify_signature: signature -> signature
 
 val save_signature : string -> Typedtree.signature -> string -> string ->
-  Env.t -> Types.signature_item list * (string * Digest.t) list -> unit
+  Env.t -> Types.signature_item list -> unit
 
 val package_units:
         string list -> string -> string -> Typedtree.module_coercion

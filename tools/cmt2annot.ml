@@ -242,33 +242,49 @@ in  *)
 
 module Iterator = MakeIterator(ForIterator)
 
-let gen_annot filename cmt =
+let gen_annot target_filename filename cmt =
   match cmt.Cmt_format.cmt_annots with
       Cmt_format.Implementation typedtree ->
         Iterator.iter_structure typedtree;
-        Stypes.dump (filename ^ ".annot") (*  ((Filename.chop_suffix filename ".cmt") ^ ".annot") *)
+        let target_filename = match target_filename with
+            None -> Some (filename ^ ".annot")
+          | Some "-" -> None
+          | Some filename -> target_filename
+        in
+        Stypes.dump target_filename
+    | Cmt_format.Interface _ ->
+      Printf.fprintf stderr "Cannot generate annotations for interface file\n%!";
+      exit 2
     | _ ->
       Printf.fprintf stderr "File was generated with an error\n%!";
       exit 2
 
 
 
-let gen_ml filename cmt =
-  match cmt.Cmt_format.cmt_annots with
-    | Cmt_format.Implementation typedtree ->
-      let filename = filename ^ ".ml" in
-      let oc = open_out filename in
-      let ppf = Format.formatter_of_out_channel oc in
-      Pprintast.print_structure ppf (Untypeast.untype_structure typedtree);
-      Format.pp_print_flush ppf ();
-      close_out oc;
-    | Cmt_format.Interface typedtree ->
-      let filename = filename ^ ".mli" in
-      let oc = open_out filename in
-      let ppf = Format.formatter_of_out_channel oc in
-      Pprintast.print_signature ppf (Untypeast.untype_signature typedtree);
-      Format.pp_print_flush ppf ();
-      close_out oc;
-    | _ ->
-      Printf.fprintf stderr "File was generated with an error\n%!";
-      exit 2
+let gen_ml target_filename filename cmt =
+  let (printer, ext) =
+    match cmt.Cmt_format.cmt_annots with
+      | Cmt_format.Implementation typedtree ->
+        (fun ppf -> Pprintast.print_structure ppf (Untypeast.untype_structure typedtree)), ".ml"
+      | Cmt_format.Interface typedtree ->
+        (fun ppf -> Pprintast.print_signature ppf (Untypeast.untype_signature typedtree)), ".mli"
+      | _ ->
+        Printf.fprintf stderr "File was generated with an error\n%!";
+        exit 2
+  in
+  let target_filename = match target_filename with
+      None -> Some (filename ^ ext)
+    | Some "-" -> None
+    | Some filename -> target_filename
+  in
+  let oc = match target_filename with
+      None -> None
+    | Some filename -> Some (open_out filename) in
+  let ppf = match oc with
+      None -> Format.std_formatter
+    | Some oc -> Format.formatter_of_out_channel oc in
+  printer ppf;
+  Format.pp_print_flush ppf ();
+  match oc with
+      None -> flush stdout
+    | Some oc -> close_out oc
