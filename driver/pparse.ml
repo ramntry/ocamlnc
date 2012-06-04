@@ -51,7 +51,7 @@ let rewrite_ast magic ast ppx =
   (* TODO: be more clever, and do not read/write intermediate files
      when several ppx processors are chained. *)
   let fn_in = Filename.temp_file "camlppx_in" "" in
-  let fn_out = Filename.temp_file "camlppx_in" "" in
+  let fn_out = Filename.temp_file "camlppx_out" "" in
   let oc = open_out_bin fn_in in
   output_string oc magic;
   output_value oc !Location.input_name;
@@ -59,8 +59,9 @@ let rewrite_ast magic ast ppx =
   close_out oc;
 
   let comm = Printf.sprintf "%s %s %s" ppx (Filename.quote fn_in) (Filename.quote fn_out) in
+  let ok = Ccomp.command comm = 0 in
   Misc.remove_file fn_in;
-  if Ccomp.command comm <> 0 then begin
+  if not ok then begin
     Misc.remove_file fn_out;
     raise Error;
   end;
