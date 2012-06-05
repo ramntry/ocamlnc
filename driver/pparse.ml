@@ -47,17 +47,17 @@ let remove_preprocessed_if_ast inputfile =
 
 exception Outdated_version
 
-let rewrite_ast magic ast ppx =
-  (* TODO: be more clever, and do not read/write intermediate files
-     when several ppx processors are chained. *)
-  let fn_in = Filename.temp_file "camlppx_in" "" in
-  let fn_out = Filename.temp_file "camlppx_out" "" in
-  let oc = open_out_bin fn_in in
+let write_ast magic ast =
+  let fn = Filename.temp_file "camlppx" "" in
+  let oc = open_out_bin fn in
   output_string oc magic;
   output_value oc !Location.input_name;
   output_value oc ast;
   close_out oc;
+  fn
 
+let apply_rewriter fn_in ppx =
+  let fn_out = Filename.temp_file "camlppx" "" in
   let comm = Printf.sprintf "%s %s %s" ppx (Filename.quote fn_in) (Filename.quote fn_out) in
   let ok = Ccomp.command comm = 0 in
   Misc.remove_file fn_in;
@@ -65,22 +65,29 @@ let rewrite_ast magic ast ppx =
     Misc.remove_file fn_out;
     raise Error;
   end;
-  let ic = open_in_bin fn_out in
-  begin try
-    let buffer = String.create (String.length magic) in
-    really_input ic buffer 0 (String.length magic);
+  if not (Sys.file_exists fn_out) then raise Error;
+  fn_out
+
+let read_ast magic fn =
+  let ic = open_in_bin fn in
+  try
+    let buffer = Misc.input_bytes ic (String.length magic) in
     if buffer <> magic then
-      Misc.fatal_error "Ocaml and preprocessor have incompatible versions";
+      Misc.fatal_error "OCaml and preprocessor have incompatible versions";
     Location.input_name := input_value ic;
     let ast = input_value ic in
     close_in ic;
-    Misc.remove_file fn_out;
+    Misc.remove_file fn;
     ast
   with exn ->
     close_in ic;
-    Misc.remove_file fn_out;
+    Misc.remove_file fn;
     raise exn
-  end
+
+let apply_rewriters magic ast ppxs =
+  if ppxs = [] then ast
+  else let fn = List.fold_left apply_rewriter (write_ast magic ast) ppxs in
+  read_ast magic fn
 
 let file ppf inputfile parse_fun ast_magic =
   let ic = open_in_bin inputfile in
@@ -114,4 +121,4 @@ let file ppf inputfile parse_fun ast_magic =
     with x -> close_in ic; raise x
   in
   close_in ic;
-  List.fold_left (rewrite_ast ast_magic) ast !Clflags.ppx
+  apply_rewriters ast_magic ast !Clflags.ppx
