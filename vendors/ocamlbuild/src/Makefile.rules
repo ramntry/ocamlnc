@@ -1,0 +1,27 @@
+
+distclean: partialclean
+	rm -f *.byte *.opt  *.o *.annot $(TMP_SRCS) *.a
+
+partialclean:
+	rm -f *.cm? *.cm?? *.annot *~
+
+clean: partialclean
+
+depend: $(TMP_SRCS)
+	$(CAMLDEP) *.ml *.mli > .depend
+
+-include .depend
+
+.SUFFIXES: .ml .mll .mli .cmo .cmi .cmx
+
+.mll.ml:
+	$(CAMLLEX) $<
+
+.ml.cmo: $(BUILD_DEPS)
+	$(CAMLC) $(COMPFLAGS) $(PP) -c $<
+
+.mli.cmi: $(BUILD_DEPS)
+	$(CAMLC) $(COMPFLAGS) $(PP) -c $<
+
+.ml.cmx: $(BUILD_DEPS)
+	$(CAMLOPT) $(COMPFLAGS) $(PP) -c $<
