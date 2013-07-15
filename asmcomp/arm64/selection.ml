@@ -2,9 +2,10 @@
 (*                                                                     *)
 (*                                OCaml                                *)
 (*                                                                     *)
+(*            Xavier Leroy, projet Gallium, INRIA Rocquencourt         *)
 (*                  Benedikt Meurer, University of Siegen              *)
 (*                                                                     *)
-(*    Copyright 1998 Institut National de Recherche en Informatique    *)
+(*    Copyright 2013 Institut National de Recherche en Informatique    *)
 (*    et en Automatique. Copyright 2012 Benedikt Meurer. All rights    *)
 (*    reserved.  This file is distributed  under the terms of the Q    *)
 (*    Public License version 1.0.                                      *)
@@ -180,7 +181,15 @@ method! select_operation op args =
   (* Integer multiplication *)
   (* ARM does not support immediate operands for multiplication *)
   | Cmuli ->
-      (Iintop Imul, args)
+      begin match args with
+      | [arg; Cconst_int n] | [Cconst_int n; arg] ->
+          let l = Misc.log2 n in
+          if n = 1 lsl l
+          then (Iintop_imm(Ilsl, l), [arg])
+          else (Iintop Imul, args)
+      | _ ->
+          (Iintop Imul, args)
+      end
   (* Division and modulus *)
   (* Recognize (x / cst) and (x % cst) only if cst is a power of 2. *)
   | Cdivi ->
@@ -219,9 +228,9 @@ method! select_operation op args =
   | Csubf ->
       begin match args with
       | [arg; Cop(Cmulf, args)] ->
-          (Ispecific Inegmuladdf, arg :: args)
-      | [Cop(Cmulf, args); arg] ->
           (Ispecific Imulsubf, arg :: args)
+      | [Cop(Cmulf, args); arg] ->
+          (Ispecific Inegmulsubf, arg :: args)
       | _ ->
           super#select_operation op args
       end

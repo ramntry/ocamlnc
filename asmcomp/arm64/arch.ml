@@ -2,9 +2,10 @@
 (*                                                                     *)
 (*                                OCaml                                *)
 (*                                                                     *)
+(*            Xavier Leroy, projet Gallium, INRIA Rocquencourt         *)
 (*                  Benedikt Meurer, University of Siegen              *)
 (*                                                                     *)
-(*    Copyright 1998 Institut National de Recherche en Informatique    *)
+(*    Copyright 2013 Institut National de Recherche en Informatique    *)
 (*    et en Automatique. Copyright 2012 Benedikt Meurer. All rights    *)
 (*    reserved.  This file is distributed  under the terms of the Q    *)
 (*    Public License version 1.0.                                      *)
@@ -122,17 +123,17 @@ let print_specific_operation printreg op ppf arg =
         printreg arg.(1)
         printreg arg.(2)
   | Inegmuladdf ->
-      fprintf ppf "%a -f (%a *f %a)"
+      fprintf ppf "(-f %a) -f (%a *f %a)"
         printreg arg.(0)
         printreg arg.(1)
         printreg arg.(2)
   | Imulsubf ->
-      fprintf ppf "(-f %a) +f (%a *f %a)"
+      fprintf ppf "%a -f (%a *f %a)"
         printreg arg.(0)
         printreg arg.(1)
         printreg arg.(2)
   | Inegmulsubf ->
-      fprintf ppf "(-f %a) -f (%a *f %a)"
+      fprintf ppf "(-f %a) +f (%a *f %a)"
         printreg arg.(0)
         printreg arg.(1)
         printreg arg.(2)

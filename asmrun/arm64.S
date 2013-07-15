@@ -282,7 +282,7 @@ caml_c_call:
 caml_start_program:
         CFI_STARTPROC
         PROFILE
-	ADDRGLOBAL(ARG, caml_progam)
+	ADDRGLOBAL(ARG, caml_program)
 
 /* Code shared with caml_callback* */
 /* Address of OCaml code to call is in ARG */
@@ -311,7 +311,7 @@ caml_start_program:
         str     x10, [sp, 16]
     /* Setup a trap frame to catch exceptions escaping the OCaml code */
 	LOADGLOBAL(x8, caml_exception_pointer)
-        adr     x9, .Ltrap_hander
+        adr     x9, .Ltrap_handler
         stp     x8, x9, [sp, -16]!
         CFI_ADJUST(16)
         add     TRAP_PTR, sp, #0
@@ -493,7 +493,7 @@ caml_ml_array_bound_error:
         CFI_STARTPROC
         PROFILE
     /* Load address of [caml_array_bound_error] in ARG */
-        LOADGLOBAL(ARG, caml_array_bound_error)
+        ADDRGLOBAL(ARG, caml_array_bound_error)
     /* Call that function */
         b       caml_c_call
         CFI_ENDPROC

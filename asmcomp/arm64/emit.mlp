@@ -3,6 +3,7 @@
 (*                                OCaml                                *)
 (*                                                                     *)
 (*            Xavier Leroy, projet Gallium, INRIA Rocquencourt         *)
+(*                  Benedikt Meurer, University of Siegen              *)
 (*                                                                     *)
 (*    Copyright 2013 Institut National de Recherche en Informatique    *)
 (*    et en Automatique. Copyright 2012 Benedikt Meurer. All rights    *)
@@ -201,36 +202,35 @@ let name_for_int_operation = function
 
 (* Load an integer constant into a register *)
 
-type eimode = EIZ | EIN | EIK
-
 let emit_intconst dst n =
-  let rec emit_const mode shift =
+  let rec emit_pos first shift =
     if shift < 0 then begin
-      match mode with
-      | EIZ -> `	mov	{emit_reg dst}, xzr\n`
-      | EIN -> `	movn	{emit_reg dst}, #0	/* -1 */\n`
-      | EIK -> ()
+      if first then `	mov	{emit_reg dst}, xzr\n`
     end else begin
       let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
-      match mode with
-      | EIZ ->
-          if s = 0n then emit_const mode (shift - 16) else begin
-            `	movz	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}	/* {emit_nativeint n} */\n`;
-            emit_const EIK (shift - 16)
-          end
-      | EIN ->
-          let s = Nativeint.logxor s 0xFFFFn in
-          if s = 0n then emit_const mode (shift - 16) else begin
-            `	movn	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}	/* {emit_nativeint n} */\n`;
-            emit_const EIK (shift - 16)
-          end
-      | EIK ->
-          if s = 0n then emit_const mode (shift - 16) else begin
-            `	movk	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`;
-            emit_const EIK (shift - 16)
-          end
+      if s = 0n then emit_pos first (shift - 16) else begin
+        if first then
+          `	movz	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`
+        else
+           `	movk	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`;
+        emit_pos false (shift - 16)
+      end
     end
-  in emit_const (if n < 0n then EIN else EIZ) 48
+  and emit_neg first shift =
+    if shift < 0 then begin
+      if first then `	movn	{emit_reg dst}, #0\n`
+    end else begin
+      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
+      if s = 0xFFFFn then emit_neg first (shift - 16) else begin
+        if first then
+          `	movn	{emit_reg dst}, #{emit_nativeint (Nativeint.logxor s 0xFFFFn)}, lsl #{emit_int shift}\n`
+        else
+           `	movk	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`;
+        emit_neg false (shift - 16)
+      end
+    end
+  in
+    if n < 0n then emit_neg true 48 else emit_pos true 48
 
 (* Adjust sp (up or down) by the given byte amount *)
 
@@ -278,7 +278,7 @@ let emit_literals() =
     `	.align	3\n`;
     List.iter
       (fun (f, lbl) ->
-        `{emit_label lbl}:	.double	{emit_string f}\n`)
+        `{emit_label lbl}:`; emit_float64_directive ".quad" f)
       !float_literals;
     float_literals := []
   end
@@ -286,7 +286,7 @@ let emit_literals() =
 (* Emit code to load the address of a symbol *)
 
 let emit_load_symbol_addr dst s =
-  if !Clflags.dlcode then begin
+  if false (*!Clflags.dlcode currently broken*) then begin
     `	adrp	{emit_reg dst}, :got:{emit_symbol s}\n`;
     `	ldr	{emit_reg dst}, [{emit_reg dst}, #:got_lo12:{emit_symbol s}]\n`
   end else begin
@@ -454,7 +454,7 @@ let emit_instr i =
         `	asr	{emit_reg reg_tmp1}, {emit_reg i.arg.(0)}, #63\n`;
         `	add	{emit_reg reg_tmp1}, {emit_reg i.arg.(0)}, {emit_reg reg_tmp1}, lsr {emit_int (64-l)}\n`;
         `	asr	{emit_reg reg_tmp1}, {emit_reg reg_tmp1}, {emit_int l}\n`;
-        `	sub	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg reg_tmp1}, lsl {emit_int n}\n`
+        `	sub	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg reg_tmp1}, lsl {emit_int l}\n`
     | Lop(Iintop op) ->
         let instr = name_for_int_operation op in
         `	{emit_string instr}     {emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`
@@ -665,17 +665,17 @@ let fundecl fundecl =
 (* Emission of data *)
 
 let emit_item = function
-    Cglobal_symbol s -> `	.globl	{emit_symbol s}\n`;
+  | Cglobal_symbol s -> `	.globl	{emit_symbol s}\n`;
   | Cdefine_symbol s -> `{emit_symbol s}:\n`
   | Cdefine_label lbl -> `{emit_data_label lbl}:\n`
   | Cint8 n -> `	.byte	{emit_int n}\n`
   | Cint16 n -> `	.short	{emit_int n}\n`
-  | Cint32 n -> `	.long	{emit_int32 (Nativeint.to_int32 n)}\n`
-  | Cint n -> `	.long	{emit_int32 (Nativeint.to_int32 n)}\n`
-  | Csingle f -> `	.single	{emit_string f}\n`
-  | Cdouble f -> `	.double	{emit_string f}\n`
-  | Csymbol_address s -> `	.word	{emit_symbol s}\n`
-  | Clabel_address lbl -> `	.word	{emit_data_label lbl}\n`
+  | Cint32 n -> `	.long	{emit_nativeint n}\n`
+  | Cint n -> `	.quad	{emit_nativeint n}\n`
+  | Csingle f -> emit_float32_directive ".long" f
+  | Cdouble f -> emit_float64_directive ".quad" f
+  | Csymbol_address s -> `	.quad	{emit_symbol s}\n`
+  | Clabel_address lbl -> `	.quad	{emit_data_label lbl}\n`
   | Cstring s -> emit_string_directive "	.ascii  " s
   | Cskip n -> if n > 0 then `	.space	{emit_int n}\n`
   | Calign n -> `	.align	{emit_int(Misc.log2 n)}\n`
@@ -713,13 +713,13 @@ let end_assembly () =
   emit_frames
     { efa_label = (fun lbl ->
                        `	.type	{emit_label lbl}, %function\n`;
-                       `	.word	{emit_label lbl}\n`);
+                       `	.quad	{emit_label lbl}\n`);
       efa_16 = (fun n -> `	.short	{emit_int n}\n`);
       efa_32 = (fun n -> `	.long	{emit_int32 n}\n`);
-      efa_word = (fun n -> `	.word	{emit_int n}\n`);
+      efa_word = (fun n -> `	.quad	{emit_int n}\n`);
       efa_align = (fun n -> `	.align	{emit_int(Misc.log2 n)}\n`);
       efa_label_rel = (fun lbl ofs ->
-                           `	.word	{emit_label lbl} - . + {emit_int32 ofs}\n`);
+                           `	.long	{emit_label lbl} - . + {emit_int32 ofs}\n`);
       efa_def_label = (fun lbl -> `{emit_label lbl}:\n`);
       efa_string = (fun s -> emit_string_directive "	.asciz	" s) };
   `	.type	{emit_symbol lbl}, %object\n`;
