@@ -105,8 +105,8 @@ let emit_stack r =
 
 let emit_symbol_offset s ofs =
   emit_symbol s; 
-  if ofs > 0 then `+ {emit_int ofs}`
-  else if ofs < 0 then `- {emit_int (-ofs)}`
+  if ofs > 0 then `+{emit_int ofs}`
+  else if ofs < 0 then `-{emit_int (-ofs)}`
   else ()
 
 let emit_addressing addr r =
@@ -114,7 +114,6 @@ let emit_addressing addr r =
   | Iindexed ofs ->
       `[{emit_reg r}, #{emit_int ofs}]`
   | Ibased(s, ofs) ->
-      assert (not !Clflags.dlcode);
       `[{emit_reg r}, #:lo12:{emit_symbol_offset s ofs}]`
 
 (* Record live pointers at call points *)
@@ -232,6 +231,15 @@ let emit_intconst dst n =
   in
     if n < 0n then emit_neg true 48 else emit_pos true 48
 
+(* Recognize float constants appropriate for FMOV dst, #fpimm instruction:
+   "a normalized binary floating point encoding with 1 sign bit, 4
+    bits of fraction and a 3-bit exponent" *)
+
+let is_immediate_float bits =
+  let exp = (Int64.(to_int (shift_right_logical bits 52)) land 0x7FF) - 1023 in
+  let mant = Int64.logand bits 0xF_FFFF_FFFF_FFFFL in
+  exp >= -3 && exp <= 4 && Int64.logand mant 0xF_0000_0000_0000L = mant
+
 (* Adjust sp (up or down) by the given byte amount *)
 
 let emit_stack_adjustment n =
@@ -261,7 +269,7 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 (* Pending floating-point literals *)
-let float_literals = ref ([] : (string * label) list)
+let float_literals = ref ([] : (int64 * label) list)
 
 (* Label a floating-point literal *)
 let float_literal f =
@@ -278,7 +286,7 @@ let emit_literals() =
     `	.align	3\n`;
     List.iter
       (fun (f, lbl) ->
-        `{emit_label lbl}:`; emit_float64_directive ".quad" f)
+        `{emit_label lbl}:	.quad	`; emit_printf "0x%Lx\n" f)
       !float_literals;
     float_literals := []
   end
@@ -286,12 +294,12 @@ let emit_literals() =
 (* Emit code to load the address of a symbol *)
 
 let emit_load_symbol_addr dst s =
-  if false (*!Clflags.dlcode currently broken*) then begin
-    `	adrp	{emit_reg dst}, :got:{emit_symbol s}\n`;
-    `	ldr	{emit_reg dst}, [{emit_reg dst}, #:got_lo12:{emit_symbol s}]\n`
-  end else begin
+  if (not !Clflags.dlcode) || Compilenv.symbol_in_current_unit s then begin
     `	adrp	{emit_reg dst}, {emit_symbol s}\n`;
     `	add	{emit_reg dst}, {emit_reg dst}, #:lo12:{emit_symbol s}\n`
+  end else begin
+    `	adrp	{emit_reg dst}, :got:{emit_symbol s}\n`;
+    `	ldr	{emit_reg dst}, [{emit_reg dst}, #:got_lo12:{emit_symbol s}]\n`
   end
 
 (* Output the assembly code for an instruction *)
@@ -318,11 +326,13 @@ let emit_instr i =
     | Lop(Iconst_int n) ->
         emit_intconst i.res.(0) n
     | Lop(Iconst_float f) ->
-        (* TODO: use FMOV D, #fpimm when applicable *)
-        if Int64.bits_of_float (float_of_string f) = 0L then
-          `	fmov	{emit_reg i.res.(0)}, xzr\n`
+        let b = Int64.bits_of_float(float_of_string f) in
+        if b = 0L then
+          `	fmov	{emit_reg i.res.(0)}, xzr	/* {emit_string f} */\n`
+        else if is_immediate_float b then
+          `	fmov	{emit_reg i.res.(0)}, #{emit_printf "0x%Lx" b}	/* {emit_string f} */\n`
         else begin
-          let lbl = float_literal f in
+          let lbl = float_literal b in
           `	adrp	{emit_reg reg_tmp1}, {emit_label lbl}\n`;
           `	ldr	{emit_reg i.res.(0)}, [{emit_reg reg_tmp1}, #:lo12:{emit_label lbl}]	/* {emit_string f} */\n`
         end
@@ -472,7 +482,7 @@ let emit_instr i =
         `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}\n`
     | Lop(Iaddf | Isubf | Imulf | Idivf | Ispecific Inegmulf as op) ->
         let instr = (match op with
-                       Iaddf              -> "fadd"
+                     | Iaddf              -> "fadd"
                      | Isubf              -> "fsub"
                      | Imulf              -> "fmul"
                      | Idivf              -> "fdiv"
@@ -481,7 +491,7 @@ let emit_instr i =
         `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`
     | Lop(Ispecific(Imuladdf | Inegmuladdf | Imulsubf | Inegmulsubf as op)) ->
         let instr = (match op with
-                       Imuladdf    -> "fmadd"
+                     | Imuladdf    -> "fmadd"
                      | Inegmuladdf -> "fnmadd"
                      | Imulsubf    -> "fmsub"
                      | Inegmulsubf -> "fnmsub"

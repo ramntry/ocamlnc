@@ -187,10 +187,12 @@ let destroyed_at_raise = all_phys_regs
 
 let safe_register_pressure = function
   | Iextcall(_, _) -> 8
+  | Ialloc _ -> 25
   | _ -> 26
 
 let max_register_pressure = function
   | Iextcall(_, _) -> [| 10; 8 |]
+  | Ialloc _ -> [| 25; 32 |]
   | Iintoffloat | Ifloatofint
   | Iload(Single, _) | Istore(Single, _) -> [| 26; 31 |]
   | _ -> [| 26; 32 |]

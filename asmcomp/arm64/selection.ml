@@ -81,6 +81,9 @@ let inline_ops =
   [ "sqrt"; "caml_bswap16_direct"; "caml_int32_direct_bswap";
     "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap" ]
 
+let use_direct_addressing symb =
+  (not !Clflags.dlcode) || Compilenv.symbol_in_current_unit symb
+
 (* Instruction selection *)
 
 class selector = object(self)
@@ -100,7 +103,7 @@ method! is_simple_expr = function
 
 method select_addressing chunk = function
   | Cop(Cadda, [Cconst_symbol s; Cconst_int n])
-    when not !Clflags.dlcode ->
+    when use_direct_addressing s ->
       (Ibased(s, n), Ctuple [])
   | Cop(Cadda, [arg; Cconst_int n])
     when is_offset chunk n ->
@@ -109,7 +112,7 @@ method select_addressing chunk = function
     when is_offset chunk n ->
       (Iindexed n, Cop(Cadda, [arg1; arg2]))
   | Cconst_symbol s
-    when not !Clflags.dlcode ->
+    when use_direct_addressing s ->
       (Ibased(s, 0), Ctuple [])
   | arg ->
       (Iindexed 0, arg)

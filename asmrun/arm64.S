@@ -88,9 +88,9 @@ caml_call_gc:
 	mov	TMP, sp
 	STOREGLOBAL(TMP, caml_bottom_of_stack)
     /* Set up stack space, saving return address and frame pointer */
-    /* (2 regs RA/GP, 24 allocatable int regs, 8 callee-save float regs) * 8 */
-        stp     x29, x30, [sp, -272]!
-        CFI_ADJUST(272)
+    /* (2 regs RA/GP, 24 allocatable int regs, 24 caller-save float regs) * 8 */
+        stp     x29, x30, [sp, -400]!
+        CFI_ADJUST(400)
         add     x29, sp, #0
     /* Save allocatable integer registers on the stack, in the order
        given in proc.ml */
@@ -106,11 +106,20 @@ caml_call_gc:
         stp     x21, x22, [sp, 160]
         stp     x23, x24, [sp, 176]
         str     x25, [sp, 192]
-     /* Save caller floating-point registers on the stack */
-	stp     d8, d9, [sp, 208]
-        stp     d10, d11, [sp, 224]
-        stp     d12, d13, [sp, 240]
-        stp     d14, d15, [sp, 256]
+     /* Save caller-save floating-point registers on the stack
+        (callee-saves are preserved by caml_garbage_collection) */
+        stp     d0, d1, [sp, 208]
+        stp     d2, d3, [sp, 224]
+        stp     d4, d5, [sp, 240]
+        stp     d6, d7, [sp, 256]
+        stp     d16, d17, [sp, 272]
+        stp     d18, d19, [sp, 288]
+        stp     d20, d21, [sp, 304]
+        stp     d22, d23, [sp, 320]
+        stp     d24, d25, [sp, 336]
+        stp     d26, d27, [sp, 352]
+        stp     d28, d29, [sp, 368]
+        stp     d30, d31, [sp, 384]
     /* Store pointer to saved integer registers in caml_gc_regs */
 	add	TMP, sp, #16
 	STOREGLOBAL(TMP, caml_gc_regs)
@@ -133,15 +142,23 @@ caml_call_gc:
         ldp     x21, x22, [sp, 160]
         ldp     x23, x24, [sp, 176]
         ldr     x25, [sp, 192]
-	ldp     d8, d9, [sp, 208]
-        ldp     d10, d11, [sp, 224]
-        ldp     d12, d13, [sp, 240]
-        ldp     d14, d15, [sp, 256]
+        ldp     d0, d1, [sp, 208]
+        ldp     d2, d3, [sp, 224]
+        ldp     d4, d5, [sp, 240]
+        ldp     d6, d7, [sp, 256]
+        ldp     d16, d17, [sp, 272]
+        ldp     d18, d19, [sp, 288]
+        ldp     d20, d21, [sp, 304]
+        ldp     d22, d23, [sp, 320]
+        ldp     d24, d25, [sp, 336]
+        ldp     d26, d27, [sp, 352]
+        ldp     d28, d29, [sp, 368]
+        ldp     d30, d31, [sp, 384]
     /* Reload new allocation pointer and allocation limit */
 	LOADGLOBAL(ALLOC_PTR, caml_young_ptr)
 	LOADGLOBAL(ALLOC_LIMIT, caml_young_limit)
     /* Free stack space and return to caller */
-	ldp     x29, x30, [sp], 272
+	ldp     x29, x30, [sp], 400
         ret
         CFI_ENDPROC
         .type   caml_call_gc, %function

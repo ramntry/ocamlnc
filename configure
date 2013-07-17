@@ -1349,6 +1349,7 @@ case "$arch" in
             fi;;
   power)    bng_arch=ppc; bng_asm_level=1;;
   amd64)    bng_arch=amd64; bng_asm_level=1;;
+  arm64)    bng_arch=arm64; bng_asm_level=1;;
   *)        bng_arch=generic; bng_asm_level=0;;
 esac
 
