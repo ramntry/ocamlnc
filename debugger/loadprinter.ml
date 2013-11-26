@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Loading and installation of user-defined printer functions *)
 
 open Misc
@@ -94,6 +92,15 @@ let rec eval_path = function
   | Papply(p1, p2) -> fatal_error "Loadprinter.eval_path"
 
 (* Install, remove a printer (as in toplevel/topdirs) *)
+
+(* since 4.00, "topdirs.cmi" is not in the same directory as the standard
+  libray, so we load it beforehand as it cannot be found in the search path. *)
+let () =
+  let compiler_libs =
+    Filename.concat Config.standard_library "compiler-libs" in
+  let topdirs =
+    Filename.concat compiler_libs "topdirs.cmi" in
+  ignore (Env.read_signature "Topdirs" topdirs)
 
 let match_printer_type desc typename =
   let (printer_type, _) =

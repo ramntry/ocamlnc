@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -61,7 +62,7 @@ module Set = struct
 
   module type S = sig
     include Set.S
-    val find : (elt -> bool) -> t -> elt
+    val find_elt : (elt -> bool) -> t -> elt
     val map : (elt -> elt) -> t -> t
     val of_list : elt list -> t
     val print : formatter -> t -> unit
@@ -70,7 +71,7 @@ module Set = struct
   module Make (M : OrderedTypePrintable) : S with type elt = M.t = struct
     include Set.Make(M)
     exception Found of elt
-    let find p set =
+    let find_elt p set =
       try
         iter begin fun elt ->
           if p elt then raise (Found elt)
@@ -118,6 +119,21 @@ module List = struct
 
   let union a b =
     rev (rev_append_uniq (rev_append_uniq [] a) b)
+
+  let ordered_unique (type el) (lst : el list)  =
+    let module Set = Set.Make(struct
+      type t = el
+      let compare = Pervasives.compare
+      let print _ _ = ()
+    end)
+    in
+    let _, lst =
+      List.fold_left (fun (set,acc) el ->
+        if Set.mem el set
+        then set, acc
+        else Set.add el set, el :: acc) (Set.empty,[]) lst
+    in
+    List.rev lst
 
 end
 
@@ -179,7 +195,7 @@ module String = struct
     and n = String.length v
     in
     m <= n &&
-      let rec loop i = i = m or u.[i] = v.[i] && loop (i + 1) in
+      let rec loop i = i = m || u.[i] = v.[i] && loop (i + 1) in
       loop 0
   (* ***)
 
@@ -189,7 +205,7 @@ module String = struct
     and n = String.length v
     in
     n <= m &&
-      let rec loop i = i = n or u.[m - 1 - i] = v.[n - 1 - i] && loop (i + 1) in
+      let rec loop i = i = n || u.[m - 1 - i] = v.[n - 1 - i] && loop (i + 1) in
       loop 0
   (* ***)
 
@@ -248,19 +264,18 @@ let sys_command =
   match Sys.os_type with
   | "Win32" -> fun cmd ->
       if cmd = "" then 0 else
-      let cmd = "bash -c "^Filename.quote cmd in
-      (* FIXME fix Filename.quote for windows *)
-      let cmd = String.subst "\"&\"\"&\"" "&&" cmd in
+      let cmd = "bash --norc -c "^Filename.quote cmd in
       Sys.command cmd
   | _ -> fun cmd -> if cmd = "" then 0 else Sys.command cmd
 
 (* FIXME warning fix and use Filename.concat *)
 let filename_concat x y =
   if x = Filename.current_dir_name || x = "" then y else
-  if x.[String.length x - 1] = '/' then
+  if Sys.os_type = "Win32" && (x.[String.length x - 1] = '\\') || x.[String.length x - 1] = '/' then
     if y = "" then x
     else x ^ y
-  else x ^ "/" ^ y
+  else
+    x ^ "/" ^ y
 
 (* let reslash =
   match Sys.os_type with
@@ -333,7 +348,7 @@ module Digest = struct
 (* USEFUL FOR DIGEST DEBUGING
   let digest_log_hash = Hashtbl.create 103;;
   let digest_log = "digest.log";;
-  let digest_log_oc = open_out_gen [Open_append;Open_wronly;Open_text;Open_creat] 0o644 digest_log;;
+  let digest_log_oc = open_out_gen [Open_append;Open_wronly;Open_text;Open_creat] 0o666 digest_log;;
   let my_to_hex x = to_hex x ^ ";";;
   if sys_file_exists digest_log then
     with_input_file digest_log begin fun ic ->
@@ -388,3 +403,19 @@ let memo f =
     with Not_found ->
       let res = f x in
       (Hashtbl.add cache x res; res)
+
+let memo2 f =
+  let cache = Hashtbl.create 103 in
+  fun x y ->
+    try Hashtbl.find cache (x,y)
+    with Not_found ->
+      let res = f x y in
+      (Hashtbl.add cache (x,y) res; res)
+
+let memo3 f =
+  let cache = Hashtbl.create 103 in
+  fun x y z ->
+    try Hashtbl.find cache (x,y,z)
+    with Not_found ->
+      let res = f x y z in
+      (Hashtbl.add cache (x,y,z) res; res)

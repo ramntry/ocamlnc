@@ -10,8 +10,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #define ST8OFF(a,b,d) st8 [a] = b, d
 #define LD8OFF(a,b,d) ld8 a = [b], d
 #define STFDOFF(a,b,d) stfd [a] = b, d
@@ -26,7 +24,7 @@
         .proc   call_gen_code#
 
 call_gen_code:
-        /* Allocate 64 "out" registers (for the Caml code) and no locals */
+        /* Allocate 64 "out" registers (for the OCaml code) and no locals */
         alloc   r3 = ar.pfs, 0, 0, 64, 0
 
         /* Save PFS, return address and GP on stack */

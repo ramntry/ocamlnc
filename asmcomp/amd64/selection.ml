@@ -10,15 +10,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Instruction selection for the AMD64 *)
 
-open Misc
 open Arch
 open Proc
 open Cmm
-open Reg
 open Mach
 
 (* Auxiliary for recognizing addressing modes *)
@@ -88,8 +84,17 @@ let pseudoregs_for_operation op arg res =
       ([|res.(0); arg.(1)|], res)
   (* One-address unary operations: arg.(0) and res.(0) must be the same *)
   | Iintop_imm((Iadd|Isub|Imul|Iand|Ior|Ixor|Ilsl|Ilsr|Iasr), _)
-  | Iabsf | Inegf ->
+  | Iabsf | Inegf
+  | Ispecific(Ibswap (32|64)) ->
       (res, res)
+  (* For xchg, args must be a register allowing access to high 8 bit register
+     (rax, rbx, rcx or rdx). Keep it simple, just force the argument in rax. *)
+  | Ispecific(Ibswap 16) ->
+      ([| rax |], [| rax |])
+  (* For imulq, first arg must be in rax, rax is clobbered, and result is in
+     rdx. *)
+  | Iintop(Imulh) ->
+      ([| rax; arg.(1) |], [| rdx |])
   | Ispecific(Ifloatarithmem(_,_)) ->
       let arg' = Array.copy arg in
       arg'.(0) <- res.(0);
@@ -104,12 +109,12 @@ let pseudoregs_for_operation op arg res =
       ([| rax; rcx |], [| rax |])
   | Iintop(Imod) ->
       ([| rax; rcx |], [| rdx |])
-  (* For div and mod with immediate operand, arg must not be in rax.
-     Keep it simple, force it in rdx. *)
-  | Iintop_imm((Idiv|Imod), _) ->
-      ([| rdx |], [| rdx |])
   (* Other instructions are regular *)
   | _ -> raise Use_default
+
+let inline_ops =
+  [ "sqrt"; "caml_bswap16_direct"; "caml_int32_direct_bswap";
+    "caml_int64_direct_bswap"; "caml_nativeint_direct_bswap" ]
 
 (* The selector class *)
 
@@ -121,7 +126,16 @@ method is_immediate n = n <= 0x7FFFFFFF && n >= -0x80000000
 
 method is_immediate_natint n = n <= 0x7FFFFFFFn && n >= -0x80000000n
 
-method select_addressing exp =
+method! is_simple_expr e =
+  match e with
+  | Cop(Cextcall(fn, _, _, _), args)
+    when List.mem fn inline_ops ->
+      (* inlined ops are simple if their arguments are *)
+      List.for_all self#is_simple_expr args
+  | _ ->
+      super#is_simple_expr e
+
+method select_addressing chunk exp =
   let (a, d) = select_addr exp in
   (* PR#4625: displacement must be a signed 32-bit immediate *)
   if d < -0x8000_0000 || d > 0x7FFF_FFFF
@@ -157,25 +171,10 @@ method! select_operation op args =
   match op with
   (* Recognize the LEA instruction *)
     Caddi | Cadda | Csubi | Csuba ->
-      begin match self#select_addressing (Cop(op, args)) with
+      begin match self#select_addressing Word (Cop(op, args)) with
         (Iindexed d, _) -> super#select_operation op args
       | (Iindexed2 0, _) -> super#select_operation op args
       | (addr, arg) -> (Ispecific(Ilea addr), [arg])
-      end
-  (* Recognize (x / cst) and (x % cst) only if cst is a power of 2. *)
-  | Cdivi ->
-      begin match args with
-        [arg1; Cconst_int n] when self#is_immediate n
-                               && n = 1 lsl (Misc.log2 n) ->
-          (Iintop_imm(Idiv, n), [arg1])
-      | _ -> (Iintop Idiv, args)
-      end
-  | Cmodi ->
-      begin match args with
-        [arg1; Cconst_int n] when self#is_immediate n
-                               && n = 1 lsl (Misc.log2 n) ->
-          (Iintop_imm(Imod, n), [arg1])
-      | _ -> (Iintop Imod, args)
       end
   (* Recognize float arithmetic with memory. *)
   | Caddf ->
@@ -186,28 +185,48 @@ method! select_operation op args =
       self#select_floatarith true Imulf Ifloatmul args
   | Cdivf ->
       self#select_floatarith false Idivf Ifloatdiv args
+  | Cextcall("sqrt", _, false, _) ->
+     begin match args with
+       [Cop(Cload (Double|Double_u as chunk), [loc])] ->
+         let (addr, arg) = self#select_addressing chunk loc in
+         (Ispecific(Ifloatsqrtf addr), [arg])
+     | [arg] ->
+         (Ispecific Isqrtf, [arg])
+     | _ ->
+         assert false
+     end
   (* Recognize store instructions *)
   | Cstore Word ->
       begin match args with
         [loc; Cop(Caddi, [Cop(Cload _, [loc']); Cconst_int n])]
         when loc = loc' && self#is_immediate n ->
-          let (addr, arg) = self#select_addressing loc in
+          let (addr, arg) = self#select_addressing Word loc in
           (Ispecific(Ioffset_loc(n, addr)), [arg])
       | _ ->
           super#select_operation op args
       end
+  | Cextcall("caml_bswap16_direct", _, _, _) ->
+      (Ispecific (Ibswap 16), args)
+  | Cextcall("caml_int32_direct_bswap", _, _, _) ->
+      (Ispecific (Ibswap 32), args)
+  | Cextcall("caml_int64_direct_bswap", _, _, _)
+  | Cextcall("caml_nativeint_direct_bswap", _, _, _) ->
+      (Ispecific (Ibswap 64), args)
+  (* AMD64 does not support immediate operands for multiply high signed *)
+  | Cmulhi ->
+      (Iintop Imulh, args)
   | _ -> super#select_operation op args
 
 (* Recognize float arithmetic with mem *)
 
 method select_floatarith commutative regular_op mem_op args =
   match args with
-    [arg1; Cop(Cload (Double|Double_u), [loc2])] ->
-      let (addr, arg2) = self#select_addressing loc2 in
+    [arg1; Cop(Cload (Double|Double_u as chunk), [loc2])] ->
+      let (addr, arg2) = self#select_addressing chunk loc2 in
       (Ispecific(Ifloatarithmem(mem_op, addr)),
                  [arg1; arg2])
-  | [Cop(Cload (Double|Double_u), [loc1]); arg2] when commutative ->
-      let (addr, arg1) = self#select_addressing loc1 in
+  | [Cop(Cload (Double|Double_u as chunk), [loc1]); arg2] when commutative ->
+      let (addr, arg1) = self#select_addressing chunk loc1 in
       (Ispecific(Ifloatarithmem(mem_op, addr)),
                  [arg2; arg1])
   | [arg1; arg2] ->
@@ -226,9 +245,6 @@ method! insert_op_debug op dbg rs rd =
     rd
   with Use_default ->
     super#insert_op_debug op dbg rs rd
-
-method! insert_op op rs rd =
-  self#insert_op_debug op Debuginfo.none rs rd
 
 end
 

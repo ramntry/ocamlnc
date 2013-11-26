@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Insert load/stores for pseudoregs that got assigned to stack locations. *)
 
 open Misc
@@ -90,7 +88,7 @@ method private reload i =
        already at the correct position (e.g. on stack for some arguments).
        However, something needs to be done for the function pointer in
        indirect calls. *)
-    Iend | Ireturn | Iop(Itailcall_imm _) | Iraise -> i
+    Iend | Ireturn | Iop(Itailcall_imm _) | Iraise _ -> i
   | Iop(Itailcall_ind) ->
       let newarg = self#makereg1 i.arg in
       insert_moves i.arg newarg
@@ -134,7 +132,8 @@ method fundecl f =
   redo_regalloc <- false;
   let new_body = self#reload f.fun_body in
   ({fun_name = f.fun_name; fun_args = f.fun_args;
-    fun_body = new_body; fun_fast = f.fun_fast},
+    fun_body = new_body; fun_fast = f.fun_fast;
+    fun_dbg  = f.fun_dbg},
    redo_regalloc)
 
 end

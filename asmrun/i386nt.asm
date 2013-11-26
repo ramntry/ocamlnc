@@ -11,12 +11,10 @@
 ;*                                                                     *
 ;***********************************************************************
 
-; $Id$
-
 ; Asm part of the runtime system, Intel 386 processor, Intel syntax
 
-	.386
-	.MODEL FLAT
+        .386
+        .MODEL FLAT
 
         EXTERN  _caml_garbage_collection: PROC
         EXTERN  _caml_apply2: PROC
@@ -25,10 +23,11 @@
         EXTERN  _caml_array_bound_error: PROC
         EXTERN  _caml_young_limit: DWORD
         EXTERN  _caml_young_ptr: DWORD
-        EXTERN	_caml_bottom_of_stack: DWORD
-        EXTERN	_caml_last_return_address: DWORD
-        EXTERN	_caml_gc_regs: DWORD
-	EXTERN	_caml_exception_pointer: DWORD
+        EXTERN  _caml_bottom_of_stack: DWORD
+        EXTERN  _caml_last_return_address: DWORD
+        EXTERN  _caml_gc_regs: DWORD
+        EXTERN  _caml_exception_pointer: DWORD
+        EXTERN  _caml_backtrace_pos: DWORD
         EXTERN  _caml_backtrace_active: DWORD
         EXTERN  _caml_stash_backtrace: PROC
 
@@ -39,11 +38,11 @@
         PUBLIC  _caml_alloc2
         PUBLIC  _caml_alloc3
         PUBLIC  _caml_allocN
-	PUBLIC  _caml_call_gc
+        PUBLIC  _caml_call_gc
 
 _caml_call_gc:
     ; Record lowest stack address and return address
-        mov	eax, [esp]
+        mov     eax, [esp]
         mov     _caml_last_return_address, eax
         lea     eax, [esp+4]
         mov     _caml_bottom_of_stack, eax
@@ -57,9 +56,9 @@ L105:   push    ebp
         push    eax
         mov     _caml_gc_regs, esp
     ; Call the garbage collector
-        call	_caml_garbage_collection
+        call    _caml_garbage_collection
     ; Restore all regs used by the code generator
-	pop     eax
+        pop     eax
         pop     ebx
         pop     ecx
         pop     edx
@@ -71,13 +70,13 @@ L105:   push    ebp
 
         ALIGN  4
 _caml_alloc1:
-        mov	eax, _caml_young_ptr
-        sub	eax, 8
-        mov	_caml_young_ptr, eax
-        cmp	eax, _caml_young_limit
-        jb	L100
+        mov     eax, _caml_young_ptr
+        sub     eax, 8
+        mov     _caml_young_ptr, eax
+        cmp     eax, _caml_young_limit
+        jb      L100
         ret
-L100:   mov	eax, [esp]
+L100:   mov     eax, [esp]
         mov     _caml_last_return_address, eax
         lea     eax, [esp+4]
         mov     _caml_bottom_of_stack, eax
@@ -86,13 +85,13 @@ L100:   mov	eax, [esp]
 
         ALIGN  4
 _caml_alloc2:
-        mov	eax, _caml_young_ptr
-        sub	eax, 12
-        mov	_caml_young_ptr, eax
-        cmp	eax, _caml_young_limit
-        jb	L101
+        mov     eax, _caml_young_ptr
+        sub     eax, 12
+        mov     _caml_young_ptr, eax
+        cmp     eax, _caml_young_limit
+        jb      L101
         ret
-L101:   mov	eax, [esp]
+L101:   mov     eax, [esp]
         mov     _caml_last_return_address, eax
         lea     eax, [esp+4]
         mov     _caml_bottom_of_stack, eax
@@ -101,13 +100,13 @@ L101:   mov	eax, [esp]
 
         ALIGN  4
 _caml_alloc3:
-        mov	eax, _caml_young_ptr
-        sub	eax, 16
-        mov	_caml_young_ptr, eax
-        cmp	eax, _caml_young_limit
-        jb	L102
+        mov     eax, _caml_young_ptr
+        sub     eax, 16
+        mov     _caml_young_ptr, eax
+        cmp     eax, _caml_young_limit
+        jb      L102
         ret
-L102:   mov	eax, [esp]
+L102:   mov     eax, [esp]
         mov     _caml_last_return_address, eax
         lea     eax, [esp+4]
         mov     _caml_bottom_of_stack, eax
@@ -126,7 +125,7 @@ L103:   sub     eax, _caml_young_ptr         ; eax = - size
         neg     eax                     ; eax = size
         push    eax                     ; save desired size
         sub     _caml_young_ptr, eax         ; must update young_ptr
-        mov	eax, [esp+4]
+        mov     eax, [esp+4]
         mov     _caml_last_return_address, eax
         lea     eax, [esp+8]
         mov     _caml_bottom_of_stack, eax
@@ -134,29 +133,29 @@ L103:   sub     eax, _caml_young_ptr         ; eax = - size
         pop     eax                     ; recover desired size
         jmp     _caml_allocN
 
-; Call a C function from Caml
+; Call a C function from OCaml
 
         PUBLIC  _caml_c_call
         ALIGN  4
 _caml_c_call:
     ; Record lowest stack address and return address
-        mov	edx, [esp]
-        mov	_caml_last_return_address, edx
-        lea	edx, [esp+4]
-        mov	_caml_bottom_of_stack, edx
+        mov     edx, [esp]
+        mov     _caml_last_return_address, edx
+        lea     edx, [esp+4]
+        mov     _caml_bottom_of_stack, edx
     ; Call the function (address in %eax)
-        jmp	eax
+        jmp     eax
 
-; Start the Caml program
+; Start the OCaml program
 
         PUBLIC  _caml_start_program
         ALIGN  4
 _caml_start_program:
     ; Save callee-save registers
-        push	ebx
-        push	esi
-        push	edi
-        push	ebp
+        push    ebx
+        push    esi
+        push    edi
+        push    ebp
     ; Initial code pointer is caml_program
         mov     esi, offset _caml_program
 
@@ -165,29 +164,29 @@ _caml_start_program:
 L106:
     ; Build a callback link
         push    _caml_gc_regs
-        push	_caml_last_return_address
-        push	_caml_bottom_of_stack
+        push    _caml_last_return_address
+        push    _caml_bottom_of_stack
     ; Build an exception handler
-        push	L108
-        push	_caml_exception_pointer
-        mov	_caml_exception_pointer, esp
-    ; Call the Caml code
-        call	esi
+        push    L108
+        push    _caml_exception_pointer
+        mov     _caml_exception_pointer, esp
+    ; Call the OCaml code
+        call    esi
 L107:
     ; Pop the exception handler
-        pop	_caml_exception_pointer
-        pop	esi             ; dummy register
+        pop     _caml_exception_pointer
+        pop     esi             ; dummy register
 L109:
     ; Pop the callback link, restoring the global variables
     ; used by caml_c_call
-        pop	_caml_bottom_of_stack
-        pop	_caml_last_return_address
+        pop     _caml_bottom_of_stack
+        pop     _caml_last_return_address
         pop     _caml_gc_regs
     ; Restore callee-save registers.
-        pop	ebp
-        pop	edi
-        pop	esi
-        pop	ebx
+        pop     ebp
+        pop     edi
+        pop     esi
+        pop     ebx
     ; Return to caller.
         ret
 L108:
@@ -196,17 +195,19 @@ L108:
         or      eax, 2
         jmp     L109
 
-; Raise an exception for Caml
+; Raise an exception for OCaml
 
         PUBLIC  _caml_raise_exn
         ALIGN   4
 _caml_raise_exn:
         test    _caml_backtrace_active, 1
         jne     L110
-        mov	esp, _caml_exception_pointer
-        pop	_caml_exception_pointer
+        mov     esp, _caml_exception_pointer
+        pop     _caml_exception_pointer
         ret
 L110:
+        mov     _caml_backtrace_pos, 0
+L111:
         mov     esi, eax                ; Save exception bucket in esi
         mov     edi, _caml_exception_pointer ; SP of handler
         mov     eax, [esp]              ; PC of raise
@@ -221,18 +222,27 @@ L110:
         pop     _caml_exception_pointer
         ret
 
-; Raise an exception from C
+        PUBLIC  _caml_reraise_exn
+        ALIGN   4
+_caml_reraise_exn:
+        test    _caml_backtrace_active, 1
+        jne     L111
+        mov     esp, _caml_exception_pointer
+        pop     _caml_exception_pointer
+        ret
+
+                                ; Raise an exception from C
 
         PUBLIC  _caml_raise_exception
         ALIGN  4
 _caml_raise_exception:
         test    _caml_backtrace_active, 1
-        jne     L111
-        mov	eax, [esp+4]
-        mov	esp, _caml_exception_pointer
-        pop	_caml_exception_pointer
+        jne     L112
+        mov     eax, [esp+4]
+        mov     esp, _caml_exception_pointer
+        pop     _caml_exception_pointer
         ret
-L111:
+L112:
         mov     esi, [esp+4]            ; Save exception bucket in esi
         push    _caml_exception_pointer ; arg 4: SP of handler
         push    _caml_bottom_of_stack   ; arg 3: SP of raise
@@ -244,52 +254,52 @@ L111:
         pop     _caml_exception_pointer
         ret
 
-; Callback from C to Caml
+; Callback from C to OCaml
 
         PUBLIC  _caml_callback_exn
         ALIGN  4
 _caml_callback_exn:
     ; Save callee-save registers
-        push	ebx
-        push	esi
-        push	edi
-        push	ebp
+        push    ebx
+        push    esi
+        push    edi
+        push    ebp
     ; Initial loading of arguments
-        mov	ebx, [esp+20]   ; closure
-        mov	eax, [esp+24]   ; argument
-        mov	esi, [ebx]      ; code pointer
+        mov     ebx, [esp+20]   ; closure
+        mov     eax, [esp+24]   ; argument
+        mov     esi, [ebx]      ; code pointer
         jmp     L106
 
         PUBLIC  _caml_callback2_exn
         ALIGN  4
 _caml_callback2_exn:
     ; Save callee-save registers
-        push	ebx
-        push	esi
-        push	edi
-        push	ebp
+        push    ebx
+        push    esi
+        push    edi
+        push    ebp
     ; Initial loading of arguments
-        mov	ecx, [esp+20]   ; closure
-        mov	eax, [esp+24]   ; first argument
-        mov	ebx, [esp+28]   ; second argument
-        mov	esi, offset _caml_apply2   ; code pointer
-        jmp	L106
+        mov     ecx, [esp+20]   ; closure
+        mov     eax, [esp+24]   ; first argument
+        mov     ebx, [esp+28]   ; second argument
+        mov     esi, offset _caml_apply2   ; code pointer
+        jmp     L106
 
         PUBLIC  _caml_callback3_exn
-        ALIGN	4
+        ALIGN   4
 _caml_callback3_exn:
     ; Save callee-save registers
-        push	ebx
-        push	esi
-        push	edi
-        push	ebp
+        push    ebx
+        push    esi
+        push    edi
+        push    ebp
     ; Initial loading of arguments
-        mov	edx, [esp+20]   ; closure
-        mov	eax, [esp+24]   ; first argument
-        mov	ebx, [esp+28]   ; second argument
-        mov	ecx, [esp+32]   ; third argument
-        mov	esi, offset _caml_apply3   ; code pointer
-        jmp	L106
+        mov     edx, [esp+20]   ; closure
+        mov     eax, [esp+24]   ; first argument
+        mov     ebx, [esp+28]   ; second argument
+        mov     ecx, [esp+32]   ; third argument
+        mov     esi, offset _caml_apply3   ; code pointer
+        jmp     L106
 
         PUBLIC  _caml_ml_array_bound_error
         ALIGN   4

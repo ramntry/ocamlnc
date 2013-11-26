@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Win32-specific stuff */
 
 #include <windows.h>
@@ -33,7 +31,7 @@
 #include "signals.h"
 #include "sys.h"
 
-#include "flexdll.h"
+#include <flexdll.h>
 
 #ifndef S_ISREG
 #define S_ISREG(mode) (((mode) & S_IFMT) == S_IFREG)
@@ -93,7 +91,7 @@ CAMLexport char * caml_search_exe_in_path(char * name)
   pathlen = strlen(name) + 1;
   if (pathlen < 256) pathlen = 256;
   while (1) {
-    fullname = stat_alloc(pathlen);
+    fullname = caml_stat_alloc(pathlen);
     retcode = SearchPath(NULL,              /* use system search path */
                          name,
                          ".exe",            /* add .exe extension if needed */
@@ -107,7 +105,7 @@ CAMLexport char * caml_search_exe_in_path(char * name)
       break;
     }
     if (retcode < pathlen) break;
-    stat_free(fullname);
+    caml_stat_free(fullname);
     pathlen = retcode + 1;
   }
   return fullname;
@@ -205,7 +203,6 @@ static int argvsize;
 static void store_argument(char * arg);
 static void expand_argument(char * arg);
 static void expand_pattern(char * arg);
-static void expand_diversion(char * filename);
 
 static void out_of_memory(void)
 {
@@ -227,10 +224,6 @@ static void expand_argument(char * arg)
 {
   char * p;
 
-  if (arg[0] == '@') {
-    expand_diversion(arg + 1);
-    return;
-  }
   for (p = arg; *p != 0; p++) {
     if (*p == '*' || *p == '?') {
       expand_pattern(arg);
@@ -265,62 +258,6 @@ static void expand_pattern(char * pat)
   _findclose(handle);
 }
 
-static void expand_diversion(char * filename)
-{
-  struct _stat stat;
-  int fd;
-  char * buf, * endbuf, * p, * q, * s;
-  int inquote;
-
-  if (_stat(filename, &stat) == -1 ||
-      (fd = _open(filename, O_RDONLY | O_BINARY, 0)) == -1) {
-    fprintf(stderr, "Cannot open file %s\n", filename);
-    exit(2);
-  }
-  buf = (char *) malloc(stat.st_size + 1);
-  if (buf == NULL) out_of_memory();
-  _read(fd, buf, stat.st_size);
-  endbuf = buf + stat.st_size;
-  _close(fd);
-  for (p = buf; p < endbuf; /*nothing*/) {
-    /* Skip leading blanks */
-    while (p < endbuf && isspace(*p)) p++;
-    if (p >= endbuf) break;
-    s = p;
-    /* Skip to end of argument, taking quotes into account */
-    q = s;
-    inquote = 0;
-    while (p < endbuf) {
-      if (! inquote) {
-        if (isspace(*p)) break;
-        if (*p == '"') { inquote = 1; p++; continue; }
-        *q++ = *p++;
-      } else {
-        switch (*p) {
-          case '"':
-            inquote = 0; p++; continue;
-          case '\\':
-            if (p + 4 <= endbuf && strncmp(p, "\\\\\\\"", 4) == 0) {
-              p += 4; *q++ = '\\'; *q++ = '"'; continue;
-            }
-            if (p + 3 <= endbuf && strncmp(p, "\\\\\"", 3) == 0) {
-              p += 3; *q++ = '\\'; inquote = 0; continue;
-            }
-            if (p + 2 <= endbuf && p[1] == '"') {
-              p += 2; *q++ = '"'; continue;
-            }
-            /* fallthrough */
-        default:
-          *q++ = *p++;
-        }
-      }
-    }
-    /* Delimit argument and expand it */
-    *q++ = 0;
-    expand_argument(s);
-    p++;
-  }
-}
 
 CAMLexport void caml_expand_command_line(int * argcp, char *** argvp)
 {
@@ -528,18 +465,52 @@ void caml_win32_overflow_detection()
 
 /* Seeding of pseudo-random number generators */
 
-intnat caml_win32_random_seed (void)
+int caml_win32_random_seed (intnat data[16])
 {
-  intnat seed;
-  SYSTEMTIME t;
+  /* For better randomness, consider:
+     http://msdn.microsoft.com/library/en-us/seccrypto/security/rtlgenrandom.asp
+     http://blogs.msdn.com/b/michael_howard/archive/2005/01/14/353379.aspx
+  */
+  FILETIME t;
+  LARGE_INTEGER pc;
+  GetSystemTimeAsFileTime(&t);
+  QueryPerformanceCounter(&pc);  /* PR#6032 */
+  data[0] = t.dwLowDateTime;
+  data[1] = t.dwHighDateTime;
+  data[2] = GetCurrentProcessId();
+  data[3] = pc.LowPart;
+  data[4] = pc.HighPart;
+  return 5;
+}
 
-  GetLocalTime(&t);
-  seed = t.wMonth;
-  seed = (seed << 5) ^ t.wDay;
-  seed = (seed << 4) ^ t.wHour;
-  seed = (seed << 5) ^ t.wMinute;
-  seed = (seed << 5) ^ t.wSecond;
-  seed = (seed << 9) ^ t.wMilliseconds;
-  seed ^= GetCurrentProcessId();
-  return seed;
+
+#ifdef _MSC_VER
+
+static void invalid_parameter_handler(const wchar_t* expression,
+   const wchar_t* function,
+   const wchar_t* file,
+   unsigned int line,
+   uintptr_t pReserved)
+{
+  /* no crash box */
+}
+
+
+void caml_install_invalid_parameter_handler()
+{
+  _set_invalid_parameter_handler(invalid_parameter_handler);
+}
+
+#endif
+
+
+/* Recover executable name  */
+
+int caml_executable_name(char * name, int name_len)
+{
+  int retcode;
+
+  int ret = GetModuleFileName(NULL, name, name_len);
+  if (0 == ret || ret >= name_len) return -1;
+  return 0;
 }

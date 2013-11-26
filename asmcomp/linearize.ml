@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Transformation of Mach code into a list of pseudo-instructions. *)
 
 open Reg
@@ -44,17 +42,18 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise
+  | Lraise of Lambda.raise_kind
 
 let has_fallthrough = function
-  | Lreturn | Lbranch _ | Lswitch _ | Lraise
+  | Lreturn | Lbranch _ | Lswitch _ | Lraise _
   | Lop Itailcall_ind | Lop (Itailcall_imm _) -> false
   | _ -> true
 
 type fundecl =
   { fun_name: string;
     fun_body: instruction;
-    fun_fast: bool }
+    fun_fast: bool;
+    fun_dbg : Debuginfo.t }
 
 (* Invert a test *)
 
@@ -258,10 +257,11 @@ let rec linear i n =
                     (linear body (cons_instr Lpoptrap n1))) in
       cons_instr (Lsetuptrap lbl_body)
         (linear handler (add_branch lbl_join n2))
-  | Iraise ->
-      copy_instr Lraise i (discard_dead_code n)
+  | Iraise k ->
+      copy_instr (Lraise k) i (discard_dead_code n)
 
 let fundecl f =
   { fun_name = f.Mach.fun_name;
     fun_body = linear f.Mach.fun_body end_instr;
-    fun_fast = f.Mach.fun_fast }
+    fun_fast = f.Mach.fun_fast;
+    fun_dbg  = f.Mach.fun_dbg }

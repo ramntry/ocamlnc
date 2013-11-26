@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Renaming of registers at reload points to split live ranges. *)
 
 open Reg
@@ -21,7 +19,7 @@ open Mach
 
 type subst = Reg.t Reg.Map.t
 
-let subst_reg r sub =
+let subst_reg r (sub : subst) =
   try
     Reg.Map.find r sub
   with Not_found ->
@@ -186,8 +184,8 @@ let rec rename i sub =
         rename i.next (merge_substs sub_body sub_handler i.next) in
       (instr_cons (Itrywith(new_body, new_handler)) [||] [||] new_next,
        sub_next)
-  | Iraise ->
-      (instr_cons_debug Iraise (subst_regs i.arg sub) [||] i.dbg i.next,
+  | Iraise k ->
+      (instr_cons_debug (Iraise k) (subst_regs i.arg sub) [||] i.dbg i.next,
        None)
 
 (* Second pass: replace registers by their final representatives *)
@@ -207,4 +205,5 @@ let fundecl f =
   { fun_name = f.fun_name;
     fun_args = new_args;
     fun_body = new_body;
-    fun_fast = f.fun_fast }
+    fun_fast = f.fun_fast;
+    fun_dbg  = f.fun_dbg }

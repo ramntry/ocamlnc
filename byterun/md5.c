@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #include <string.h>
 #include "alloc.h"
 #include "fail.h"
@@ -66,6 +64,15 @@ CAMLprim value caml_md5_chan(value vchan, value len)
   caml_MD5Final(&Byte_u(res, 0), &ctx);
   Unlock(chan);
   CAMLreturn (res);
+}
+
+CAMLexport void caml_md5_block(unsigned char digest[16],
+                               void * data, uintnat len)
+{
+  struct MD5Context ctx;
+  caml_MD5Init(&ctx);
+  caml_MD5Update(&ctx, data, len);
+  caml_MD5Final(digest, &ctx);
 }
 
 /*
@@ -206,7 +213,7 @@ CAMLexport void caml_MD5Final(unsigned char *digest, struct MD5Context *ctx)
     caml_MD5Transform(ctx->buf, (uint32 *) ctx->in);
     byteReverse((unsigned char *) ctx->buf, 4);
     memcpy(digest, ctx->buf, 16);
-    memset(ctx, 0, sizeof(ctx));        /* In case it's sensitive */
+    memset(ctx, 0, sizeof(*ctx));        /* In case it's sensitive */
 }
 
 /* The four core functions - F1 is optimized somewhat */

@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 exception Text_syntax of int * int * string (* line, char, string *)
 
@@ -133,6 +132,8 @@ module Texter =
                    | RK_attribute -> "attribute"
                    | RK_method -> "method"
                    | RK_section _ -> "section"
+                   | RK_recfield -> "recfield"
+                   | RK_const -> "const"
                  in
                  s^":"
             )

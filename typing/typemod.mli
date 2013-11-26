@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Type-checking of the module language *)
 
 open Types
@@ -21,16 +19,22 @@ val type_module:
         Env.t -> Parsetree.module_expr -> Typedtree.module_expr
 val type_structure:
         Env.t -> Parsetree.structure -> Location.t ->
-          Typedtree.structure * signature * Env.t
+         Typedtree.structure * Types.signature * Env.t
+val type_toplevel_phrase:
+        Env.t -> Parsetree.structure ->
+         Typedtree.structure * Types.signature * Env.t
 val type_implementation:
-        string -> string -> string -> Env.t -> Parsetree.structure ->
-                               Typedtree.structure * Typedtree.module_coercion
+  string -> string -> string -> Env.t -> Parsetree.structure ->
+  Typedtree.structure * Typedtree.module_coercion
 val transl_signature:
-        Env.t -> Parsetree.signature -> signature
+        Env.t -> Parsetree.signature -> Typedtree.signature
 val check_nongen_schemes:
-        Env.t -> Typedtree.structure -> unit
+        Env.t -> Typedtree.structure_item list -> unit
 
 val simplify_signature: signature -> signature
+
+val save_signature : string -> Typedtree.signature -> string -> string ->
+  Env.t -> Types.signature_item list -> unit
 
 val package_units:
         string list -> string -> string -> Typedtree.module_coercion
@@ -54,7 +58,9 @@ type error =
   | Not_a_packed_module of type_expr
   | Incomplete_packed_module of type_expr
   | Scoping_pack of Longident.t * type_expr
+  | Extension of string
+  | Recursive_module_require_explicit_type
 
-exception Error of Location.t * error
+exception Error of Location.t * Env.t * error
 
-val report_error: formatter -> error -> unit
+val report_error: Env.t -> formatter -> error -> unit

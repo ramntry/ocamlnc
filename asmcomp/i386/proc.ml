@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Description of the Intel 386 processor *)
 
 open Misc
@@ -165,8 +163,7 @@ let destroyed_at_oper = function
     Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
   | Iop(Iextcall(_, false)) -> destroyed_at_c_call
   | Iop(Iintop(Idiv | Imod)) -> [| eax; edx |]
-  | Iop(Iintop_imm(Imod, _)) -> [| eax |]
-  | Iop(Ialloc _) -> [| eax |]
+  | Iop(Ialloc _ | Iintop Imulh) -> [| eax |]
   | Iop(Iintop(Icomp _) | Iintop_imm(Icomp _, _)) -> [| eax |]
   | Iop(Iintoffloat) -> [| eax |]
   | Iifthenelse(Ifloattest(_, _), _, _) -> [| eax |]
@@ -201,5 +198,4 @@ let assemble_file infile outfile =
     Ccomp.command (Config.asm ^ " -o " ^
                    Filename.quote outfile ^ " " ^ Filename.quote infile)
 
-open Clflags;;
-open Config;;
+let init () = ()

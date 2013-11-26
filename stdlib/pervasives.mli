@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (** The initially opened module.
 
    This module provides the basic operations over the built-in types
@@ -30,6 +28,11 @@
 external raise : exn -> 'a = "%raise"
 (** Raise the given exception value *)
 
+external raise_notrace : exn -> 'a = "%raise_notrace"
+(** A faster version [raise] which does not record the backtrace.
+    @since 4.02.0
+*)
+
 val invalid_arg : string -> 'a
 (** Raise exception [Invalid_argument] with the given string. *)
 
@@ -38,7 +41,7 @@ val failwith : string -> 'a
 
 exception Exit
 (** The [Exit] exception is not raised by any library function.  It is
-    provided for use in your programs.*)
+    provided for use in your programs. *)
 
 
 (** {6 Comparisons} *)
@@ -122,7 +125,7 @@ external not : bool -> bool = "%boolnot"
 (** The boolean negation. *)
 
 external ( && ) : bool -> bool -> bool = "%sequand"
-(** The boolean ``and''. Evaluation is sequential, left-to-right:
+(** The boolean 'and'. Evaluation is sequential, left-to-right:
    in [e1 && e2], [e1] is evaluated first, and if it returns [false],
    [e2] is not evaluated at all. *)
 
@@ -130,13 +133,27 @@ external ( & ) : bool -> bool -> bool = "%sequand"
 (** @deprecated {!Pervasives.( && )} should be used instead. *)
 
 external ( || ) : bool -> bool -> bool = "%sequor"
-(** The boolean ``or''. Evaluation is sequential, left-to-right:
+(** The boolean 'or'. Evaluation is sequential, left-to-right:
    in [e1 || e2], [e1] is evaluated first, and if it returns [true],
    [e2] is not evaluated at all. *)
 
 external ( or ) : bool -> bool -> bool = "%sequor"
 (** @deprecated {!Pervasives.( || )} should be used instead.*)
 
+
+(** {6 Composition operators} *)
+
+external ( |> ) : 'a -> ('a -> 'b) -> 'b = "%revapply"
+(** Reverse-application operator: [x |> f |> g] is exactly equivalent
+ to [g (f (x))].
+   @since 4.01
+*)
+
+external ( @@ ) : ('a -> 'b) -> 'a -> 'b = "%apply"
+(** Application operator: [g @@ f @@ x] is exactly equivalent to
+ [g (f (x))].
+   @since 4.01
+*)
 
 (** {6 Integer arithmetic} *)
 
@@ -234,7 +251,7 @@ external ( asr ) : int -> int -> int = "%asrint"
    Floating-point operations never raise an exception on overflow,
    underflow, division by zero, etc.  Instead, special IEEE numbers
    are returned as appropriate, such as [infinity] for [1.0 /. 0.0],
-   [neg_infinity] for [-1.0 /. 0.0], and [nan] (``not a number'')
+   [neg_infinity] for [-1.0 /. 0.0], and [nan] ('not a number')
    for [0.0 /. 0.0].  These special numbers then propagate through
    floating-point computations as expected: for instance,
    [1.0 /. infinity] is [0.0], and any arithmetic operation with [nan]
@@ -320,7 +337,7 @@ external hypot : float -> float -> float
   of the hypotenuse of a right-angled triangle with sides of length
   [x] and [y], or, equivalently, the distance of the point [(x,y)]
   to origin.
-  @since 3.13.0  *)
+  @since 4.00.0  *)
 
 external cosh : float -> float = "caml_cosh_float" "cosh" "float"
 (** Hyperbolic cosine.  Argument is in radians. *)
@@ -351,7 +368,7 @@ external copysign : float -> float -> float
   and whose sign is that of [y].  If [x] is [nan], returns [nan].
   If [y] is [nan], returns either [x] or [-. x], but it is not
   specified which.
-  @since 3.13.0  *)
+  @since 4.00.0  *)
 
 external mod_float : float -> float -> float = "caml_fmod_float" "fmod" "float"
 (** [mod_float a b] returns the remainder of [a] with respect to
@@ -395,7 +412,7 @@ val neg_infinity : float
 val nan : float
 (** A special floating-point value denoting the result of an
    undefined operation such as [0.0 /. 0.0].  Stands for
-   ``not a number''.  Any floating-point operation with [nan] as
+   'not a number'.  Any floating-point operation with [nan] as
    argument returns [nan] as result.  As for floating-point comparisons,
    [=], [<], [<=], [>] and [>=] return [false] and [<>] returns [true]
    if one or both of their arguments is [nan]. *)
@@ -508,7 +525,9 @@ val ( @ ) : 'a list -> 'a list -> 'a list
 (** List concatenation. *)
 
 
-(** {6 Input/output} *)
+(** {6 Input/output}
+    Note: all input/output functions can raise [Sys_error] when the system
+    calls they invoke fail. *)
 
 type in_channel
 (** The type of input channel. *)
@@ -611,8 +630,7 @@ val open_out : string -> out_channel
 (** Open the named file for writing, and return a new output channel
    on that file, positionned at the beginning of the file. The
    file is truncated to zero length if it already exists. It
-   is created if it does not already exists.
-   Raise [Sys_error] if the file could not be opened. *)
+   is created if it does not already exists. *)
 
 val open_out_bin : string -> out_channel
 (** Same as {!Pervasives.open_out}, but the file is opened in binary mode,
@@ -712,8 +730,7 @@ val set_binary_mode_out : out_channel -> bool -> unit
 
 val open_in : string -> in_channel
 (** Open the named file for reading, and return a new input channel
-   on that file, positionned at the beginning of the file.
-   Raise [Sys_error] if the file could not be opened. *)
+   on that file, positionned at the beginning of the file. *)
 
 val open_in_bin : string -> in_channel
 (** Same as {!Pervasives.open_in}, but the file is opened in binary mode,
@@ -802,8 +819,7 @@ val close_in : in_channel -> unit
 (** Close the given channel.  Input functions raise a [Sys_error]
   exception when they are applied to a closed input channel,
   except [close_in], which does nothing when applied to an already
-  closed channel.  Note that [close_in] may raise [Sys_error] if
-  the operating system signals an error. *)
+  closed channel. *)
 
 val close_in_noerr : in_channel -> unit
 (** Same as [close_in], but ignore all errors. *)
@@ -866,23 +882,73 @@ external decr : int ref -> unit = "%decr"
 
 (** {6 Operations on format strings} *)
 
-(** Format strings are used to read and print data using formatted input
-    functions in module {!Scanf} and formatted output in modules {!Printf} and
-    {!Format}. *)
+(** Format strings are character strings with special lexical conventions
+  that defines the functionality of formatted input/output functions. Format
+  strings are used to read data with formatted input functions from module
+  {!Scanf} and to print data with formatted output functions from modules
+  {!Printf} and {!Format}.
+
+  Format strings are made of three kinds of entities:
+  - {e conversions specifications}, introduced by the special character ['%']
+    followed by one or more characters specifying what kind of argument to
+    read or print,
+  - {e formatting indications}, introduced by the special character ['@']
+    followed by one or more characters specifying how to read or print the
+    argument,
+  - {e plain characters} that are regular characters with usual lexical
+    conventions. Plain characters specify string literals to be read in the
+    input or printed in the output.
+
+  There is an additional lexical rule to escape the special characters ['%']
+  and ['@'] in format strings: if a special character follows a ['%']
+  character, it is treated as a plain character. In other words, ["%%"] is
+  considered as a plain ['%'] and ["%@"] as a plain ['@'].
+
+  For more information about conversion specifications and formatting
+  indications available, read the documentation of modules {!Scanf},
+  {!Printf} and {!Format}.
+*)
 
 (** Format strings have a general and highly polymorphic type
     [('a, 'b, 'c, 'd, 'e, 'f) format6]. Type [format6] is built in.
     The two simplified types, [format] and [format4] below are
-    included for backward compatibility with earlier releases of OCaml.
-    ['a] is the type of the parameters of the format,
-    ['b] is the type of the first argument given to
-         [%a] and [%t] printing functions,
-    ['c] is the type of the argument transmitted to the first argument of
-         "kprintf"-style functions,
-    ['d] is the result type for the "scanf"-style functions,
-    ['e] is the type of the receiver function for the "scanf"-style functions,
-    ['f] is the result type for the "printf"-style function.
- *)
+    included for backward compatibility with earlier releases of
+    OCaml.
+
+    The meaning of format string type parameters is as follows:
+
+    - ['a] is the type of the parameters of the format for formatted output
+      functions ([printf]-style functions);
+      ['a] is the type of the values read by the format for formatted input
+      functions ([scanf]-style functions).
+
+    - ['b] is the type of input source for formatted input functions and the
+      type of output target for formatted output functions.
+      For [printf]-style functions from module [Printf], ['b] is typically
+      [out_channel];
+      for [printf]-style functions from module [Format], ['b] is typically
+      [Format.formatter];
+      for [scanf]-style functions from module [Scanf], ['b] is typically
+      [Scanf.Scanning.in_channel].
+
+      Type argument ['b] is also the type of the first argument given to
+      user's defined printing functions for [%a] and [%t] conversions,
+      and user's defined reading functions for [%r] conversion.
+
+    - ['c] is the type of the result of the [%a] and [%t] printing
+      functions, and also the type of the argument transmitted to the
+      first argument of [kprintf]-style functions or to the
+      [kscanf]-style functions.
+
+    - ['d] is the type of parameters for the [scanf]-style functions.
+
+    - ['e] is the type of the receiver function for the [scanf]-style functions.
+
+    - ['f] is the final result type of a formatted input/output function
+      invocation: for the [printf]-style functions, it is typically [unit];
+      for the [scanf]-style functions, it is typically the result type of the
+      receiver function.
+*)
 type ('a, 'b, 'c, 'd) format4 = ('a, 'b, 'c, 'c, 'c, 'd) format6
 
 type ('a, 'b, 'c) format = ('a, 'b, 'c, 'c) format4
@@ -894,14 +960,22 @@ external format_of_string :
   ('a, 'b, 'c, 'd, 'e, 'f) format6 ->
   ('a, 'b, 'c, 'd, 'e, 'f) format6 = "%identity"
 (** [format_of_string s] returns a format string read from the string
-    literal [s]. *)
+    literal [s].
+    Note: [format_of_string] can not convert a string argument that is not a
+    literal. If you need this functionality, use the more general
+    {!Scanf.format_from_string} function.
+*)
 
 val ( ^^ ) :
       ('a, 'b, 'c, 'd, 'e, 'f) format6 ->
       ('f, 'b, 'c, 'e, 'g, 'h) format6 ->
       ('a, 'b, 'c, 'd, 'g, 'h) format6
-(** [f1 ^^ f2] catenates formats [f1] and [f2].  The result is a format
-  that accepts arguments from [f1], then arguments from [f2]. *)
+(** [f1 ^^ f2] catenates format strings [f1] and [f2]. The result is a
+  format string that behaves as the concatenation of format strings [f1] and
+  [f2]: in case of formatted output, it accepts arguments from [f1], then
+  arguments from [f2]; in case of formatted input, it returns results from
+  [f1], then results from [f2].
+*)
 
 
 (** {6 Program termination} *)
@@ -920,13 +994,12 @@ val at_exit : (unit -> unit) -> unit
    termination time. The functions registered with [at_exit]
    will be called when the program executes {!Pervasives.exit},
    or terminates, either normally or because of an uncaught exception.
-   The functions are called in ``last in, first out'' order:
+   The functions are called in 'last in, first out' order:
    the function most recently added with [at_exit] is called first. *)
 
 (**/**)
 
-
-(** {6 For system use only, not for the casual user} *)
+(* The following is for system use only. Do not call directly. *)
 
 val valid_float_lexem : string -> string
 

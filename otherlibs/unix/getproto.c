@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #include <mlvalues.h>
 #include <alloc.h>
 #include <fail.h>
@@ -23,8 +21,6 @@
 
 #ifndef _WIN32
 #include <netdb.h>
-#else
-#include <winsock.h>
 #endif
 
 static value alloc_proto_entry(struct protoent *entry)

@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (** Formatted output functions. *)
 
 val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
@@ -27,7 +25,7 @@ val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
 
    Conversion specifications have the following form:
 
-   [% \[flags\] \[width\] \[.precision\] type]
+   [% [flags] [width] [.precision] type]
 
    In short, a conversion specification consists in the [%] character,
    followed by optional modifiers and a type which is made of one or
@@ -47,7 +45,8 @@ val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
    - [s]: insert a string argument.
    - [S]: convert a string argument to OCaml syntax (double quotes, escapes).
    - [c]: insert a character argument.
-   - [C]: convert a character argument to OCaml syntax (single quotes, escapes).
+   - [C]: convert a character argument to OCaml syntax
+     (single quotes, escapes).
    - [f]: convert a floating-point argument to decimal notation,
      in the style [dddd.ddd].
    - [F]: convert a floating-point argument to OCaml syntax ([dddd.]
@@ -73,8 +72,9 @@ val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
      [fprintf] at the current point.
    - [t]: same as [%a], but take only one argument (with type
      [out_channel -> unit]) and apply it to [outchan].
-   - [\{ fmt %\}]: convert a format string argument. The argument must
-     have the same type as the internal format string [fmt].
+   - [\{ fmt %\}]: convert a format string argument to its type digest.
+     The argument must have the same type as the internal format string
+     [fmt].
    - [( fmt %)]: format string substitution. Take a format string
      argument and substitute it to the internal format string [fmt]
      to print following arguments. The argument must have the same
@@ -82,7 +82,8 @@ val fprintf : out_channel -> ('a, out_channel, unit) format -> 'a
    - [!]: take no argument and flush the output.
    - [%]: take no argument and output one [%] character.
    - [\@]: take no argument and output one [\@] character.
-   - [,]: take no argument and do nothing.
+   - [,]: take no argument and output nothing: a no-op delimiter for
+     conversion specifications.
 
    The optional [flags] are:
    - [-]: left-justify the output (default is right justification).
@@ -115,12 +116,6 @@ val printf : ('a, out_channel, unit) format -> 'a
 val eprintf : ('a, out_channel, unit) format -> 'a
 (** Same as {!Printf.fprintf}, but output on [stderr]. *)
 
-val ifprintf : 'a -> ('b, 'a, unit) format -> 'b
-(** Same as {!Printf.fprintf}, but does not print anything.
-    Useful to ignore some material when conditionally printing.
-    @since 3.10.0
-*)
-
 val sprintf : ('a, unit, string) format -> 'a
 (** Same as {!Printf.fprintf}, but instead of printing on an output channel,
    return a string containing the result of formatting the arguments. *)
@@ -130,6 +125,12 @@ val bprintf : Buffer.t -> ('a, Buffer.t, unit) format -> 'a
    append the formatted arguments to the given extensible buffer
    (see module {!Buffer}). *)
 
+val ifprintf : 'a -> ('b, 'a, unit) format -> 'b
+(** Same as {!Printf.fprintf}, but does not print anything.
+    Useful to ignore some material when conditionally printing.
+    @since 3.10.0
+*)
+
 (** Formatted output functions with continuations. *)
 
 val kfprintf : (out_channel -> 'a) -> out_channel ->
@@ -137,6 +138,14 @@ val kfprintf : (out_channel -> 'a) -> out_channel ->
 (** Same as [fprintf], but instead of returning immediately,
    passes the out channel to its first argument at the end of printing.
    @since 3.09.0
+*)
+
+val ikfprintf : (out_channel -> 'a) -> out_channel ->
+              ('b, out_channel, unit, 'a) format4 -> 'b
+;;
+(** Same as [kfprintf] above, but does not print anything.
+   Useful to ignore some material when conditionally printing.
+   @since 4.0
 *)
 
 val ksprintf : (string -> 'a) -> ('b, unit, string, 'a) format4 -> 'b;;
@@ -159,7 +168,7 @@ val kprintf : (string -> 'a) -> ('b, unit, string, 'a) format4 -> 'b;;
 
 (**/**)
 
-(* For OCaml system internal use only. Don't call directly. *)
+(* The following is for system use only. Do not call directly. *)
 
 module CamlinternalPr : sig
 
@@ -171,6 +180,7 @@ module CamlinternalPr : sig
     external unsafe_index_of_int : int -> index = "%identity";;
 
     val succ_index : index -> index;;
+    val add_int_index : int -> index -> index;;
 
     val sub : ('a, 'b, 'c, 'd, 'e, 'f) format6 -> index -> int -> string;;
     val to_string : ('a, 'b, 'c, 'd, 'e, 'f) format6 -> string;;
@@ -194,6 +204,8 @@ module CamlinternalPr : sig
     };;
 
     val ac_of_format : ('a, 'b, 'c, 'd, 'e, 'f) format6 -> ac;;
+    val count_printing_arguments_of_format :
+      ('a, 'b, 'c, 'd, 'e, 'f) format6 -> int;;
 
     val sub_format :
         (('a, 'b, 'c, 'd, 'e, 'f) format6 -> int) ->

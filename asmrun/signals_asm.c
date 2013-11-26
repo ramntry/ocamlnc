@@ -11,14 +11,13 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Signal handling, code specific to the native-code compiler */
 
 #if defined(TARGET_amd64) && defined (SYS_linux)
 #define _GNU_SOURCE
 #endif
 #include <signal.h>
+#include <errno.h>
 #include <stdio.h>
 #include "fail.h"
 #include "memory.h"
@@ -46,14 +45,17 @@ extern void caml_win32_overflow_detection();
 #endif
 
 extern char * caml_code_area_start, * caml_code_area_end;
+extern char caml_system__code_begin, caml_system__code_end;
 
 #define Is_in_code_area(pc) \
  ( ((char *)(pc) >= caml_code_area_start && \
     (char *)(pc) <= caml_code_area_end)     \
-   || (Classify_addr(pc) & In_code_area) )
+|| ((char *)(pc) >= &caml_system__code_begin && \
+    (char *)(pc) <= &caml_system__code_end)     \
+|| (Classify_addr(pc) & In_code_area) )
 
 /* This routine is the common entry point for garbage collection
-   and signal handling.  It can trigger a callback to Caml code.
+   and signal handling.  It can trigger a callback to OCaml code.
    With system threads, this callback can cause a context switch.
    Hence [caml_garbage_collection] must not be called from regular C code
    (e.g. the [caml_alloc] function) because the context of the call
@@ -72,6 +74,9 @@ void caml_garbage_collection(void)
 
 DECLARE_SIGNAL_HANDLER(handle_signal)
 {
+  int saved_errno;
+  /* Save the value of errno (PR#5982). */
+  saved_errno = errno;
 #if !defined(POSIX_SIGNALS) && !defined(BSD_SIGNALS)
   signal(sig, handle_signal);
 #endif
@@ -83,12 +88,13 @@ DECLARE_SIGNAL_HANDLER(handle_signal)
     caml_record_signal(sig);
   /* Some ports cache [caml_young_limit] in a register.
      Use the signal context to modify that register too, but only if
-     we are inside Caml code (not inside C code). */
+     we are inside OCaml code (not inside C code). */
 #if defined(CONTEXT_PC) && defined(CONTEXT_YOUNG_LIMIT)
     if (Is_in_code_area(CONTEXT_PC))
       CONTEXT_YOUNG_LIMIT = (context_reg) caml_young_limit;
 #endif
   }
+  errno = saved_errno;
 }
 
 int caml_set_signal_action(int signo, int action)
@@ -184,6 +190,10 @@ static char sig_alt_stack[SIGSTKSZ];
 #define EXTRA_STACK 0x2000
 #endif
 
+#ifdef RETURN_AFTER_STACK_OVERFLOW
+extern void caml_stack_overflow(void);
+#endif
+
 DECLARE_SIGNAL_HANDLER(segv_handler)
 {
   struct rlimit limit;
@@ -193,7 +203,7 @@ DECLARE_SIGNAL_HANDLER(segv_handler)
   /* Sanity checks:
      - faulting address is word-aligned
      - faulting address is within the stack
-     - we are in Caml code */
+     - we are in OCaml code */
   fault_addr = CONTEXT_FAULTING_ADDRESS;
   if (((uintnat) fault_addr & (sizeof(intnat) - 1)) == 0
       && getrlimit(RLIMIT_STACK, &limit) == 0
@@ -203,19 +213,31 @@ DECLARE_SIGNAL_HANDLER(segv_handler)
       && Is_in_code_area(CONTEXT_PC)
 #endif
       ) {
-    /* Turn this into a Stack_overflow exception */
+#ifdef RETURN_AFTER_STACK_OVERFLOW
+    /* Tweak the PC part of the context so that on return from this
+       handler, we jump to the asm function [caml_stack_overflow]
+       (from $ARCH.S). */
+#ifdef CONTEXT_PC
+    CONTEXT_PC = (context_reg) &caml_stack_overflow;
+#else
+#error "CONTEXT_PC must be defined if RETURN_AFTER_STACK_OVERFLOW is"
+#endif
+#else
+    /* Raise a Stack_overflow exception straight from this signal handler */
 #if defined(CONTEXT_YOUNG_PTR) && defined(CONTEXT_EXCEPTION_POINTER)
     caml_exception_pointer = (char *) CONTEXT_EXCEPTION_POINTER;
     caml_young_ptr = (char *) CONTEXT_YOUNG_PTR;
 #endif
     caml_raise_stack_overflow();
+#endif
+  } else {
+    /* Otherwise, deactivate our exception handler and return,
+       causing fatal signal to be generated at point of error. */
+    act.sa_handler = SIG_DFL;
+    act.sa_flags = 0;
+    sigemptyset(&act.sa_mask);
+    sigaction(SIGSEGV, &act, NULL);
   }
-  /* Otherwise, deactivate our exception handler and return,
-     causing fatal signal to be generated at point of error. */
-  act.sa_handler = SIG_DFL;
-  act.sa_flags = 0;
-  sigemptyset(&act.sa_mask);
-  sigaction(SIGSEGV, &act, NULL);
 }
 
 #endif

@@ -10,9 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
-type term = 
+type term =
     Var of int
   | Term of string * term list
 

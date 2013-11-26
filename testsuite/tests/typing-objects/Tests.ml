@@ -159,7 +159,7 @@ e#f, e#g, e#h, e#i, e#j;;
 
 class c a = object val x = 1 val y = 1 val z = 1 val a = a end;;
 class d b = object val z = 2 val t = 2 val u = 2 val b = b end;;
-class e () = object 
+class e () = object
   val x = 3
   inherit c 5
   val y = 3
@@ -325,3 +325,10 @@ let o = object val x = 33 val y = 44 method m = x end in
   let o' : <m:int> = Marshal.from_string s 0 in
   let o'' : <m:int> = Marshal.from_string s 0 in
   (Oo.id o, Oo.id o', Oo.id o'', o#m, o'#m);;
+
+(* Recursion (cf. PR#5291) *)
+
+class a = let _ = new b in object end
+and b = let _ = new a in object end;;
+
+class a = let _ = new a in object end;;

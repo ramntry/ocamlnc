@@ -10,7 +10,5 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
-UNIXDIR=../otherlibs/unix
+UNIXDIR=../otherlibs/$(UNIXLIB)
 include Makefile.shared

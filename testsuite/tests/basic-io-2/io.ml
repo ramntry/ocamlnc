@@ -1,3 +1,15 @@
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
+
 (* Test a file copy function *)
 
 let test msg funct f1 f2 =
@@ -11,8 +23,8 @@ let test msg funct f1 f2 =
 (* File copy with constant-sized chunks *)
 
 let copy_file sz infile ofile =
-  let ic = open_in infile in
-  let oc = open_out ofile in
+  let ic = open_in_bin infile in
+  let oc = open_out_bin ofile in
   let buffer = String.create sz in
   let rec copy () =
     let n = input ic buffer 0 sz in
@@ -27,8 +39,8 @@ let copy_file sz infile ofile =
 (* File copy with random-sized chunks *)
 
 let copy_random sz infile ofile =
-  let ic = open_in infile in
-  let oc = open_out ofile in
+  let ic = open_in_bin infile in
+  let oc = open_out_bin ofile in
   let buffer = String.create sz in
   let rec copy () =
     let s = 1 + Random.int sz in
@@ -44,8 +56,8 @@ let copy_random sz infile ofile =
 (* File copy line per line *)
 
 let copy_line infile ofile =
-  let ic = open_in infile in
-  let oc = open_out ofile in
+  let ic = open_in_bin infile in
+  let oc = open_out_bin ofile in
   try
     while true do
       output_string oc (input_line ic); output_char oc '\n'
@@ -73,7 +85,7 @@ let copy_seek chunksize infile ofile =
 (* Create long lines of text *)
 
 let make_lines ofile =
-  let oc = open_out ofile in
+  let oc = open_out_bin ofile in
   for i = 1 to 256 do
     output_string oc (String.make (i*64) '.'); output_char oc '\n'
   done;
@@ -93,7 +105,7 @@ let _ =
   test "263-byte chunks" (copy_file 263) src testio;
   test "4011-byte chunks" (copy_file 4011) src testio;
   test "0...8192 byte chunks" (copy_random 8192) src testio;
-  test "line per line, short lines" copy_line "/etc/hosts" testio;
+  test "line per line, short lines" copy_line "test-file-short-lines" testio;
   make_lines lines;
   test "line per line, short and long lines" copy_line lines testio;
   test "backwards, 4096-byte chunks" (copy_seek 4096) src testio;

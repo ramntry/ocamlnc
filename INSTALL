@@ -8,17 +8,6 @@ PREREQUISITES
   performance.  gcc is the standard compiler under Linux, MacOS X,
   and many other systems.
 
-* Under MacOS X 10.5, you need version 3.1 or later of the XCode
-  development tools.  The version of XCode found on MacOS X 10.5
-  installation media causes linking problems.  XCode updates
-  are available free of charge at http://developer.apple.com/tools/xcode/
-
-* Under MacOS X up to version 10.2.8, you must raise the limit on the
-  stack size with one of the following commands:
-
-    limit stacksize 64M  # if your shell is zsh or tcsh
-    ulimit -s 65536      # if your shell is bash
-
 * If you do not have write access to /tmp, you should set the environment
   variable TMPDIR to the name of some other temporary directory.
 
@@ -26,8 +15,8 @@ PREREQUISITES
   are all *required*.  The vendor-provided compiler, assembler and make
   have major problems.
 
-* GNU make is needed to build ocamlbuild and camlp4.  If your system's
-  default make is not GNU make, you need to define the GNUMAKE environment
+* GNU make is needed to build ocamlbuild.  If your system's default
+  make is not GNU make, you need to define the GNUMAKE environment
   variable to the name of GNU make, typically with this command:
 
     export GNUMAKE=gnumake
@@ -43,18 +32,21 @@ in the config/ subdirectory.
 
 The "configure" script accepts the following options:
 
--bindir <dir>                   (default: /usr/local/bin)
-        Directory where the binaries will be installed
-
--libdir <dir>                   (default: /usr/local/lib/ocaml)
-        Directory where the Caml library will be installed
-
--mandir <dir>                   (default: /usr/local/man/man1)
-        Directory where the manual pages will be installed
-
 -prefix <dir>                   (default: /usr/local)
-        Set bindir, libdir and mandir to
-        <dir>/bin, <dir>/lib/ocaml, <dir>/man/man1 respectively.
+        Set the PREFIX variable used to define the defaults of the
+        following three options.  Must be an absolute path name.
+
+-bindir <dir>                   (default: $(PREFIX)/bin)
+        Directory where the binaries will be installed.
+        Must be an absolute path name, or start with "$(PREFIX)"
+
+-libdir <dir>                   (default: $(PREFIX)/lib/ocaml)
+        Directory where the OCaml library will be installed
+        Must be an absolute path name, or start with "$(PREFIX)"
+
+-mandir <dir>                   (default: $(PREFIX)/man/man1)
+        Directory where the manual pages will be installed
+        Must be an absolute path name, or start with "$(PREFIX)"
 
 -cc <C compiler and options>    (default: gcc if available, cc otherwise)
         C compiler to use for building the system
@@ -67,33 +59,25 @@ The "configure" script accepts the following options:
 
 -host <hosttype>                (default: determined automatically)
         The type of the host machine, in GNU's "configuration name"
-        format (CPU-COMPANY-SYSTEM). This info is generally determined
-        automatically by the "configure" script, and rarely ever
-        needs to be provided by hand. The installation instructions
-        for gcc or emacs contain a complete list of configuration names.
+        format (CPU-COMPANY-SYSTEM or CPU-COMPANY-KERNEL-SYSTEM).
+        This info is generally determined automatically by the
+        "configure" script, and rarely ever needs to be provided by
+        hand. The installation instructions for gcc or emacs contain a
+        complete list of configuration names.
+
+-target <targettype>            (default: same as -host)
+        The type of the target machine, in GNU's "configuration name"
+        format (CPU-COMPANY-SYSTEM or CPU-COMPANY-KERNEL-SYSTEM).
+        Setting this will setup OCaml as a cross-compiler which runs on
+        $host and produces code for $target. This requires a C toolchain
+        which also produces code for $target and a native OCaml
+        compiler of the exact same version (if you want a cross 4.00.1,
+        you need a native 4.00.1).
 
 -x11include <include_dir>       (default: determined automatically)
 -x11lib     <lib_dir>           (default: determined automatically)
         Location of the X11 include directory (e.g. /usr/X11R6/include)
         and the X11 library directory (e.g. /usr/X11R6/lib).
-
--tkdefs <cpp flags>             (default: none)
--tklibs <flags and libraries>   (default: determined automatically)
-        These options specify where to find the Tcl/Tk libraries for
-        LablTk. "-tkdefs" helps to find the headers, and "-tklibs"
-        the C libraries. "-tklibs" may contain either only -L/path and
-        -Wl,... flags, in which case the library names are determined
-        automatically, or the actual libraries, which are used as given.
-        Example: for a Japanese tcl/tk whose headers are in specific
-        directories and libraries in /usr/local/lib, you can use
-        ./configure -tklibs "-L/usr/local/lib -ltk8.0jp -ltcl8.0jp"
-          -tkdefs "-I/usr/local/include/tcl8.0jp -I/usr/local/include/tk8.0jp"
-
--tk-no-x11
-        Build LablTk without using X11. This option is needed on Cygwin.
-
--no-tk
-        Do not attempt to build LablTk.
 
 -no-pthread
         Do not attempt to use POSIX threads.
@@ -127,6 +111,25 @@ The "configure" script accepts the following options:
         Verbose output of the configuration tests. Use it if the outcome
         of configure is not what you were expecting.
 
+-no-debugger
+        Do not build ocamldebug.
+
+-no-ocamldoc
+        Do not build ocamldoc.
+
+-no-ocamlbuild
+        Do not build ocamlbuild.
+
+-no-graph
+        Do not compile the Graphics library.
+
+-partialld <linker and options>  (default: determined automatically)
+        The linker and options to use for producing an object file
+        (rather than an executable) from several other object files.
+
+-no-cfi
+        Do not compile support for CFI directives.
+
 Examples:
 
   Standard installation in /usr/{bin,lib,man} instead of /usr/local:
@@ -134,6 +137,17 @@ Examples:
 
   Installation in /usr, man pages in section "l":
     ./configure -bindir /usr/bin -libdir /usr/lib/ocaml -mandir /usr/man/manl
+  or:
+    ./configure -prefix /usr -mandir '$(PREFIX)/man/manl'
+
+  On a Linux x86/64 bits host, to build a 32-bit version of OCaml:
+    ./configure -cc "gcc -m32" -as "as --32" -aspp "gcc -m32 -c" \
+                -host i386-linux -partialld "ld -r -melf_i386"
+
+  On a Linux x86/64 bits host, to build the run-time system in PIC mode
+  (enables putting the runtime in a shared library,
+   at a small performance cost):
+    ./configure -cc "gcc -fPIC" -aspp "gcc -c -fPIC"
 
   On a MacOSX 10.5/Intel Core 2 or MacOSX 10.5/PowerPC host,
   to build a 64-bit version of OCaml:
@@ -142,16 +156,11 @@ Examples:
   On a MacOSX 10.6/Intel Core 2, to build a 32-bit version of OCaml:
     ./configure -cc "gcc -m32" -as "as -arch i386" -aspp "gcc -m32 -c"
 
-  On a Linux x86/64 bits host, to build a 32-bit version of OCaml:
-    ./configure -cc "gcc -m32" -as "as --32" -aspp "gcc -m32 -c"
-
-  On a Linux x86/64 bits host, to build the run-time system in PIC mode
-  (enables putting the runtime in a shared library, 
-   at a small performance cost):
-    ./configure -cc "gcc -fPIC" -aspp "gcc -c -fPIC"
-
   For Sun Solaris with the "acc" compiler:
     ./configure -cc "acc -fast" -libs "-lucb"
+
+  For Sun Solaris on Sparc 64bit, to compile natively (32bit only)
+    ./configure -cc "gcc -m32" -as "as -32" -aspp "gcc -m32 -c"
 
   For AIX 4.3 with the IBM compiler xlc:
     ./configure -cc "xlc_r -D_AIX43 -Wl,-bexpall,-brtl -qmaxmem=8192"
@@ -237,9 +246,9 @@ autoconfiguration):
         ocamllex         the lexer generator
         ocaml            the interactive, toplevel-based system
         ocamlmktop       a tool to make toplevel systems that integrate
-                         user-defined C primitives and Caml code
+                         user-defined C primitives and OCaml code
         ocamldebug       the source-level replay debugger
-        ocamldep         generator of "make" dependencies for Caml sources
+        ocamldep         generator of "make" dependencies for OCaml sources
         ocamldoc         documentation generator
         ocamlprof        execution count profiler
         ocamlcp          the bytecode compiler in profiling mode
@@ -271,7 +280,7 @@ In the latter case, the destination directory defaults to the
 
 9- After installation, do *not* strip the ocamldebug and ocamlbrowser
 executables.  (These are mixed-mode executables, containing both
-compiled C code and Caml bytecode; stripping erases the bytecode!)
+compiled C code and OCaml bytecode; stripping erases the bytecode!)
 Other executables such as ocamlrun can safely be stripped.
 
 IF SOMETHING GOES WRONG:
@@ -328,3 +337,7 @@ system.  The "configure" script tries to work around this problem.
 unable to compile correctly the runtime system (wrong code is
 generated for (x - y) where x is a pointer and y an integer).
 Fix: use gcc.
+
+* Under MacOS X 10.6, with XCode 4.0.2, the configure script mistakenly
+detects support for CFI directives in the assembler.
+Fix: give the "-no-cfi" option to configure.

@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Misc
 open Path
 open Instruct
@@ -89,7 +87,8 @@ let rec expression event env = function
       end
   | E_result ->
       begin match event with
-        Some {ev_kind = Event_after ty; ev_typsubst = subst} when !Frames.current_frame = 0 ->
+        Some {ev_kind = Event_after ty; ev_typsubst = subst}
+        when !Frames.current_frame = 0 ->
           (Debugcom.Remote_value.accu(), Subst.type_expr subst ty)
       | _ ->
           raise(Error(No_result))
@@ -148,13 +147,13 @@ let rec expression event env = function
 and find_label lbl env ty path tydesc pos = function
     [] ->
       raise(Error(Wrong_label(ty, lbl)))
-  | (name, mut, ty_arg) :: rem ->
-      if name = lbl then begin
+  | {ld_id; ld_type} :: rem ->
+      if Ident.name ld_id = lbl then begin
         let ty_res =
           Btype.newgenty(Tconstr(path, tydesc.type_params, ref Mnil))
         in
         (pos,
-         try Ctype.apply env [ty_res] ty_arg [ty] with Ctype.Cannot_apply ->
+         try Ctype.apply env [ty_res] ld_type [ty] with Ctype.Cannot_apply ->
            abstract_type)
       end else
         find_label lbl env ty path tydesc (pos + 1) rem
@@ -183,10 +182,12 @@ let report_error ppf = function
         pos len Printtyp.type_expr ty
   | Array_index(len, pos) ->
       fprintf ppf
-        "@[Cannot extract element number %i from an array of length %i@]@." pos len
+        "@[Cannot extract element number %i from an array of length %i@]@."
+        pos len
   | List_index(len, pos) ->
       fprintf ppf
-        "@[Cannot extract element number %i from a list of length %i@]@." pos len
+        "@[Cannot extract element number %i from a list of length %i@]@."
+        pos len
   | String_index(s, len, pos) ->
       fprintf ppf
         "@[Cannot extract character number %i@ \

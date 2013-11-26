@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -22,7 +23,7 @@ end
 
 module type SET = sig
   include Set.S
-  val find : (elt -> bool) -> t -> elt
+  val find_elt : (elt -> bool) -> t -> elt
   val map : (elt -> elt) -> t -> t
   val of_list : elt list -> t
   val print : Format.formatter -> t -> unit
@@ -33,7 +34,7 @@ module type LIST = sig
   val print : (Format.formatter -> 'a -> 'b) -> Format.formatter -> 'a list -> unit
   val filter_opt : ('a -> 'b option) -> 'a list -> 'b list
   val union : 'a list -> 'a list -> 'a list
-
+  val ordered_unique : 'a list -> 'a list
   (* Original functions *)
   include module type of List
 end
@@ -94,6 +95,12 @@ end
 
 module type TAGS = sig
   include Set.S with type elt = string
+  (** [Tags.elt] represents a tag, which is simply a string, usually
+      lowercase, for example "ocaml" or "native".  The set of tags
+      attached to a file is computed by applying the tagging rules to
+      the filename.  Tagging rules are defined in _tags files in any
+      parent directory of a file, up to the main project directory. *)
+
   val of_list : string list -> t
   val print : Format.formatter -> t -> unit
   val does_match : t -> t -> bool
@@ -152,8 +159,8 @@ module type PATHNAME = sig
   end
 end
 
-(** Provides an abstract type for easily building complex shell commands without making
-    quotation mistakes.  *)
+(** Provides an abstract type for easily building complex shell
+    commands without making quotation mistakes.  *)
 module type COMMAND = sig
   type tags
   type pathname
@@ -161,27 +168,33 @@ module type COMMAND = sig
   (** The type [t] provides some basic combinators and command primitives.
       Other commands can be made of command specifications ([spec]). *)
   type t =
-    | Seq of t list                  (** A sequence of commands (like the `;' in shell) *)
-    | Cmd of spec                    (** A command is made of command specifications ([spec]) *)
-    | Echo of string list * pathname (** Write the given strings (w/ any formatting) to the given file *)
-    | Nop                            (** The command that does nothing *)
+    | Seq of t list (** A sequence of commands (like the `;' in shell) *)
+    | Cmd of spec   (** A command is made of command specifications ([spec]) *)
+    | Echo of string list * pathname
+    (** Write the given strings (w/ any formatting) to the given file *)
+    | Nop           (** The command that does nothing *)
 
   (** The type for command specifications. That is pieces of command. *)
   and spec =
-    | N                       (** No operation. *)
-    | S of spec list          (** A sequence.  This gets flattened in the last stages *)
-    | A of string             (** An atom. *)
-    | P of pathname           (** A pathname. *)
-    | Px of pathname          (** A pathname, that will also be given to the call_with_target hook. *)
-    | Sh of string            (** A bit of raw shell code, that will not be escaped. *)
-    | T of tags               (** A set of tags, that describe properties and some semantics
-                                  information about the command, afterward these tags will be
-                                  replaced by command [spec]s (flags for instance). *)
-    | V of string             (** A virtual command, that will be resolved at execution using [resolve_virtuals] *)
-    | Quote of spec           (** A string that should be quoted like a filename but isn't really one. *)
+    | N              (** No operation. *)
+    | S of spec list (** A sequence.  This gets flattened in the last stages *)
+    | A of string    (** An atom. *)
+    | P of pathname  (** A pathname. *)
+    | Px of pathname (** A pathname, that will also be given to the
+                         call_with_target hook. *)
+    | Sh of string   (** A bit of raw shell code, that will not be escaped. *)
+    | T of tags      (** A set of tags, that describe properties and
+                         some semantics information about the
+                         command, afterward these tags will be
+                         replaced by command [spec]s (flags for
+                         instance). *)
+    | V of string    (** A virtual command, that will be resolved at
+                         execution using [resolve_virtuals] *)
+    | Quote of spec  (** A string that should be quoted like a
+                           filename but isn't really one. *)
 
   (*type v = [ `Seq of v list | `Cmd of vspec | `Nop ]
-  and vspec =
+    and vspec =
     [ `N
     | `S of vspec list
     | `A of string
@@ -190,10 +203,10 @@ module type COMMAND = sig
     | `Sh of string
     | `Quote of vspec ]
 
-  val spec_of_vspec : vspec -> spec
-  val vspec_of_spec : spec -> vspec
-  val t_of_v : v -> t
-  val v_of_t : t -> v*)
+    val spec_of_vspec : vspec -> spec
+    val vspec_of_spec : spec -> vspec
+    val t_of_v : v -> t
+    val v_of_t : t -> v*)
 
   (** Will convert a string list to a list of atoms by adding [A] constructors. *)
   val atomize : string list -> spec
@@ -347,6 +360,10 @@ module type MISC = sig
   val ( @:= ) : 'a list ref -> 'a list -> unit
 
   val memo : ('a -> 'b) -> ('a -> 'b)
+
+  val memo2 : ('a -> 'b -> 'c) -> ('a -> 'b -> 'c)
+
+  val memo3 : ('a -> 'b -> 'c -> 'd) -> ('a -> 'b -> 'c -> 'd)
 end
 
 module type OPTIONS = sig
@@ -386,9 +403,11 @@ module type OPTIONS = sig
   val ocaml_libs : string list ref
   val ocaml_mods : string list ref
   val ocaml_pkgs : string list ref
+  val ocaml_syntax : string option ref
   val ocaml_cflags : string list ref
   val ocaml_lflags : string list ref
   val ocaml_ppflags : string list ref
+  val ocaml_docflags : string list ref
   val ocaml_yaccflags : string list ref
   val ocaml_lexflags : string list ref
   val program_args : string list ref
@@ -501,7 +520,8 @@ include directories, libraries and special link options. *)
     (** Same as [link_flags_byte] but for native mode. *)
 end
 
-(** This module contains the functions and values that can be used by plugins. *)
+(** This module contains the functions and values that can be used by
+    plugins. *)
 module type PLUGIN = sig
   module Pathname  : PATHNAME
   module Tags      : TAGS
@@ -515,8 +535,14 @@ module type PLUGIN = sig
   module Findlib   : FINDLIB with type command_spec = Command.spec
   include MISC
 
-  (** See [COMMAND] for the description of these types. *)
-  type command = Command.t = Seq of command list | Cmd of spec | Echo of string list * Pathname.t | Nop
+  (** See {!COMMAND.t} for the description of this type. *)
+  type command = Command.t =
+    | Seq of command list
+    | Cmd of spec
+    | Echo of string list * Pathname.t
+    | Nop
+
+  (** See {!COMMAND.spec} for the description of this type. *)
   and spec = Command.spec =
     | N | S of spec list | A of string | P of string | Px of string
     | Sh of string | T of Tags.t | V of string | Quote of spec
@@ -537,8 +563,8 @@ module type PLUGIN = sig
       if the given option is Some. *)
   val ( +++ ) : Tags.t -> Tags.elt option -> Tags.t
 
-  (** [tags---optional_tag] Remove the given optional tag to the given set of tags
-      if the given option is Some. *)
+  (** [tags---optional_tag] Remove the given optional tag to the given
+      set of tags if the given option is Some. *)
   val ( --- ) : Tags.t -> Tags.elt option -> Tags.t
 
   (** The type of the builder environments. Here an environment is just the
@@ -554,9 +580,10 @@ module type PLUGIN = sig
   type builder = Pathname.t list list -> (Pathname.t, exn) Outcome.t list
 
   (** This is the type for rule actions. An action receive as argument, the
-      environment lookup function (see [env]), and a function to dynamically
-      build more targets (see [builder]). An action should return the command
-      to run in order to build the rule productions using the rule dependencies. *)
+      environment lookup function (see {!env}), and a function to dynamically
+      build more targets (see {!builder}). An action should return the command
+      to run in order to build the rule productions using the rule dependencies.
+  *)
   type action = env -> builder -> Command.t
 
   (** This is the main function for adding a rule to the ocamlbuild engine.
@@ -567,14 +594,22 @@ module type PLUGIN = sig
         Use ~dep for one file, ~deps for list of files.
       - It finally takes the action to perform in order to produce the
         productions files using the dependencies (see [action]).
-      There is also two more options:
+
+      There are some more optional parameters:
       - The ~insert argument allow to insert the rules precisely between other
         rules.
       - The ~stamp argument specify the name of a file that will be
         automatically produced by ocamlbuild. This file can serve as a virtual
         target (or phony target), since it will be filled up by a digest of
         it dependencies.
-      - The ~tags argument in deprecated, don't use it. *)
+      - The ~tags argument in deprecated, don't use it.
+      
+      Finally, the optional ~doc argument allows to give an informal
+      explanation of the rule purpose and behavior, that will be
+      displayed by [ocamlbuild -documentation]. For example, it is
+      a good place to specify the commands that will be called, any
+      new tags introduced by the rule, and dynamic dependencies.
+  *)
   val rule : string ->
     ?tags:string list ->
     ?prods:string list ->
@@ -583,6 +618,7 @@ module type PLUGIN = sig
     ?dep:string ->
     ?stamp:string ->
     ?insert:[`top | `before of string | `after of string | `bottom] ->
+    ?doc:string ->
     action -> unit
 
   (** [copy_rule name ?insert source destination] *)
@@ -593,12 +629,14 @@ module type PLUGIN = sig
   (** Empties the list of rules of the ocamlbuild engine. *)
   val clear_rules : unit -> unit
 
-  (** [dep tags deps] Will build [deps] when all [tags] will be activated. *)
+  (** [dep tags deps] Will build [deps] when all [tags] will be activated.
+      If you do not know which tags to use, have a look to the file
+      _build/_log after trying to compile your code. *)
   val dep : Tags.elt list -> Pathname.t list -> unit
 
-  (** [pdep tags ptag deps] is equivalent to [dep tags deps], with an additional
-      parameterized tag [ptag]. [deps] is now a function which takes the
-      parameter of the tag [ptag] as an argument.
+  (** [pdep tags ptag deps] is equivalent to [dep tags deps], with an
+      additional parameterized tag [ptag]. [deps] is now a function
+      which takes the parameter of the tag [ptag] as an argument.
 
       Example:
         [pdep ["ocaml"; "compile"] "autodep" (fun param -> param)]
@@ -607,16 +645,18 @@ module type PLUGIN = sig
   val pdep : Tags.elt list -> Tags.elt -> (string -> Pathname.t list) -> unit
 
   (** [flag tags command_spec] Will inject the given piece of command
-      ([command_spec]) when all [tags] will be activated. *)
+      ([command_spec]) when all [tags] will be activated.
+      If you do not know which tags to use, have a look to the file
+      _build/_log after trying to compile your code. *)
   val flag : Tags.elt list -> Command.spec -> unit
 
-  (** Allows to use [flag] with a parameterized tag (as [pdep] for [dep]).
+  (** Allows to use [flag] with a parametrized tag (as [pdep] for [dep]).
 
       Example:
         [pflag ["ocaml"; "compile"] "inline"
            (fun count -> S [A "-inline"; A count])]
       says that command line option ["-inline 42"] should be added
-      when compiling files tagged with tag ["inline(42)"]. *)
+      when compiling OCaml modules tagged with ["inline(42)"]. *)
   val pflag : Tags.elt list -> Tags.elt -> (string -> Command.spec) -> unit
 
   (** [flag_and_dep tags command_spec]
@@ -632,27 +672,44 @@ module type PLUGIN = sig
   val pflag_and_dep : Tags.elt list -> Tags.elt ->
     (string -> Command.spec) -> unit
 
+  (** manually mark the tag as "useful" to silence the warning about
+      tags that are not part of any flag declaration.
+
+      This is useful,
+      for example, if the tag is used in a flag declaration that is
+      only perfored in a conditional branch:
+      [if we_are_on_Windows then flag ["libfoo"] (A "bar");]
+
+      When [we_are_on_Windows] is not true, you could get a warning about
+      "libfoo" not used in any flag declaration.
+     *)
+  val mark_tag_used : Tags.elt -> unit
+
   (** [non_dependency module_path module_name]
-       Example:
+      Example:
          [non_dependency "foo/bar/baz" "Goo"]
-       Says that the module [Baz] in the file [foo/bar/baz.*] does not depend on [Goo]. *)
+      Says that the module [Baz] in the file [foo/bar/baz.*] does
+      not depend on [Goo]. *)
   val non_dependency : Pathname.t -> string -> unit
 
   (** [use_lib module_path lib_path]*)
   val use_lib : Pathname.t -> Pathname.t -> unit
 
-  (** [ocaml_lib <options> library_pathname]
-      Declare an ocaml library.
+  (** [ocaml_lib <options> library_pathname] Declare an ocaml library.
+      This informs ocamlbuild and produce tags to use the library;
+      they are named by default use_#{library_name}.
 
-      Example: ocaml_lib "foo/bar"
-        This will setup the tag use_bar tag.
+      Example: [ocaml_lib "foo/bar"] will setup the tag use_bar.
         At link time it will include:
           foo/bar.cma or foo/bar.cmxa
-        If you supply the ~dir:"boo" option -I boo
-          will be added at link and compile time.
-        Use ~extern:true for non-ocamlbuild handled libraries.
-        Use ~byte:false or ~native:false to disable byte or native mode.
-        Use ~tag_name:"usebar" to override the default tag name. *)
+      @param dir supply the [~dir:"boo"] option to add '-I boo'
+             at link and compile time.
+      @param extern use ~extern:true for non-ocamlbuild handled libraries.
+             Set this to add libraries whose sources are not in your project.
+      @param byte use ~byte:false to disable byte mode.
+      @param native use ~native:false to disable native mode.
+      @param tag_name Use ~tag_name:"usebar" to override the default
+             tag name. *)
   val ocaml_lib :
     ?extern:bool ->
     ?byte:bool ->
@@ -663,10 +720,10 @@ module type PLUGIN = sig
 
   (** [expand_module include_dirs module_name extensions]
       Example:
-        [expand_module ["a";"b";"c"] "Foo" ["cmo";"cmi"] =
-         ["a/foo.cmo"; "a/Foo.cmo"; "a/foo.cmi"; "a/Foo.cmi";
-          "b/foo.cmo"; "b/Foo.cmo"; "b/foo.cmi"; "b/Foo.cmi";
-          "c/foo.cmo"; "c/Foo.cmo"; "c/foo.cmi"; "c/Foo.cmi"]] *)
+      [expand_module ["a";"b";"c"] "Foo" ["cmo";"cmi"] =
+      ["a/foo.cmo"; "a/Foo.cmo"; "a/foo.cmi"; "a/Foo.cmi";
+      "b/foo.cmo"; "b/Foo.cmo"; "b/foo.cmi"; "b/Foo.cmi";
+      "c/foo.cmo"; "c/Foo.cmo"; "c/foo.cmi"; "c/Foo.cmi"]] *)
   val expand_module :
     Pathname.t list -> Pathname.t -> string list -> Pathname.t list
 
@@ -705,7 +762,12 @@ module type PLUGIN = sig
       this package even if it contains that module. *)
   val hide_package_contents : string -> unit
 
-  (** [tag_file filename tag_list] Tag the given filename with all given tags. *)
+  (** [tag_file filename tag_list] Tag the given filename with all
+      given tags.  Prefix a tag with the minus sign to remove it.
+      This is usually used as an [After_rules] hook.
+      For example [tag_file "bla.ml" ["use_unix"]] tags the file
+      "bla.ml" with "use_unix" and [tag_file "bla.ml" ["-use_unix"]]
+      removes the tag "use_unix" from the file "bla.ml". *)
   val tag_file : Pathname.t -> Tags.elt list -> unit
 
   (** [tag_any tag_list] Tag anything with all given tags. *)
@@ -718,7 +780,7 @@ module type PLUGIN = sig
   val run_and_read : string -> string
 
   (** Here is the list of hooks that the dispatch function have to handle.
-      Generally one respond to one or two hooks (like After_rules) and do
+      Generally one responds to one or two hooks (like After_rules) and do
       nothing in the default case. *)
   type hook =
     | Before_hygiene

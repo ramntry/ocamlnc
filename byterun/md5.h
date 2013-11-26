@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* MD5 message digest */
 
 #ifndef CAML_MD5_H
@@ -24,6 +22,8 @@
 
 CAMLextern value caml_md5_string (value str, value ofs, value len);
 CAMLextern value caml_md5_chan (value vchan, value len);
+CAMLextern void caml_md5_block(unsigned char digest[16],
+                               void * data, uintnat len);
 
 struct MD5Context {
         uint32 buf[4];

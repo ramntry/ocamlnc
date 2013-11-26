@@ -10,11 +10,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Identifiers (unique names) *)
 
-type t
+type t = { stamp: int; name: string; mutable flags: int }
 
 val create: string -> t
 val create_persistent: string -> t
@@ -56,4 +54,7 @@ val empty: 'a tbl
 val add: t -> 'a -> 'a tbl -> 'a tbl
 val find_same: t -> 'a tbl -> 'a
 val find_name: string -> 'a tbl -> 'a
-val keys: 'a tbl -> t list
+val find_all: string -> 'a tbl -> 'a list
+val fold_name: (t -> 'a -> 'b -> 'b) -> 'a tbl -> 'b -> 'b
+val fold_all: (t -> 'a -> 'b -> 'b) -> 'a tbl -> 'b -> 'b
+val iter: (t -> 'a -> unit) -> 'a tbl -> unit

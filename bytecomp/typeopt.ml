@@ -10,13 +10,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Auxiliaries for type-based optimizations, e.g. array kinds *)
 
-open Misc
-open Asttypes
-open Primitive
 open Path
 open Types
 open Typedtree
@@ -39,7 +34,7 @@ let maybe_pointer exp =
         match Env.find_type p exp.exp_env with
         | {type_kind = Type_variant []} -> true (* type exn *)
         | {type_kind = Type_variant cstrs} ->
-            List.exists (fun (name, args,_) -> args <> []) cstrs
+            List.exists (fun c -> c.Types.cd_args <> []) cstrs
         | _ -> true
       with Not_found -> true
         (* This can happen due to e.g. missing -I options,
@@ -69,7 +64,7 @@ let array_element_kind env ty =
             {type_kind = Type_abstract} ->
               Pgenarray
           | {type_kind = Type_variant cstrs}
-            when List.for_all (fun (name, args,_) -> args = []) cstrs ->
+            when List.for_all (fun c -> c.Types.cd_args = []) cstrs ->
               Pintarray
           | {type_kind = _} ->
               Paddrarray
@@ -125,6 +120,7 @@ let bigarray_kind_and_layout exp =
   match scrape exp.exp_env exp.exp_type with
   | Tconstr(p, [caml_type; elt_type; layout_type], abbrev) ->
       (bigarray_decode_type exp.exp_env elt_type kind_table Pbigarray_unknown,
-       bigarray_decode_type exp.exp_env layout_type layout_table Pbigarray_unknown_layout)
+       bigarray_decode_type exp.exp_env layout_type layout_table
+                            Pbigarray_unknown_layout)
   | _ ->
       (Pbigarray_unknown, Pbigarray_unknown_layout)

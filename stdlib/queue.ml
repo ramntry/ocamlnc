@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*                                OCaml                                *)
 (*                                                                     *)
-(*        François Pottier, projet Cristal, INRIA Rocquencourt         *)
+(*        Francois Pottier, projet Cristal, INRIA Rocquencourt         *)
 (*                                                                     *)
 (*  Copyright 2002 Institut National de Recherche en Informatique et   *)
 (*  en Automatique.  All rights reserved.  This file is distributed    *)
@@ -10,8 +10,6 @@
 (*  the special exception on linking described in file ../LICENSE.     *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 exception Empty
 
@@ -54,12 +52,12 @@ let clear q =
   q.tail <- Obj.magic None
 
 let add x q =
-  q.length <- q.length + 1;
-  if q.length = 1 then
+  if q.length = 0 then
     let rec cell = {
       content = x;
       next = cell
     } in
+    q.length <- 1;
     q.tail <- cell
   else
     let tail = q.tail in
@@ -68,6 +66,7 @@ let add x q =
       content = x;
       next = head
     } in
+    q.length <- q.length + 1;
     tail.next <- cell;
     q.tail <- cell
 
@@ -108,14 +107,15 @@ let copy q =
       next = tail'
     } in
 
-    let rec copy cell =
-      if cell == tail then tail'
-      else {
+    let rec copy prev cell =
+      if cell != tail
+      then let res = {
         content = cell.content;
-        next = copy cell.next
-      } in
+        next = tail'
+      } in prev.next <- res;
+      copy res cell.next in
 
-    tail'.next <- copy tail.next;
+    copy tail' tail.next;
     {
       length = q.length;
       tail = tail'

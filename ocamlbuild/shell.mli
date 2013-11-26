@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -9,10 +10,14 @@
 (*                                                                     *)
 (***********************************************************************)
 
-
 (* Original author: Nicolas Pouillard *)
+
 val is_simple_filename : string -> bool
+
 val quote_filename_if_needed : string -> string
+(** This will quote using Unix conventions, even on Windows, because commands are
+ * always run through bash -c on Windows. *)
+
 val chdir : string -> unit
 val rm : string -> unit
 val rm_f : string -> unit

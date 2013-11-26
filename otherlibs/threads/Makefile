@@ -11,15 +11,14 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 include ../../config/Makefile
 
 CC=$(BYTECC)
 CFLAGS=-I../../byterun -O $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) -g
-CAMLC=../../ocamlcomp.sh -I ../unix
+CAMLC=$(CAMLC_BIN) -nostdlib -I ../../stdlib -I ../unix
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
-COMPFLAGS=-warn-error A
+COMPFLAGS=-w +33..39 -warn-error A
+CAMLC_BIN_CMD=$(CAMLC_BIN_CMD_TO_EVAL) -nostdlib -I ../../stdlib
 
 C_OBJS=scheduler.o
 
@@ -28,22 +27,20 @@ CAML_OBJS=thread.cmo mutex.cmo condition.cmo event.cmo threadUnix.cmo
 LIB=../../stdlib
 
 LIB_OBJS=pervasives.cmo \
-  $(LIB)/array.cmo $(LIB)/list.cmo $(LIB)/char.cmo $(LIB)/string.cmo \
-  $(LIB)/sys.cmo $(LIB)/hashtbl.cmo $(LIB)/sort.cmo \
-  marshal.cmo $(LIB)/obj.cmo $(LIB)/int32.cmo $(LIB)/int64.cmo \
-  $(LIB)/nativeint.cmo \
-  $(LIB)/lexing.cmo $(LIB)/parsing.cmo \
-  $(LIB)/set.cmo $(LIB)/map.cmo $(LIB)/stack.cmo $(LIB)/queue.cmo \
-  $(LIB)/camlinternalLazy.cmo $(LIB)/lazy.cmo \
-  $(LIB)/stream.cmo $(LIB)/buffer.cmo \
-  $(LIB)/printf.cmo $(LIB)/format.cmo \
-  $(LIB)/scanf.cmo $(LIB)/arg.cmo \
-  $(LIB)/printexc.cmo $(LIB)/gc.cmo $(LIB)/digest.cmo $(LIB)/random.cmo \
-  $(LIB)/camlinternalOO.cmo $(LIB)/oo.cmo $(LIB)/camlinternalMod.cmo \
-  $(LIB)/genlex.cmo $(LIB)/callback.cmo $(LIB)/weak.cmo \
-  $(LIB)/filename.cmo $(LIB)/complex.cmo \
-  $(LIB)/arrayLabels.cmo $(LIB)/listLabels.cmo $(LIB)/stringLabels.cmo \
-  $(LIB)/stdLabels.cmo $(LIB)/moreLabels.cmo
+  $(LIB)/array.cmo $(LIB)/list.cmo $(LIB)/char.cmo $(LIB)/string.cmo        \
+  $(LIB)/sys.cmo $(LIB)/sort.cmo marshal.cmo $(LIB)/obj.cmo                 \
+  $(LIB)/int32.cmo $(LIB)/int64.cmo $(LIB)/nativeint.cmo                    \
+  $(LIB)/lexing.cmo $(LIB)/parsing.cmo $(LIB)/set.cmo $(LIB)/map.cmo        \
+  $(LIB)/stack.cmo $(LIB)/queue.cmo $(LIB)/camlinternalLazy.cmo             \
+  $(LIB)/lazy.cmo $(LIB)/stream.cmo $(LIB)/buffer.cmo                       \
+  $(LIB)/printf.cmo $(LIB)/arg.cmo $(LIB)/printexc.cmo $(LIB)/gc.cmo        \
+  $(LIB)/digest.cmo $(LIB)/random.cmo $(LIB)/hashtbl.cmo                    \
+  $(LIB)/format.cmo $(LIB)/scanf.cmo $(LIB)/callback.cmo \
+  $(LIB)/camlinternalOO.cmo              \
+  $(LIB)/oo.cmo $(LIB)/camlinternalMod.cmo $(LIB)/genlex.cmo                \
+  $(LIB)/weak.cmo $(LIB)/filename.cmo                   \
+  $(LIB)/complex.cmo $(LIB)/arrayLabels.cmo $(LIB)/listLabels.cmo           \
+  $(LIB)/stringLabels.cmo $(LIB)/stdLabels.cmo $(LIB)/moreLabels.cmo
 
 UNIXLIB=../unix
 
@@ -57,13 +54,13 @@ libvmthreads.a: $(C_OBJS)
 	$(MKLIB) -o threads -oc vmthreads $(C_OBJS)
 
 threads.cma: $(CAML_OBJS)
-	$(MKLIB) -ocamlc '$(CAMLC)' -o threads -oc vmthreads $(CAML_OBJS)
+	$(MKLIB) -ocamlc "$$($(CAMLC_BIN_CMD))" -o threads -oc vmthreads $(CAML_OBJS)
 
 stdlib.cma: $(LIB_OBJS)
 	$(CAMLC) -a -o stdlib.cma $(LIB_OBJS)
 
 unix.cma: $(UNIXLIB_OBJS)
-	$(MKLIB) -ocamlc '$(CAMLC)' -o unix -linkall $(UNIXLIB_OBJS)
+	$(MKLIB) -ocamlc "$$($(CAMLC_BIN_CMD))" -o unix -linkall $(UNIXLIB_OBJS)
 
 pervasives.cmo: pervasives.mli pervasives.cmi pervasives.ml
 	$(CAMLC) ${COMPFLAGS} -nopervasives -c pervasives.ml
@@ -104,8 +101,10 @@ install:
 	mkdir -p $(LIBDIR)/vmthreads
 	cp libvmthreads.a $(LIBDIR)/vmthreads/libvmthreads.a
 	cd $(LIBDIR)/vmthreads; $(RANLIB) libvmthreads.a
-	cp thread.cmi mutex.cmi condition.cmi event.cmi threadUnix.cmi threads.cma stdlib.cma unix.cma $(LIBDIR)/vmthreads
-	cp thread.mli mutex.mli condition.mli event.mli threadUnix.mli $(LIBDIR)/vmthreads
+	cp thread.cmi mutex.cmi condition.cmi event.cmi threadUnix.cmi \
+	   threads.cma stdlib.cma unix.cma $(LIBDIR)/vmthreads
+	cp thread.mli mutex.mli condition.mli event.mli threadUnix.mli \
+	   $(LIBDIR)/vmthreads
 
 installopt:
 
@@ -118,6 +117,7 @@ installopt:
 	$(CAMLC) -c $(COMPFLAGS) $<
 
 .ml.cmx:
+	exit 1
 	$(CAMLOPT) -c $(COMPFLAGS) $<
 
 depend:

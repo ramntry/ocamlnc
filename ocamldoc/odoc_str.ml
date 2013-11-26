@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** The functions to get a string from different kinds of elements (types, modules, ...). *)
 
@@ -126,7 +125,7 @@ let string_of_class_type_param_list l =
 let string_of_class_params c =
   let b = Buffer.create 256 in
   let rec iter = function
-      Types.Tcty_fun (label, t, ctype) ->
+      Types.Cty_arrow (label, t, ctype) ->
         let parent = is_arrow_type t in
         Printf.bprintf b "%s%s%s%s -> "
           (
@@ -144,8 +143,8 @@ let string_of_class_params c =
           )
           (if parent then ")" else "");
         iter ctype
-    | Types.Tcty_signature _
-    | Types.Tcty_constr _ -> ()
+    | Types.Cty_signature _
+    | Types.Cty_constr _ -> ()
   in
   iter c.Odoc_class.cl_type;
   Buffer.contents b
@@ -283,5 +282,3 @@ let string_of_method m =
   (match m.M.met_value.M.val_info with
     None -> ""
   | Some i -> Odoc_misc.string_of_info i)
-
-(* eof $Id$ *)

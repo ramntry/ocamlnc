@@ -10,8 +10,6 @@
 .\"*                                                                     *
 .\"***********************************************************************
 .\"
-.\" $Id$
-.\"
 .TH OCAMLDOC 1
 
 \" .de Sh \" Subsection heading
@@ -172,7 +170,7 @@ the comments in implementation files.
 Always keep the source code for values, methods and instance variables, when
 available. The source code is always kept when a .ml
 file is given, but is by default discarded when a .mli
-is given. This option allows to always keep the source code.
+is given. This option allows the source code to be always kept.
 .TP
 .BI \-load \ file
 Load information from
@@ -239,6 +237,10 @@ options.
 Pipe sources through preprocessor
 .IR command .
 .TP
+.BI \-ppx \ command
+Pipe abstract syntax tree through preprocessor
+.IR command .
+.TP
 .B \-sort
 Sort the list of top-level modules before generating the documentation.
 .TP
@@ -253,7 +255,7 @@ as the title for the generated documentation.
 .BI \-intro \ file
 Use content of
 .I file
-as 
+as
 .B ocamldoc
 text to use as introduction (HTML, LaTeX and TeXinfo only).
 For HTML, the file is used to create the whole "index.html" file.

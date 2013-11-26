@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Global variables. *)
 
@@ -46,6 +45,7 @@ let recursive_types = Clflags.recursive_types
 
 (** Optional preprocessor command. *)
 let preprocessor = Clflags.preprocessor
+let ppx = Clflags.all_ppx
 
 let sort_modules = ref false
 
@@ -84,6 +84,3 @@ let with_trailer = ref true
 let with_toc = ref true
 
 let with_index = ref true
-
-
-

@@ -11,16 +11,14 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 # Makefile for the dynamic link library
 
 include ../../config/Makefile
 
-CAMLC=../../boot/ocamlrun ../../ocamlc
-CAMLOPT=../../ocamlcompopt.sh
+CAMLC=$(CAMLC_BIN) -nostdlib -I ../../stdlib
+CAMLOPT=$(CAMLOPT_BIN) -nostdlib -I ../../stdlib
 INCLUDES=-I ../../utils -I ../../typing -I ../../bytecomp -I ../../asmcomp
-COMPFLAGS=-warn-error A -I ../../stdlib $(INCLUDES)
+COMPFLAGS=-w +33..39 -warn-error A $(INCLUDES)
 
 OBJS=dynlinkaux.cmo dynlink.cmo
 
@@ -30,10 +28,12 @@ COMPILEROBJS=\
   ../../utils/terminfo.cmo ../../utils/warnings.cmo \
   ../../parsing/asttypes.cmi \
   ../../parsing/location.cmo ../../parsing/longident.cmo \
+  ../../parsing/ast_helper.cmo \
+  ../../parsing/ast_mapper.cmo \
   ../../typing/ident.cmo ../../typing/path.cmo \
   ../../typing/primitive.cmo ../../typing/types.cmo \
   ../../typing/btype.cmo ../../typing/subst.cmo ../../typing/predef.cmo \
-  ../../typing/datarepr.cmo ../../typing/env.cmo \
+  ../../typing/datarepr.cmo ../../typing/cmi_format.cmo ../../typing/env.cmo \
   ../../bytecomp/lambda.cmo ../../bytecomp/instruct.cmo \
   ../../bytecomp/cmo_format.cmi ../../bytecomp/opcodes.cmo \
   ../../bytecomp/runtimedef.cmo ../../bytecomp/bytesections.cmo \
@@ -47,10 +47,12 @@ all: dynlink.cma extract_crc
 allopt: dynlink.cmxa
 
 dynlink.cma: $(OBJS)
-	$(CAMLC) $(COMPFLAGS) -ccopt "$(NATDYNLINKOPTS)" -a -o dynlink.cma $(OBJS)
+	$(CAMLC) $(COMPFLAGS) -ccopt "$(NATDYNLINKOPTS)" -a -o dynlink.cma \
+	         $(OBJS)
 
 dynlink.cmxa: $(NATOBJS)
-	$(CAMLOPT) $(COMPFLAGS) -ccopt "$(NATDYNLINKOPTS)" -a -o dynlink.cmxa $(NATOBJS)
+	$(CAMLOPT) $(COMPFLAGS) -ccopt "$(NATDYNLINKOPTS)" -a -o dynlink.cmxa \
+	           $(NATOBJS)
 
 dynlinkaux.cmo: $(COMPILEROBJS)
 	$(CAMLC) $(COMPFLAGS) -pack -o dynlinkaux.cmo $(COMPILEROBJS)

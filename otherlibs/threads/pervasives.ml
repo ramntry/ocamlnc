@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Same as ../../stdlib/pervasives.ml, except that I/O functions have
    been redefined to not block the whole process, but only the calling
    thread. *)
@@ -21,12 +19,26 @@
 
 (* Exceptions *)
 
+external register_named_value : string -> 'a -> unit
+                              = "caml_register_named_value"
+
+let () =
+  (* for asmrun/fail.c *)
+  register_named_value "Pervasives.array_bound_error"
+    (Invalid_argument "index out of bounds")
+
 external raise : exn -> 'a = "%raise"
+external raise_notrace : exn -> 'a = "%raise_notrace"
 
 let failwith s = raise(Failure s)
 let invalid_arg s = raise(Invalid_argument s)
 
 exception Exit
+
+(* Composition operators *)
+
+external (|>) : 'a -> ('a -> 'b) -> 'b = "%revapply"
+external ( @@ ) : ('a -> 'b) -> 'a -> 'b = "%apply"
 
 (* Comparisons *)
 
@@ -94,7 +106,8 @@ external acos : float -> float = "caml_acos_float" "acos" "float"
 external asin : float -> float = "caml_asin_float" "asin" "float"
 external atan : float -> float = "caml_atan_float" "atan" "float"
 external atan2 : float -> float -> float = "caml_atan2_float" "atan2" "float"
-external hypot : float -> float -> float = "caml_hypot_float" "caml_hypot" "float"
+external hypot : float -> float -> float
+   = "caml_hypot_float" "caml_hypot" "float"
 external cos : float -> float = "caml_cos_float" "cos" "float"
 external cosh : float -> float = "caml_cosh_float" "cosh" "float"
 external log : float -> float = "caml_log_float" "log" "float"
@@ -108,7 +121,8 @@ external tanh : float -> float = "caml_tanh_float" "tanh" "float"
 external ceil : float -> float = "caml_ceil_float" "ceil" "float"
 external floor : float -> float = "caml_floor_float" "floor" "float"
 external abs_float : float -> float = "%absfloat"
-external copysign : float -> float -> float = "caml_copysign_float" "caml_copysign" "float"
+external copysign : float -> float -> float
+   = "caml_copysign_float" "caml_copysign" "float"
 external mod_float : float -> float -> float = "caml_fmod_float" "fmod" "float"
 external frexp : float -> float * int = "caml_frexp_float"
 external ldexp : float -> int -> float = "caml_ldexp_float"
@@ -541,8 +555,5 @@ let do_at_exit () = (!exit_function) ()
 let exit retcode =
   do_at_exit ();
   sys_exit retcode
-
-external register_named_value : string -> 'a -> unit
-                              = "caml_register_named_value"
 
 let _ = register_named_value "Pervasives.do_at_exit" do_at_exit

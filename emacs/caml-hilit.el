@@ -10,8 +10,6 @@
 ;(*                                                                     *)
 ;(***********************************************************************)
 
-;(* $Id$ *)
-
 ; Highlighting patterns for hilit19 under caml-mode
 
 ; defined also in caml.el
@@ -53,7 +51,7 @@
           "\\|\|\\|->\\|&\\|#")
          nil 'keyword)
    '(";" nil struct))
-  "Hilit19 patterns used for Caml mode")
+  "Hilit19 patterns used for OCaml mode")
 
 (hilit-set-mode-patterns 'caml-mode caml-mode-patterns)
 (hilit-set-mode-patterns

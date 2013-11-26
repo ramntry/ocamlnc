@@ -10,11 +10,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Link a set of .cmx/.o files and produce an executable *)
 
-open Sys
 open Misc
 open Config
 open Cmx_format
@@ -209,8 +206,8 @@ let make_startup_file ppf filename units_list =
   compile_phrase (Cmmgen.entry_point name_list);
   let units = List.map (fun (info,_,_) -> info) units_list in
   List.iter compile_phrase (Cmmgen.generic_functions false units);
-  Array.iter
-    (fun name -> compile_phrase (Cmmgen.predef_exception name))
+  Array.iteri
+    (fun i name -> compile_phrase (Cmmgen.predef_exception i name))
     Runtimedef.builtin_exceptions;
   compile_phrase (Cmmgen.global_table name_list);
   compile_phrase
@@ -260,7 +257,7 @@ let link_shared ppf objfiles output_name =
     (fun (info, file_name, crc) -> check_consistency file_name info crc)
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
-  Clflags.ccopts := !lib_ccopts @ !Clflags.ccopts;
+  Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
   let objfiles = List.rev (List.map object_file_name objfiles) @
     (List.rev !Clflags.ccobjs) in
 
@@ -318,7 +315,8 @@ let link ppf objfiles output_name =
     (fun (info, file_name, crc) -> check_consistency file_name info crc)
     units_tolink;
   Clflags.ccobjs := !Clflags.ccobjs @ !lib_ccobjs;
-  Clflags.ccopts := !lib_ccopts @ !Clflags.ccopts; (* put user's opts first *)
+  Clflags.all_ccopts := !lib_ccopts @ !Clflags.all_ccopts;
+                                               (* put user's opts first *)
   let startup =
     if !Clflags.keep_startup_file then output_name ^ ".startup" ^ ext_asm
     else Filename.temp_file "camlstartup" ext_asm in
@@ -342,7 +340,8 @@ let report_error ppf = function
   | File_not_found name ->
       fprintf ppf "Cannot find file %s" name
   | Not_an_object_file name ->
-      fprintf ppf "The file %s is not a compilation unit description" name
+      fprintf ppf "The file %a is not a compilation unit description"
+        Location.print_filename name
   | Missing_implementations l ->
      let print_references ppf = function
        | [] -> ()
@@ -359,27 +358,42 @@ let report_error ppf = function
        print_modules l
   | Inconsistent_interface(intf, file1, file2) ->
       fprintf ppf
-       "@[<hov>Files %s@ and %s@ make inconsistent assumptions \
+       "@[<hov>Files %a@ and %a@ make inconsistent assumptions \
               over interface %s@]"
-       file1 file2 intf
+       Location.print_filename file1
+       Location.print_filename file2
+       intf
   | Inconsistent_implementation(intf, file1, file2) ->
       fprintf ppf
-       "@[<hov>Files %s@ and %s@ make inconsistent assumptions \
+       "@[<hov>Files %a@ and %a@ make inconsistent assumptions \
               over implementation %s@]"
-       file1 file2 intf
+       Location.print_filename file1
+       Location.print_filename file2
+       intf
   | Assembler_error file ->
-      fprintf ppf "Error while assembling %s" file
+      fprintf ppf "Error while assembling %a" Location.print_filename file
   | Linking_error ->
       fprintf ppf "Error during linking"
   | Multiple_definition(modname, file1, file2) ->
       fprintf ppf
-        "@[<hov>Files %s@ and %s@ both define a module named %s@]"
-        file1 file2 modname
+        "@[<hov>Files %a@ and %a@ both define a module named %s@]"
+        Location.print_filename file1
+        Location.print_filename file2
+        modname
   | Missing_cmx(filename, name) ->
       fprintf ppf
-        "@[<hov>File %s@ was compiled without access@ \
+        "@[<hov>File %a@ was compiled without access@ \
          to the .cmx file@ for module %s,@ \
          which was produced by `ocamlopt -for-pack'.@ \
-         Please recompile %s@ with the correct `-I' option@ \
+         Please recompile %a@ with the correct `-I' option@ \
          so that %s.cmx@ is found.@]"
-        filename name filename name
+        Location.print_filename filename name
+        Location.print_filename  filename
+        name
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some (Location.error_of_printer_file report_error err)
+      | _ -> None
+    )

@@ -12,8 +12,6 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 cd `dirname $0`
 set -e
 if [ -e ocamlbuild_mixed_mode ]; then
@@ -21,8 +19,7 @@ if [ -e ocamlbuild_mixed_mode ]; then
   echo 'please cleanup and re-launch (make clean ; ./build/distclean.sh)'
   exit 1
 fi
-./mkconfig.sh
-./mkmyocamlbuild_config.sh
+./mk_shell_and_ocamlbuild_config.sh
 ./boot-c-parts.sh
 ./boot.sh $@
 
@@ -43,7 +40,7 @@ cp _build/myocamlbuild boot/myocamlbuild.native
 ./boot/myocamlbuild.native $@ \
   $OCAMLC_NATIVE $TOPLEVEL $OTHERLIBS_BYTE $OTHERLIBS_NATIVE $OCAMLLEX_BYTE \
   $OCAMLLEX_NATIVE $TOOLS_BYTE $TOOLS_NATIVE $DEBUGGER  \
-  $OCAMLDOC_BYTE $OCAMLDOC_NATIVE $OCAMLBUILD_BYTE $CAMLP4_BYTE $CAMLP4_NATIVE
+  $OCAMLDOC_BYTE $OCAMLDOC_NATIVE $OCAMLBUILD_BYTE
 
 cd tools
 make objinfo_helper

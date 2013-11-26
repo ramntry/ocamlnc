@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Printf
 
 let compargs = ref ([] : string list)
@@ -45,11 +43,13 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _a () = make_archive := true; option "-a" ()
   let _absname = option "-absname"
   let _annot = option "-annot"
+  let _binannot = option "-bin-annot"
   let _c = option "-c"
   let _cc s = option_with_arg "-cc" s
   let _cclib s = option_with_arg "-cclib" s
   let _ccopt s = option_with_arg "-ccopt" s
   let _config = option "-config"
+  let _compat_32 = option "-compat-32"
   let _custom = option "-custom"
   let _dllib = option_with_arg "-dllib"
   let _dllpath = option_with_arg "-dllpath"
@@ -60,6 +60,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _impl s = with_impl := true; option_with_arg "-impl" s
   let _intf s = with_intf := true; option_with_arg "-intf" s
   let _intf_suffix s = option_with_arg "-intf-suffix" s
+  let _keep_locs = option "-keep-locs"
   let _labels = option "-labels"
   let _linkall = option "-linkall"
   let _make_runtime = option "-make-runtime"
@@ -72,9 +73,11 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _output_obj = option "-output-obj"
   let _pack = option "-pack"
   let _pp s = incompatible "-pp"
+  let _ppx s = incompatible "-ppx"
   let _principal = option "-principal"
   let _rectypes = option "-rectypes"
   let _runtime_variant s = option_with_arg "-runtime-variant" s
+  let _short_paths = option "-short-paths"
   let _strict_sequence = option "-strict-sequence"
   let _thread () = option "-thread" ()
   let _vmthread () = option "-vmthread" ()
@@ -90,7 +93,9 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _warn_help = option "-warn-help"
   let _where = option "-where"
   let _nopervasives = option "-nopervasives"
+  let _dsource = option "-dsource"
   let _dparsetree = option "-dparsetree"
+  let _dtypedtree = option "-dtypedtree"
   let _drawlambda = option "-drawlambda"
   let _dlambda = option "-dlambda"
   let _dinstr = option "-dinstr"
@@ -102,7 +107,7 @@ let add_profarg s =
 ;;
 
 let optlist =
-    ("-p", Arg.String add_profarg,
+    ("-P", Arg.String add_profarg,
            "[afilmt]  Profile constructs specified by argument (default fm):\n\
         \032     a  Everything\n\
         \032     f  Function calls and method calls\n\
@@ -110,6 +115,7 @@ let optlist =
         \032     l  while and for loops\n\
         \032     m  match ... with\n\
         \032     t  try ... with")
+    :: ("-p", Arg.String add_profarg, "[afilmt]  Same as option -P")
     :: Options.list
 in
 Arg.parse optlist process_file usage;

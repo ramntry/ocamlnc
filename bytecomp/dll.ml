@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Handling of dynamically-linked libraries *)
 
 type dll_handle
@@ -39,6 +37,9 @@ let names_of_opened_dlls = ref ([] : string list)
 (* Add the given directories to the search path for DLLs. *)
 let add_path dirs =
   search_path := dirs @ !search_path
+
+let remove_path dirs =
+  search_path := List.filter (fun d -> not (List.mem d dirs)) !search_path
 
 (* Extract the name of a DLLs from its external name (xxx.so or -lxxx) *)
 

@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -13,15 +14,11 @@
 (* Original author: Romain Bardou *)
 
 module StringSet = Set.Make(String)
-module SSOSet = Set.Make(struct
-  type t = string * string option
-  let compare = Pervasives.compare
-end)
 
 (* tag name -> tag action (string -> unit) *)
 let declared_tags = Hashtbl.create 17
 
-let acknowledged_tags = ref SSOSet.empty
+let acknowledged_tags = ref []
 
 let only_once f =
   let instances = ref StringSet.empty in
@@ -35,22 +32,29 @@ let only_once f =
 let declare name action =
   Hashtbl.add declared_tags name (only_once action)
 
-let acknowledge tag =
-  let tag = Lexers.tag_gen (Lexing.from_string tag) in
-  acknowledged_tags := SSOSet.add tag !acknowledged_tags
+let parse tag = Lexers.tag_gen (Lexing.from_string tag)
 
-let really_acknowledge (name, param) =
+let acknowledge maybe_loc tag =
+  acknowledged_tags := (parse tag, maybe_loc) :: !acknowledged_tags
+
+let really_acknowledge ?(quiet=false) ((name, param), maybe_loc) =
   match param with
     | None ->
-        if Hashtbl.mem declared_tags name then
-          Log.eprintf "Warning: tag %S expects a parameter" name
+        if Hashtbl.mem declared_tags name && not quiet then
+          Log.eprintf "%aWarning: tag %S expects a parameter"
+            Loc.print_loc_option maybe_loc name
     | Some param ->
         let actions = List.rev (Hashtbl.find_all declared_tags name) in
-        if actions = [] then
-          Log.eprintf "Warning: tag %S does not expect a parameter, but is used with parameter %S" name param;
+        if actions = [] && not quiet then
+          Log.eprintf "%aWarning: tag %S does not expect a parameter, \
+                       but is used with parameter %S"
+            Loc.print_loc_option maybe_loc name param;
         List.iter (fun f -> f param) actions
 
+let partial_init ?quiet tags =
+  Tags.iter (fun tag -> really_acknowledge ?quiet (parse tag, None)) tags
+
 let init () =
-  SSOSet.iter really_acknowledge !acknowledged_tags
+  List.iter really_acknowledge (My_std.List.ordered_unique !acknowledged_tags)
 
 let make = Printf.sprintf "%s(%s)"

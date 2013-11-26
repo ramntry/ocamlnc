@@ -10,13 +10,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Emission of Intel 386 assembly code *)
 
-module StringSet = Set.Make(struct type t = string let compare = compare end)
+module StringSet =
+  Set.Make(struct type t = string let compare (x:t) y = compare x y end)
 
-open Location
 open Misc
 open Cmm
 open Arch
@@ -312,9 +310,18 @@ let output_test_zero arg =
 
 (* Deallocate the stack frame before a return or tail call *)
 
-let output_epilogue () =
+let output_epilogue f =
   let n = frame_size() - 4 in
-  if n > 0 then `	addl	${emit_int n}, %esp\n`
+  if n > 0 then
+  begin
+    `	addl	${emit_int n}, %esp\n`;
+    cfi_adjust_cfa_offset (-n);
+    f ();
+    (* reset CFA back cause function body may continue *)
+    cfi_adjust_cfa_offset n
+  end
+  else
+    f ()
 
 (* Determine if the given register is the top of the floating-point stack *)
 
@@ -403,6 +410,23 @@ let emit_floatspecial = function
   | "tan"   -> `	fptan; fstp %st(0)\n`
   | _ -> assert false
 
+(* Floating-point constants *)
+
+let float_constants = ref ([] : (string * int) list)
+
+let add_float_constant cst =
+  try
+    List.assoc cst !float_constants
+  with
+    Not_found ->
+      let lbl = new_label() in
+      float_constants := (cst, lbl) :: !float_constants;
+      lbl
+
+let emit_float_constant (cst, lbl) =
+  `{emit_label lbl}:`;
+  emit_float64_split_directive ".long" cst
+
 (* Output the assembly code for an instruction *)
 
 (* Name of current function *)
@@ -411,13 +435,12 @@ let function_name = ref ""
 let tailrec_entry_point = ref 0
 (* Label of trap for out-of-range accesses *)
 let range_check_trap = ref 0
-(* Record float literals to be emitted later *)
-let float_constants = ref ([] : (int * string) list)
 (* Record references to external C functions (for MacOSX) *)
 let external_symbols_direct = ref StringSet.empty
 let external_symbols_indirect = ref StringSet.empty
 
 let emit_instr fallthrough i =
+    emit_debug_info i.dbg;
     match i.desc with
       Lend -> ()
     | Lop(Imove | Ispill | Ireload) ->
@@ -453,8 +476,7 @@ let emit_instr fallthrough i =
         | 0xBFF0_0000_0000_0000L ->       (* -1.0 *)
           `	fld1\n	fchs\n`
         | _ ->
-          let lbl = new_label() in
-          float_constants := (lbl, s) :: !float_constants;
+          let lbl = add_float_constant s in
           `	fldl	{emit_label lbl}\n`
         end
     | Lop(Iconst_symbol s) ->
@@ -466,14 +488,16 @@ let emit_instr fallthrough i =
         `	call	{emit_symbol s}\n`;
         record_frame i.live i.dbg
     | Lop(Itailcall_ind) ->
-        output_epilogue();
+        output_epilogue begin fun () ->
         `	jmp	*{emit_reg i.arg.(0)}\n`
+        end
     | Lop(Itailcall_imm s) ->
         if s = !function_name then
           `	jmp	{emit_label !tailrec_entry_point}\n`
         else begin
-          output_epilogue();
+          output_epilogue begin fun () ->
           `	jmp	{emit_symbol s}\n`
+          end
         end
     | Lop(Iextcall(s, alloc)) ->
         if alloc then begin
@@ -499,6 +523,7 @@ let emit_instr fallthrough i =
         if n < 0
         then `	addl	${emit_int(-n)}, %esp\n`
         else `	subl	${emit_int(n)}, %esp\n`;
+        cfi_adjust_cfa_offset n;
         stack_offset := !stack_offset + n
     | Lop(Iload(chunk, addr)) ->
         let dest = i.res.(0) in
@@ -590,6 +615,8 @@ let emit_instr fallthrough i =
     | Lop(Iintop(Ilsl | Ilsr | Iasr as op)) ->
         (* We have i.arg.(0) = i.res.(0) and i.arg.(1) = %ecx *)
         `	{emit_string(instr_for_intop op)}	%cl, {emit_reg i.res.(0)}\n`
+    | Lop(Iintop Imulh) ->
+        `	imull	{emit_reg i.arg.(1)}\n`
     | Lop(Iintop op) ->
         (* We have i.arg.(0) = i.res.(0) *)
         `	{emit_string(instr_for_intop op)}	{emit_reg i.arg.(1)}, {emit_reg i.res.(0)}\n`
@@ -599,21 +626,6 @@ let emit_instr fallthrough i =
         `	incl	{emit_reg i.res.(0)}\n`
     | Lop(Iintop_imm(Iadd, -1) | Iintop_imm(Isub, 1)) ->
         `	decl	{emit_reg i.res.(0)}\n`
-    | Lop(Iintop_imm(Idiv, n)) ->
-        let l = Misc.log2 n in
-        let lbl = new_label() in
-        output_test_zero i.arg.(0);
-        `	jge	{emit_label lbl}\n`;
-        `	addl	${emit_int(n-1)}, {emit_reg i.arg.(0)}\n`;
-        `{emit_label lbl}:	sarl	${emit_int l}, {emit_reg i.arg.(0)}\n`
-    | Lop(Iintop_imm(Imod, n)) ->
-        let lbl = new_label() in
-        `	movl	{emit_reg i.arg.(0)}, %eax\n`;
-        `	testl	%eax, %eax\n`;
-        `	jge	{emit_label lbl}\n`;
-        `	addl	${emit_int(n-1)}, %eax\n`;
-        `{emit_label lbl}:	andl	${emit_int(-n)}, %eax\n`;
-        `	subl	%eax, {emit_reg i.arg.(0)}\n`
     | Lop(Iintop_imm(op, n)) ->
         (* We have i.arg.(0) = i.res.(0) *)
         `	{emit_string(instr_for_intop op)}	${emit_int n}, {emit_reg i.res.(0)}\n`
@@ -652,6 +664,7 @@ let emit_instr fallthrough i =
           `	fldl	{emit_reg i.arg.(0)}\n`;
         stack_offset := !stack_offset - 8;
         `	subl	$8, %esp\n`;
+        cfi_adjust_cfa_offset 8;
         `	fnstcw	4(%esp)\n`;
         `	movw	4(%esp), %ax\n`;
         `	movb    $12, %ah\n`;
@@ -666,6 +679,7 @@ let emit_instr fallthrough i =
         end;
         `	fldcw	4(%esp)\n`;
         `	addl	$8, %esp\n`;
+        cfi_adjust_cfa_offset (-8);
         stack_offset := !stack_offset + 8
     | Lop(Ispecific(Ilea addr)) ->
         `	lea	{emit_addressing addr i.arg 0}, {emit_reg i.res.(0)}\n`
@@ -682,29 +696,36 @@ let emit_instr fallthrough i =
           match r with
             {loc = Reg _; typ = Float} ->
               `	subl	$8, %esp\n`;
+              cfi_adjust_cfa_offset 8;
               `	fstpl	0(%esp)\n`;
               stack_offset := !stack_offset + 8
           | {loc = Stack sl; typ = Float} ->
               let ofs = slot_offset sl 1 in
               `	pushl	{emit_int(ofs + 4)}(%esp)\n`;
               `	pushl	{emit_int(ofs + 4)}(%esp)\n`;
+              cfi_adjust_cfa_offset 8;
               stack_offset := !stack_offset + 8
           | _ ->
               `	pushl	{emit_reg r}\n`;
+              cfi_adjust_cfa_offset 4;
               stack_offset := !stack_offset + 4
         done
     | Lop(Ispecific(Ipush_int n)) ->
         `	pushl	${emit_nativeint n}\n`;
+        cfi_adjust_cfa_offset 4;
         stack_offset := !stack_offset + 4
     | Lop(Ispecific(Ipush_symbol s)) ->
         `	pushl	${emit_symbol s}\n`;
+        cfi_adjust_cfa_offset 4;
         stack_offset := !stack_offset + 4
     | Lop(Ispecific(Ipush_load addr)) ->
         `	pushl	{emit_addressing addr i.arg 0}\n`;
+        cfi_adjust_cfa_offset 4;
         stack_offset := !stack_offset + 4
     | Lop(Ispecific(Ipush_load_float addr)) ->
         `	pushl	{emit_addressing (offset_addressing addr 4) i.arg 0}\n`;
         `	pushl	{emit_addressing addr i.arg 0}\n`;
+        cfi_adjust_cfa_offset 8;
         stack_offset := !stack_offset + 8
     | Lop(Ispecific(Ifloatarithmem(double, op, addr))) ->
         if not (is_tos i.arg.(0)) then
@@ -722,8 +743,9 @@ let emit_instr fallthrough i =
     | Lreloadretaddr ->
         ()
     | Lreturn ->
-        output_epilogue();
+        output_epilogue begin fun () ->
         `	ret\n`
+        end
     | Llabel lbl ->
         `{emit_Llabel fallthrough lbl}:\n`
     | Lbranch lbl ->
@@ -787,17 +809,24 @@ let emit_instr fallthrough i =
         if trap_frame_size > 8 then
           `	subl	${emit_int (trap_frame_size - 8)}, %esp\n`;
         `	pushl	{emit_symbol "caml_exception_pointer"}\n`;
+        cfi_adjust_cfa_offset trap_frame_size;
         `	movl	%esp, {emit_symbol "caml_exception_pointer"}\n`;
         stack_offset := !stack_offset + trap_frame_size
     | Lpoptrap ->
         `	popl	{emit_symbol "caml_exception_pointer"}\n`;
         `	addl	${emit_int (trap_frame_size - 4)}, %esp\n`;
+        cfi_adjust_cfa_offset (-trap_frame_size);
         stack_offset := !stack_offset - trap_frame_size
-    | Lraise ->
-        if !Clflags.debug then begin
+    | Lraise k  ->
+        begin match !Clflags.debug, k with
+        | true, Lambda.Raise_regular ->
           `	call    {emit_symbol "caml_raise_exn"}\n`;
           record_frame Reg.Set.empty i.dbg
-        end else begin
+        | true, Lambda.Raise_reraise ->
+          `	call    {emit_symbol "caml_reraise_exn"}\n`;
+          record_frame Reg.Set.empty i.dbg
+        | false, _
+        | true, Lambda.Raise_notrace ->
           `	movl	{emit_symbol "caml_exception_pointer"}, %esp\n`;
           `	popl    {emit_symbol "caml_exception_pointer"}\n`;
           if trap_frame_size > 8 then
@@ -813,13 +842,6 @@ let rec emit_all fallthrough i =
       emit_all
         (Linearize.has_fallthrough  i.desc)
         i.next
-
-(* Emission of the floating-point constants *)
-
-let emit_float_constant (lbl, cst) =
-  `	.data\n`;
-  `{emit_label lbl}:`;
-  emit_float64_split_directive ".long" cst
 
 (* Emission of external symbol references (for MacOSX) *)
 
@@ -886,7 +908,6 @@ let fundecl fundecl =
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
   stack_offset := 0;
-  float_constants := [];
   call_gc_sites := [];
   bound_error_sites := [];
   bound_error_call := 0;
@@ -900,20 +921,25 @@ let fundecl fundecl =
   else
     `	.globl	{emit_symbol fundecl.fun_name}\n`;
   `{emit_symbol fundecl.fun_name}:\n`;
+  emit_debug_info fundecl.fun_dbg;
+  cfi_startproc ();
   if !Clflags.gprofile then emit_profile();
   let n = frame_size() - 4 in
   if n > 0 then
+  begin
     `	subl	${emit_int n}, %esp\n`;
+    cfi_adjust_cfa_offset n;
+  end;
   `{emit_label !tailrec_entry_point}:\n`;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   emit_call_bound_errors ();
+  cfi_endproc ();
   begin match Config.system with
     "linux_elf" | "bsd_elf" | "gnu" ->
       `	.type	{emit_symbol fundecl.fun_name},@function\n`;
       `	.size	{emit_symbol fundecl.fun_name},.-{emit_symbol fundecl.fun_name}\n`
-  | _ -> () end;
-  List.iter emit_float_constant !float_constants
+  | _ -> () end
 
 
 (* Emission of data *)
@@ -957,6 +983,8 @@ let data l =
 (* Beginning / end of an assembly file *)
 
 let begin_assembly() =
+  reset_debug_info();                   (* PR#5603 *)
+  float_constants := [];
   let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
   `	.data\n`;
   `	.globl	{emit_symbol lbl_begin}\n`;
@@ -968,6 +996,10 @@ let begin_assembly() =
   if macosx then `	nop\n` (* PR#4690 *)
 
 let end_assembly() =
+  if !float_constants <> [] then begin
+    `	.data\n`;
+    List.iter emit_float_constant !float_constants
+  end;
   let lbl_end = Compilenv.make_symbol (Some "code_end") in
   `	.text\n`;
   if macosx then `	nop\n`; (* suppress "ld warning: atom sorting error" *)

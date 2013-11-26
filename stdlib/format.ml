@@ -11,9 +11,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
-(* A pretty-printing facility and definition of formatters for ``parallel''
+(* A pretty-printing facility and definition of formatters for 'parallel'
    (i.e. unrelated or independent) pretty-printing on multiple out channels. *)
 
 (**************************************************************
@@ -43,7 +41,7 @@ type pp_token =
 | Pp_newline                   (* to force a newline inside a block *)
 | Pp_if_newline                (* to do something only if this very
                                   line has been broken *)
-| Pp_open_tag of string        (* opening a tag name *)
+| Pp_open_tag of tag           (* opening a tag name *)
 | Pp_close_tag                 (* closing the most recently opened tag *)
 
 and tag = string
@@ -147,13 +145,13 @@ type formatter = {
   (* Ellipsis string. *)
   mutable pp_ellipsis : string;
   (* Output function. *)
-  mutable pp_output_function : string -> int -> int -> unit;
+  mutable pp_out_string : string -> int -> int -> unit;
   (* Flushing function. *)
-  mutable pp_flush_function : unit -> unit;
+  mutable pp_out_flush : unit -> unit;
   (* Output of new lines. *)
-  mutable pp_output_newline : unit -> unit;
+  mutable pp_out_newline : unit -> unit;
   (* Output of indentation spaces. *)
-  mutable pp_output_spaces : int -> unit;
+  mutable pp_out_spaces : int -> unit;
   (* Are tags printed ? *)
   mutable pp_print_tags : bool;
   (* Are tags marked ? *)
@@ -219,7 +217,7 @@ let pp_clear_queue state =
 (* Pp_infinity: large value for default tokens size.
 
    Pp_infinity is documented as being greater than 1e10; to avoid
-   confusion about the word ``greater'', we choose pp_infinity greater
+   confusion about the word 'greater', we choose pp_infinity greater
    than 1e10 + 1; for correct handling of tests in the algorithm,
    pp_infinity must be even one more than 1e10 + 1; let's stand on the
    safe side by choosing 1.e10+10.
@@ -240,9 +238,9 @@ let pp_clear_queue state =
 let pp_infinity = 1000000010;;
 
 (* Output functions for the formatter. *)
-let pp_output_string state s = state.pp_output_function s 0 (String.length s)
-and pp_output_newline state = state.pp_output_newline ()
-and pp_display_blanks state n = state.pp_output_spaces n
+let pp_output_string state s = state.pp_out_string s 0 (String.length s)
+and pp_output_newline state = state.pp_out_newline ()
+and pp_output_spaces state n = state.pp_out_spaces n
 ;;
 
 (* To format a break, indenting a new line. *)
@@ -254,7 +252,7 @@ let break_new_line state offset width =
   let real_indent = min state.pp_max_indent indent in
   state.pp_current_indent <- real_indent;
   state.pp_space_left <- state.pp_margin - state.pp_current_indent;
-  pp_display_blanks state state.pp_current_indent
+  pp_output_spaces state state.pp_current_indent
 ;;
 
 (* To force a line break inside a block: no offset is added. *)
@@ -263,7 +261,7 @@ let break_line state width = break_new_line state 0 width;;
 (* To format a break that fits on the current line. *)
 let break_same_line state width =
   state.pp_space_left <- state.pp_space_left - width;
-  pp_display_blanks state width
+  pp_output_spaces state width
 ;;
 
 (* To indent no more than pp_max_indent, if one tries to open a block
@@ -675,9 +673,9 @@ and pp_open_box state indent = pp_open_box_gen state indent Pp_box;;
 (* Print a new line after printing all queued text
    (same for print_flush but without a newline). *)
 let pp_print_newline state () =
-  pp_flush_queue state true; state.pp_flush_function ()
+  pp_flush_queue state true; state.pp_out_flush ()
 and pp_print_flush state () =
-  pp_flush_queue state false; state.pp_flush_function ();;
+  pp_flush_queue state false; state.pp_out_flush ();;
 
 (* To get a newline when one does not want to close the current block. *)
 let pp_force_newline state () =
@@ -749,6 +747,41 @@ let pp_set_tab state () =
     enqueue_advance state elem
 ;;
 
+
+(* Convenience functions *)
+
+(* To format a list *)
+let rec pp_print_list ?(pp_sep = pp_print_cut) pp_v ppf = function
+  | [] -> ()
+  | [v] -> pp_v ppf v
+  | v :: vs ->
+    pp_v ppf v;
+    pp_sep ppf ();
+    pp_print_list ~pp_sep pp_v ppf vs
+
+(* To format free-flowing text *)
+let pp_print_text ppf s =
+  let len = String.length s in
+  let left = ref 0 in
+  let right = ref 0 in
+  let flush () =
+    pp_print_string ppf (String.sub s !left (!right - !left));
+    incr right; left := !right;
+  in
+  while (!right <> len) do
+    match s.[!right] with
+      | '\n' ->
+        flush ();
+        pp_force_newline ppf ()
+      | ' ' ->
+        flush (); pp_print_space ppf ()
+      (* there is no specific support for '\t'
+         as it is unclear what a right semantics would be *)
+      | _ -> incr right
+  done;
+  if !left <> len then flush ()
+
+
 (**************************************************************
 
   Procedures to control the pretty-printers
@@ -808,42 +841,70 @@ let pp_set_margin state n =
 
 let pp_get_margin state () = state.pp_margin;;
 
+type formatter_out_functions = {
+  out_string : string -> int -> int -> unit;
+  out_flush : unit -> unit;
+  out_newline : unit -> unit;
+  out_spaces : int -> unit;
+}
+;;
+
+let pp_set_formatter_out_functions state {
+      out_string = f;
+      out_flush = g;
+      out_newline = h;
+      out_spaces = i;
+    } =
+  state.pp_out_string <- f;
+  state.pp_out_flush <- g;
+  state.pp_out_newline <- h;
+  state.pp_out_spaces <- i;
+;;
+
+let pp_get_formatter_out_functions state () = {
+  out_string = state.pp_out_string;
+  out_flush = state.pp_out_flush;
+  out_newline = state.pp_out_newline;
+  out_spaces = state.pp_out_spaces;
+}
+;;
+
 let pp_set_formatter_output_functions state f g =
-  state.pp_output_function <- f; state.pp_flush_function <- g;;
+  state.pp_out_string <- f; state.pp_out_flush <- g;;
 let pp_get_formatter_output_functions state () =
-  (state.pp_output_function, state.pp_flush_function)
+  (state.pp_out_string, state.pp_out_flush)
 ;;
 
 let pp_set_all_formatter_output_functions state
     ~out:f ~flush:g ~newline:h ~spaces:i =
   pp_set_formatter_output_functions state f g;
-  state.pp_output_newline <- h;
-  state.pp_output_spaces <- i;
+  state.pp_out_newline <- h;
+  state.pp_out_spaces <- i;
 ;;
 let pp_get_all_formatter_output_functions state () =
-  (state.pp_output_function, state.pp_flush_function,
-   state.pp_output_newline, state.pp_output_spaces)
+  (state.pp_out_string, state.pp_out_flush,
+   state.pp_out_newline, state.pp_out_spaces)
 ;;
 
 (* Default function to output new lines. *)
-let display_newline state () = state.pp_output_function "\n" 0  1;;
+let display_newline state () = state.pp_out_string "\n" 0  1;;
 
 (* Default function to output spaces. *)
 let blank_line = String.make 80 ' ';;
 let rec display_blanks state n =
   if n > 0 then
-  if n <= 80 then state.pp_output_function blank_line 0 n else
+  if n <= 80 then state.pp_out_string blank_line 0 n else
   begin
-    state.pp_output_function blank_line 0 80;
+    state.pp_out_string blank_line 0 80;
     display_blanks state (n - 80)
   end
 ;;
 
 let pp_set_formatter_out_channel state os =
-  state.pp_output_function <- output os;
-  state.pp_flush_function <- (fun () -> flush os);
-  state.pp_output_newline <- display_newline state;
-  state.pp_output_spaces <- display_blanks state;
+  state.pp_out_string <- output os;
+  state.pp_out_flush <- (fun () -> flush os);
+  state.pp_out_newline <- display_newline state;
+  state.pp_out_spaces <- display_blanks state;
 ;;
 
 (**************************************************************
@@ -855,8 +916,8 @@ let pp_set_formatter_out_channel state os =
 let default_pp_mark_open_tag s = "<" ^ s ^ ">";;
 let default_pp_mark_close_tag s = "</" ^ s ^ ">";;
 
-let default_pp_print_open_tag _ = ();;
-let default_pp_print_close_tag = default_pp_print_open_tag;;
+let default_pp_print_open_tag = ignore;;
+let default_pp_print_close_tag = ignore;;
 
 let pp_make_formatter f g h i =
   (* The initial state of the formatter contains a dummy box. *)
@@ -883,10 +944,10 @@ let pp_make_formatter f g h i =
    pp_curr_depth = 1;
    pp_max_boxes = max_int;
    pp_ellipsis = ".";
-   pp_output_function = f;
-   pp_flush_function = g;
-   pp_output_newline = h;
-   pp_output_spaces = i;
+   pp_out_string = f;
+   pp_out_flush = g;
+   pp_out_newline = h;
+   pp_out_spaces = i;
    pp_print_tags = false;
    pp_mark_tags = false;
    pp_mark_open_tag = default_pp_mark_open_tag;
@@ -900,8 +961,8 @@ let pp_make_formatter f g h i =
 (* Make a formatter with default functions to output spaces and new lines. *)
 let make_formatter output flush =
   let ppf = pp_make_formatter output flush ignore ignore in
-  ppf.pp_output_newline <- display_newline ppf;
-  ppf.pp_output_spaces <- display_blanks ppf;
+  ppf.pp_out_newline <- display_newline ppf;
+  ppf.pp_out_spaces <- display_blanks ppf;
   ppf
 ;;
 
@@ -979,6 +1040,11 @@ and get_ellipsis_text = pp_get_ellipsis_text std_formatter
 and set_formatter_out_channel =
   pp_set_formatter_out_channel std_formatter
 
+and set_formatter_out_functions =
+  pp_set_formatter_out_functions std_formatter
+and get_formatter_out_functions =
+  pp_get_formatter_out_functions std_formatter
+
 and set_formatter_output_functions =
   pp_set_formatter_output_functions std_formatter
 and get_formatter_output_functions =
@@ -1020,7 +1086,7 @@ module Tformat = Printf.CamlinternalPr.Tformat;;
 (* Trailer: giving up at character number ... *)
 let giving_up mess fmt i =
   Printf.sprintf
-    "Format.fprintf: %s ``%s'', giving up at character number %d%s"
+    "Format.fprintf: %s \'%s\', giving up at character number %d%s"
     mess (Sformat.to_string fmt) i
     (if i < Sformat.length fmt
      then Printf.sprintf " (%c)." (Sformat.get fmt i)
@@ -1085,225 +1151,228 @@ let implode_rev s0 = function
    according to the format string.
    Regular [fprintf]-like functions of this module are obtained via partial
    applications of [mkprintf]. *)
-let mkprintf to_s get_out =
+let mkprintf to_s get_out k fmt =
 
-  let rec kprintf k fmt =
+  (* [out] is global to this definition of [pr], and must be shared by all its
+     recursive calls (if any). *)
+  let out = get_out fmt in
+  let print_as = ref None in
+  let outc c =
+    match !print_as with
+    | None -> pp_print_char out c
+    | Some size ->
+      pp_print_as_size out size (String.make 1 c);
+      print_as := None
+  and outs s =
+    match !print_as with
+    | None -> pp_print_string out s
+    | Some size ->
+      pp_print_as_size out size s;
+      print_as := None
+  and flush out = pp_print_flush out () in
+
+  let rec pr k n fmt v =
 
     let len = Sformat.length fmt in
 
-    let kpr fmt v =
-      let ppf = get_out fmt in
-      let print_as = ref None in
-      let pp_print_as_char c =
-        match !print_as with
-        | None -> pp_print_char ppf c
-        | Some size ->
-          pp_print_as_size ppf size (String.make 1 c);
-          print_as := None
-      and pp_print_as_string s =
-        match !print_as with
-        | None -> pp_print_string ppf s
-        | Some size ->
-          pp_print_as_size ppf size s;
-          print_as := None in
-
-      let rec doprn n i =
-        if i >= len then Obj.magic (k ppf) else
-        match Sformat.get fmt i with
-        | '%' ->
-          Tformat.scan_format fmt v n i cont_s cont_a cont_t cont_f cont_m
-        | '@' ->
-          let i = succ i in
-          if i >= len then invalid_format fmt i else
-          begin match Sformat.get fmt i with
-          | '[' ->
-            do_pp_open_box ppf n (succ i)
-          | ']' ->
-            pp_close_box ppf ();
-            doprn n (succ i)
-          | '{' ->
-            do_pp_open_tag ppf n (succ i)
-          | '}' ->
-            pp_close_tag ppf ();
-            doprn n (succ i)
-          | ' ' ->
-            pp_print_space ppf ();
-            doprn n (succ i)
-          | ',' ->
-            pp_print_cut ppf ();
-            doprn n (succ i)
-          | '?' ->
-            pp_print_flush ppf ();
-            doprn n (succ i)
-          | '.' ->
-            pp_print_newline ppf ();
-            doprn n (succ i)
-          | '\n' ->
-            pp_force_newline ppf ();
-            doprn n (succ i)
-          | ';' ->
-            do_pp_break ppf n (succ i)
-          | '<' ->
-            let got_size size n i =
-              print_as := Some size;
-              doprn n (skip_gt i) in
-            get_int n (succ i) got_size
-          | '@' | '%' as c ->
-            pp_print_as_char c;
-            doprn n (succ i)
-          | _ -> invalid_format fmt i
-          end
-        | c ->
-          pp_print_as_char c;
-          doprn n (succ i)
-
-      and cont_s n s i =
-        pp_print_as_string s; doprn n i
-      and cont_a n printer arg i =
-        if to_s then
-          pp_print_as_string ((Obj.magic printer : unit -> _ -> string) () arg)
-        else
-          printer ppf arg;
-        doprn n i
-      and cont_t n printer i =
-        if to_s then
-          pp_print_as_string ((Obj.magic printer : unit -> string) ())
-        else
-          printer ppf;
-        doprn n i
-      and cont_f n i =
-        pp_print_flush ppf (); doprn n i
-      and cont_m n sfmt i =
-        kprintf (Obj.magic (fun _ -> doprn n i)) sfmt
-
-      and get_int n i c =
-        if i >= len then invalid_integer fmt i else
-        match Sformat.get fmt i with
-        | ' ' -> get_int n (succ i) c
-        | '%' ->
-          let cont_s n s i = c (format_int_of_string fmt i s) n i
-          and cont_a _n _printer _arg i = invalid_integer fmt i
-          and cont_t _n _printer i = invalid_integer fmt i
-          and cont_f _n i = invalid_integer fmt i
-          and cont_m _n _sfmt i = invalid_integer fmt i in
-          Tformat.scan_format fmt v n i cont_s cont_a cont_t cont_f cont_m
-        | _ ->
-          let rec get j =
-            if j >= len then invalid_integer fmt j else
-            match Sformat.get fmt j with
-            | '0' .. '9' | '-' -> get (succ j)
-            | _ ->
-              let size =
-                if j = i then size_of_int 0 else
-                let s = Sformat.sub fmt (Sformat.index_of_int i) (j - i) in
-                format_int_of_string fmt j s in
-              c size n j in
-          get i
-
-      and skip_gt i =
+    let rec doprn n i =
+      if i >= len then Obj.magic (k out) else
+      match Sformat.get fmt i with
+      | '%' ->
+        Tformat.scan_format fmt v n i cont_s cont_a cont_t cont_f cont_m
+      | '@' ->
+        let i = succ i in
         if i >= len then invalid_format fmt i else
-        match Sformat.get fmt i with
-        | ' ' -> skip_gt (succ i)
-        | '>' -> succ i
-        | _ -> invalid_format fmt i
-
-      and get_box_kind i =
-        if i >= len then Pp_box, i else
-        match Sformat.get fmt i with
-        | 'h' ->
-           let i = succ i in
-           if i >= len then Pp_hbox, i else
-           begin match Sformat.get fmt i with
-           | 'o' ->
-             let i = succ i in
-             if i >= len then format_invalid_arg "bad box format" fmt i else
-             begin match Sformat.get fmt i with
-             | 'v' -> Pp_hovbox, succ i
-             | c ->
-               format_invalid_arg
-                 ("bad box name ho" ^ String.make 1 c) fmt i
-             end
-           | 'v' -> Pp_hvbox, succ i
-           | _ -> Pp_hbox, i
-           end
-        | 'b' -> Pp_box, succ i
-        | 'v' -> Pp_vbox, succ i
-        | _ -> Pp_box, i
-
-      and get_tag_name n i c =
-        let rec get accu n i j =
-          if j >= len then
-            c (implode_rev
-                 (Sformat.sub fmt (Sformat.index_of_int i) (j - i))
-                 accu)
-              n j else
-          match Sformat.get fmt j with
-          | '>' ->
-            c (implode_rev
-                 (Sformat.sub fmt (Sformat.index_of_int i) (j - i))
-                 accu)
-              n j
-          | '%' ->
-            let s0 = Sformat.sub fmt (Sformat.index_of_int i) (j - i) in
-            let cont_s n s i = get (s :: s0 :: accu) n i i
-            and cont_a n printer arg i =
-              let s =
-                if to_s
-                then (Obj.magic printer : unit -> _ -> string) () arg
-                else exstring printer arg in
-              get (s :: s0 :: accu) n i i
-            and cont_t n printer i =
-              let s =
-                if to_s
-                then (Obj.magic printer : unit -> string) ()
-                else exstring (fun ppf () -> printer ppf) () in
-              get (s :: s0 :: accu) n i i
-            and cont_f _n i =
-              format_invalid_arg "bad tag name specification" fmt i
-            and cont_m _n _sfmt i =
-              format_invalid_arg "bad tag name specification" fmt i in
-            Tformat.scan_format fmt v n j cont_s cont_a cont_t cont_f cont_m
-          | _ -> get accu n i (succ j) in
-        get [] n i i
-
-      and do_pp_break ppf n i =
-        if i >= len then begin pp_print_space ppf (); doprn n i end else
-        match Sformat.get fmt i with
+        begin match Sformat.get fmt i with
+        | '[' ->
+          do_pp_open_box out n (succ i)
+        | ']' ->
+          pp_close_box out ();
+          doprn n (succ i)
+        | '{' ->
+          do_pp_open_tag out n (succ i)
+        | '}' ->
+          pp_close_tag out ();
+          doprn n (succ i)
+        | ' ' ->
+          pp_print_space out ();
+          doprn n (succ i)
+        | ',' ->
+          pp_print_cut out ();
+          doprn n (succ i)
+        | '?' ->
+          pp_print_flush out ();
+          doprn n (succ i)
+        | '.' ->
+          pp_print_newline out ();
+          doprn n (succ i)
+        | '\n' ->
+          pp_force_newline out ();
+          doprn n (succ i)
+        | ';' ->
+          do_pp_break out n (succ i)
         | '<' ->
-          let rec got_nspaces nspaces n i =
-            get_int n i (got_offset nspaces)
-          and got_offset nspaces offset n i =
-            pp_print_break ppf (int_of_size nspaces) (int_of_size offset);
-            doprn n (skip_gt i) in
-          get_int n (succ i) got_nspaces
-        | _c -> pp_print_space ppf (); doprn n i
-
-      and do_pp_open_box ppf n i =
-        if i >= len then begin pp_open_box_gen ppf 0 Pp_box; doprn n i end else
-        match Sformat.get fmt i with
-        | '<' ->
-          let kind, i = get_box_kind (succ i) in
           let got_size size n i =
-            pp_open_box_gen ppf (int_of_size size) kind;
+            print_as := Some size;
             doprn n (skip_gt i) in
-          get_int n i got_size
-        | _c -> pp_open_box_gen ppf 0 Pp_box; doprn n i
+          get_int n (succ i) got_size
+        | '@' ->
+          outc '@';
+          doprn n (succ i)
+        | _ -> invalid_format fmt i
+        end
+      | c -> outc c; doprn n (succ i)
 
-      and do_pp_open_tag ppf n i =
-        if i >= len then begin pp_open_tag ppf ""; doprn n i end else
-        match Sformat.get fmt i with
-        | '<' ->
-          let got_name tag_name n i =
-            pp_open_tag ppf tag_name;
-            doprn n (skip_gt i) in
-          get_tag_name n (succ i) got_name
-        | _c -> pp_open_tag ppf ""; doprn n i in
+    and cont_s n s i =
+      outs s; doprn n i
+    and cont_a n printer arg i =
+      if to_s then
+        outs ((Obj.magic printer : unit -> _ -> string) () arg)
+      else
+        printer out arg;
+      doprn n i
+    and cont_t n printer i =
+      if to_s then
+        outs ((Obj.magic printer : unit -> string) ())
+      else
+        printer out;
+      doprn n i
+    and cont_f n i =
+      flush out; doprn n i
+    and cont_m n xf i =
+      let m =
+        Sformat.add_int_index
+          (Tformat.count_printing_arguments_of_format xf) n in
+      pr (Obj.magic (fun _ -> doprn m i)) n xf v
 
-      doprn (Sformat.index_of_int 0) 0 in
+    and get_int n i c =
+      if i >= len then invalid_integer fmt i else
+      match Sformat.get fmt i with
+      | ' ' -> get_int n (succ i) c
+      | '%' ->
+        let cont_s n s i = c (format_int_of_string fmt i s) n i
+        and cont_a _n _printer _arg i = invalid_integer fmt i
+        and cont_t _n _printer i = invalid_integer fmt i
+        and cont_f _n i = invalid_integer fmt i
+        and cont_m _n _sfmt i = invalid_integer fmt i in
+        Tformat.scan_format fmt v n i cont_s cont_a cont_t cont_f cont_m
+      | _ ->
+        let rec get j =
+          if j >= len then invalid_integer fmt j else
+          match Sformat.get fmt j with
+          | '0' .. '9' | '-' -> get (succ j)
+          | _ ->
+            let size =
+              if j = i then size_of_int 0 else
+              let s = Sformat.sub fmt (Sformat.index_of_int i) (j - i) in
+              format_int_of_string fmt j s in
+            c size n j in
+        get i
 
-    Tformat.kapr kpr fmt in
+    and skip_gt i =
+      if i >= len then invalid_format fmt i else
+      match Sformat.get fmt i with
+      | ' ' -> skip_gt (succ i)
+      | '>' -> succ i
+      | _ -> invalid_format fmt i
 
-  kprintf
+    and get_box_kind i =
+      if i >= len then Pp_box, i else
+      match Sformat.get fmt i with
+      | 'h' ->
+         let i = succ i in
+         if i >= len then Pp_hbox, i else
+         begin match Sformat.get fmt i with
+         | 'o' ->
+           let i = succ i in
+           if i >= len then format_invalid_arg "bad box format" fmt i else
+           begin match Sformat.get fmt i with
+           | 'v' -> Pp_hovbox, succ i
+           | c ->
+             format_invalid_arg
+               ("bad box name ho" ^ String.make 1 c) fmt i
+           end
+         | 'v' -> Pp_hvbox, succ i
+         | _ -> Pp_hbox, i
+         end
+      | 'b' -> Pp_box, succ i
+      | 'v' -> Pp_vbox, succ i
+      | _ -> Pp_box, i
+
+    and get_tag_name n i c =
+      let rec get accu n i j =
+        if j >= len then
+          c (implode_rev
+               (Sformat.sub fmt (Sformat.index_of_int i) (j - i))
+               accu)
+            n j else
+        match Sformat.get fmt j with
+        | '>' ->
+          c (implode_rev
+               (Sformat.sub fmt (Sformat.index_of_int i) (j - i))
+               accu)
+            n j
+        | '%' ->
+          let s0 = Sformat.sub fmt (Sformat.index_of_int i) (j - i) in
+          let cont_s n s i = get (s :: s0 :: accu) n i i
+          and cont_a n printer arg i =
+            let s =
+              if to_s
+              then (Obj.magic printer : unit -> _ -> string) () arg
+              else exstring printer arg in
+            get (s :: s0 :: accu) n i i
+          and cont_t n printer i =
+            let s =
+              if to_s
+              then (Obj.magic printer : unit -> string) ()
+              else exstring (fun ppf () -> printer ppf) () in
+            get (s :: s0 :: accu) n i i
+          and cont_f _n i =
+            format_invalid_arg "bad tag name specification" fmt i
+          and cont_m _n _sfmt i =
+            format_invalid_arg "bad tag name specification" fmt i in
+          Tformat.scan_format fmt v n j cont_s cont_a cont_t cont_f cont_m
+        | _ -> get accu n i (succ j) in
+      get [] n i i
+
+    and do_pp_break ppf n i =
+      if i >= len then begin pp_print_space ppf (); doprn n i end else
+      match Sformat.get fmt i with
+      | '<' ->
+        let rec got_nspaces nspaces n i =
+          get_int n i (got_offset nspaces)
+        and got_offset nspaces offset n i =
+          pp_print_break ppf (int_of_size nspaces) (int_of_size offset);
+          doprn n (skip_gt i) in
+        get_int n (succ i) got_nspaces
+      | _c -> pp_print_space ppf (); doprn n i
+
+    and do_pp_open_box ppf n i =
+      if i >= len then begin pp_open_box_gen ppf 0 Pp_box; doprn n i end else
+      match Sformat.get fmt i with
+      | '<' ->
+        let kind, i = get_box_kind (succ i) in
+        let got_size size n i =
+          pp_open_box_gen ppf (int_of_size size) kind;
+          doprn n (skip_gt i) in
+        get_int n i got_size
+      | _c -> pp_open_box_gen ppf 0 Pp_box; doprn n i
+
+    and do_pp_open_tag ppf n i =
+      if i >= len then begin pp_open_tag ppf ""; doprn n i end else
+      match Sformat.get fmt i with
+      | '<' ->
+        let got_name tag_name n i =
+          pp_open_tag ppf tag_name;
+          doprn n (skip_gt i) in
+        get_tag_name n (succ i) got_name
+      | _c -> pp_open_tag ppf ""; doprn n i in
+
+    doprn n 0 in
+
+  let kpr = pr k (Sformat.index_of_int 0) in
+
+  Tformat.kapr kpr fmt
 ;;
 
 (**************************************************************
@@ -1323,10 +1392,19 @@ let eprintf fmt = fprintf err_formatter fmt;;
 let ksprintf k =
   let b = Buffer.create 512 in
   let k ppf = k (string_out b ppf) in
-  mkprintf true (fun _ -> formatter_of_buffer b) k
+  let ppf = formatter_of_buffer b in
+  let get_out _ = ppf in
+  mkprintf true get_out k
 ;;
 
 let sprintf fmt = ksprintf (fun s -> s) fmt;;
+
+let asprintf fmt =
+  let b = Buffer.create 512 in
+  let k ppf = string_out b ppf in
+  let ppf = formatter_of_buffer b in
+  let get_out _ = ppf in
+  mkprintf false get_out k fmt;;
 
 (**************************************************************
 
@@ -1347,5 +1425,6 @@ let bprintf b =
 (* Deprecated alias for ksprintf. *)
 let kprintf = ksprintf;;
 
+(* Output everything left in the pretty printer queue at end of execution. *)
 at_exit print_flush
 ;;

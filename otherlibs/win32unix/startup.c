@@ -15,7 +15,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <mlvalues.h>
-#include "unixsupport.h"
 #include "winworker.h"
 #include "windbug.h"
 

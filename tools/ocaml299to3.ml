@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Lexer299
 
 let input_buffer = Buffer.create 16383
@@ -126,7 +124,8 @@ let _ =
     print_endline
       "Convert OCaml 2.99 O'Labl-style labels in implementation files to";
     print_endline
-      "a syntax compatible with version 3. Also `fun:' labels are replaced by `f:'.";
+      "a syntax compatible with version 3. Also `fun:' labels are replaced \
+       by `f:'.";
     print_endline "Other syntactic changes are not handled.";
     print_endline "Old files are renamed to <file>.bak.";
     print_endline "Interface files do not need label syntax conversion.";

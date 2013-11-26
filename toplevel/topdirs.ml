@@ -10,14 +10,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Toplevel directives *)
 
 open Format
 open Misc
 open Longident
-open Path
 open Types
 open Cmo_format
 open Trace
@@ -40,6 +37,16 @@ let dir_directory s =
   Dll.add_path [d]
 
 let _ = Hashtbl.add directive_table "directory" (Directive_string dir_directory)
+
+(* To remove a directory from the load path *)
+let dir_remove_directory s =
+  let d = expand_directory Config.standard_library s in
+  Config.load_path := List.filter (fun d' -> d' <> d) !Config.load_path;
+  Dll.remove_path [d]
+
+let _ =
+  Hashtbl.add directive_table "remove_directory"
+    (Directive_string dir_remove_directory)
 
 (* To change the current directory *)
 
@@ -86,7 +93,9 @@ let load_compunit ic filename ppf compunit =
   end
 
 let rec load_file recursive ppf name =
-  let filename = try Some (find_in_path !Config.load_path name) with Not_found -> None in
+  let filename =
+    try Some (find_in_path !Config.load_path name) with Not_found -> None
+  in
   match filename with
   | None -> fprintf ppf "Cannot find file %s.@." name; false
   | Some filename ->
@@ -101,8 +110,7 @@ let rec load_file recursive ppf name =
 
 and really_load_file recursive ppf name filename ic =
   let ic = open_in_bin filename in
-  let buffer = String.create (String.length Config.cmo_magic_number) in
-  really_input ic buffer 0 (String.length Config.cmo_magic_number);
+  let buffer = Misc.input_bytes ic (String.length Config.cmo_magic_number) in
   try
     if buffer = Config.cmo_magic_number then begin
       let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
@@ -111,11 +119,16 @@ and really_load_file recursive ppf name filename ic =
       if recursive then
         List.iter
           (function
-            | (Reloc_getglobal id, _) when not (Symtable.is_global_defined id) ->
+            | (Reloc_getglobal id, _)
+              when not (Symtable.is_global_defined id) ->
                 let file = Ident.name id ^ ".cmo" in
-                begin match try Some (Misc.find_in_path_uncap !Config.load_path file) with Not_found -> None with
+                begin match try Some (Misc.find_in_path_uncap !Config.load_path
+                                        file)
+                      with Not_found -> None
+                with
                 | None -> ()
-                | Some file -> if not (load_file recursive ppf file) then raise Load_failed
+                | Some file ->
+                    if not (load_file recursive ppf file) then raise Load_failed
                 end
             | _ -> ()
           )
@@ -151,15 +164,19 @@ let _ = Hashtbl.add directive_table "load" (Directive_string (dir_load std_out))
 
 let dir_load_rec ppf name = ignore (load_file true ppf name)
 
-let _ = Hashtbl.add directive_table "load_rec" (Directive_string (dir_load_rec std_out))
+let _ = Hashtbl.add directive_table "load_rec"
+                    (Directive_string (dir_load_rec std_out))
 
 let load_file = load_file false
 
 (* Load commands from a file *)
 
 let dir_use ppf name = ignore(Toploop.use_file ppf name)
+let dir_mod_use ppf name = ignore(Toploop.mod_use_file ppf name)
 
 let _ = Hashtbl.add directive_table "use" (Directive_string (dir_use std_out))
+let _ = Hashtbl.add directive_table "mod_use"
+                    (Directive_string (dir_mod_use std_out))
 
 (* Install, remove a printer *)
 

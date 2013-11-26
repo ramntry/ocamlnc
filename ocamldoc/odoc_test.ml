@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Custom generator to perform test on ocamldoc. *)
 
@@ -22,11 +21,12 @@ type test_kind =
 
 let p = Format.fprintf
 
-module Generator =
+module Generator (G : Odoc_gen.Base) =
 struct
-class string_gen =
+  class string_gen =
   object(self)
     inherit Odoc_info.Scan.scanner
+
 
     val mutable test_kinds = []
     val mutable fmt = Format.str_formatter
@@ -111,8 +111,12 @@ class string_gen =
   class generator =
     let g = new string_gen in
     object
-      method generate = g#generate
+      inherit G.generator as base
+
+      method generate l =
+        base#generate l;
+        g#generate l
     end
 end;;
 
-let _ = Odoc_args.set_generator (Odoc_gen.Other (module Generator : Odoc_gen.Base))
+let _ = Odoc_args.extend_base_generator (module Generator : Odoc_gen.Base_functor);;

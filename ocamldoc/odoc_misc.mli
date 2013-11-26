@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -9,9 +10,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
-(** Miscelaneous functions *)
+(** Miscellaneous functions *)
 
 (** [no_blanks s] returns the given string without any blank
    characters, i.e. '\n' '\r' ' ' '\t'.

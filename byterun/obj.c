@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Operations on objects */
 
 #include <string.h>
@@ -171,7 +169,7 @@ CAMLprim value caml_obj_add_offset (value v, value offset)
 }
 
 /* The following functions are used in stdlib/lazy.ml.
-   They are not written in O'Caml because they must be atomic with respect
+   They are not written in OCaml because they must be atomic with respect
    to the GC.
  */
 
@@ -249,3 +247,11 @@ value caml_cache_public_method2 (value *meths, value tag, value *cache)
   }
 }
 #endif /*CAML_JIT*/
+
+static value oo_last_id = Val_int(0);
+
+CAMLprim value caml_set_oo_id (value obj) {
+  Field(obj, 1) = oo_last_id;
+  oo_last_id += 2;
+  return obj;
+}

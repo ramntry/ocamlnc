@@ -10,15 +10,18 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Construction of the interference graph.
    Annotate pseudoregs with interference lists and preference lists. *)
 
 module IntPairSet =
-  Set.Make(struct type t = int * int let compare = compare end)
+  Set.Make(struct
+    type t = int * int
+    let compare ((a1,b1) : t) (a2,b2) =
+      match compare a1 a2 with
+        | 0 -> compare b1 b2
+        | c -> c
+  end)
 
-open Misc
 open Reg
 open Mach
 
@@ -32,13 +35,21 @@ let build_graph fundecl =
 
   (* Record an interference between two registers *)
   let add_interf ri rj =
-    let i = ri.stamp and j = rj.stamp in
-    if i <> j then begin
-      let p = if i < j then (i, j) else (j, i) in
-      if not(IntPairSet.mem p !mat) then begin
-        mat := IntPairSet.add p !mat;
-        if ri.loc = Unknown then ri.interf <- rj :: ri.interf;
-        if rj.loc = Unknown then rj.interf <- ri :: rj.interf
+    if Proc.register_class ri = Proc.register_class rj then begin
+      let i = ri.stamp and j = rj.stamp in
+      if i <> j then begin
+        let p = if i < j then (i, j) else (j, i) in
+        if not(IntPairSet.mem p !mat) then begin
+          mat := IntPairSet.add p !mat;
+          if ri.loc = Unknown then begin
+            ri.interf <- rj :: ri.interf;
+            if not rj.spill then ri.degree <- ri.degree + 1
+          end;
+          if rj.loc = Unknown then begin
+            rj.interf <- ri :: rj.interf;
+            if not ri.spill then rj.degree <- rj.degree + 1
+          end
+        end
       end
     end in
 
@@ -100,17 +111,21 @@ let build_graph fundecl =
     | Itrywith(body, handler) ->
         add_interf_set Proc.destroyed_at_raise handler.live;
         interf body; interf handler; interf i.next
-    | Iraise -> () in
+    | Iraise _ -> () in
 
   (* Add a preference from one reg to another.
      Do not add anything if the two registers conflict,
-     or if the source register already has a location. *)
+     or if the source register already has a location,
+     or if the two registers belong to different classes.
+     (The last case can occur e.g. on Sparc when passing
+      float arguments in integer registers, PR#6227.) *)
 
   let add_pref weight r1 r2 =
     if weight > 0 then begin
       let i = r1.stamp and j = r2.stamp in
       if i <> j
       && r1.loc = Unknown
+      && Proc.register_class r1 = Proc.register_class r2
       && (let p = if i < j then (i, j) else (j, i) in
           not (IntPairSet.mem p !mat))
       then r1.prefer <- (r2, weight) :: r1.prefer
@@ -167,7 +182,7 @@ let build_graph fundecl =
         ()
     | Itrywith(body, handler) ->
         prefer weight body; prefer weight handler; prefer weight i.next
-    | Iraise -> ()
+    | Iraise _ -> ()
   in
 
   interf fundecl.fun_body; prefer 8 fundecl.fun_body

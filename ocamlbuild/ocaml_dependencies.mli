@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -11,7 +12,7 @@
 
 
 (* Original author: Nicolas Pouillard *)
-(** Ocaml dependencies *)
+(** OCaml dependencies *)
 
 exception Circular_dependencies of string list * string
 

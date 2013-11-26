@@ -10,13 +10,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Emission of PowerPC assembly code *)
 
-module StringSet = Set.Make(struct type t = string let compare = compare end)
+module StringSet =
+  Set.Make(struct type t = string let compare (x:t) y = compare x y end)
 
-open Location
 open Misc
 open Cmm
 open Arch
@@ -58,7 +56,7 @@ let supports_backtraces =
 
 let emit_symbol =
   match Config.system with
-  | "elf" | "bsd" -> (fun s -> Emitaux.emit_symbol '.' s)
+  | "elf" | "bsd" | "bsd_elf" -> (fun s -> Emitaux.emit_symbol '.' s)
   | "rhapsody"    -> (fun s -> emit_char '_'; Emitaux.emit_symbol '$' s)
   | _ -> assert false
 
@@ -66,7 +64,7 @@ let emit_symbol =
 
 let label_prefix =
   match Config.system with
-  | "elf" | "bsd" -> ".L"
+  | "elf" | "bsd" | "bsd_elf" -> ".L"
   | "rhapsody" -> "L"
   | _ -> assert false
 
@@ -80,19 +78,19 @@ let emit_data_label lbl =
 
 let data_space =
   match Config.system with
-  | "elf" | "bsd" -> "	.section \".data\"\n"
+  | "elf" | "bsd" | "bsd_elf" -> "	.section \".data\"\n"
   | "rhapsody"    -> "	.data\n"
   | _ -> assert false
 
 let code_space =
   match Config.system with
-  | "elf" | "bsd" -> "	.section \".text\"\n"
+  | "elf" | "bsd" | "bsd_elf" -> "	.section \".text\"\n"
   | "rhapsody"    -> "	.text\n"
   | _ -> assert false
 
 let rodata_space =
   match Config.system with
-  | "elf" | "bsd" -> "	.section \".rodata\"\n"
+  | "elf" | "bsd" | "bsd_elf" -> "	.section \".rodata\"\n"
   | "rhapsody"    -> "	.const\n"
   | _ -> assert false
 
@@ -160,7 +158,7 @@ let is_native_immediate n =
 
 let emit_upper emit_fun arg =
   match Config.system with
-  | "elf" | "bsd" ->
+  | "elf" | "bsd" | "bsd_elf" ->
       emit_fun arg; emit_string "@ha"
   | "rhapsody" ->
       emit_string "ha16("; emit_fun arg; emit_string ")"
@@ -168,7 +166,7 @@ let emit_upper emit_fun arg =
 
 let emit_lower emit_fun arg =
   match Config.system with
-  | "elf" | "bsd" ->
+  | "elf" | "bsd" | "bsd_elf" ->
       emit_fun arg; emit_string "@l"
   | "rhapsody" ->
       emit_string "lo16("; emit_fun arg; emit_string ")"
@@ -268,15 +266,16 @@ let name_for_int_comparison = function
 (* Names for various instructions *)
 
 let name_for_intop = function
-    Iadd -> "add"
-  | Imul -> if ppc64 then "mulld" else "mullw"
-  | Idiv -> if ppc64 then "divd" else "divw"
-  | Iand -> "and"
-  | Ior  -> "or"
-  | Ixor -> "xor"
-  | Ilsl -> if ppc64 then "sld" else "slw"
-  | Ilsr -> if ppc64 then "srd" else "srw"
-  | Iasr -> if ppc64 then "srad" else "sraw"
+    Iadd  -> "add"
+  | Imul - > if ppc64 then "mulld" else "mullw"
+  | Imulh -> if ppc64 then "mulhd" else "mulhw"
+  | Idiv  -> if ppc64 then "divd" else "divw"
+  | Iand  -> "and"
+  | Ior   -> "or"
+  | Ixor  -> "xor"
+  | Ilsl  -> if ppc64 then "sld" else "slw"
+  | Ilsr  -> if ppc64 then "srd" else "srw"
+  | Iasr  -> if ppc64 then "srad" else "sraw"
   | _ -> Misc.fatal_error "Emit.Intop"
 
 let name_for_intop_imm = function
@@ -346,8 +345,6 @@ let instr_size = function
   | Lop(Iintop Imod) -> 3
   | Lop(Iintop(Icomp cmp)) -> 4
   | Lop(Iintop op) -> 1
-  | Lop(Iintop_imm(Idiv, n)) -> 2
-  | Lop(Iintop_imm(Imod, n)) -> 4
   | Lop(Iintop_imm(Icomp cmp, n)) -> 4
   | Lop(Iintop_imm(op, n)) -> 1
   | Lop(Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf) -> 1
@@ -367,7 +364,7 @@ let instr_size = function
   | Lsetuptrap lbl -> 1
   | Lpushtrap -> 4
   | Lpoptrap -> 2
-  | Lraise -> 6
+  | Lraise _ -> 6
 
 let label_map code =
   let map = Hashtbl.create 37 in
@@ -607,16 +604,6 @@ let rec emit_instr i dslot =
         `	{emit_string instr}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`
     | Lop(Iintop_imm(Isub, n)) ->
         `	addi	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_int(-n)}\n`
-    | Lop(Iintop_imm(Idiv, n)) ->       (* n is guaranteed to be a power of 2 *)
-        let l = Misc.log2 n in
-        `	{emit_string sragi}	{emit_reg i.res.(0)}, {emit_reg i.arg.(0)}, {emit_int l}\n`;
-        `	addze	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
-    | Lop(Iintop_imm(Imod, n)) ->       (* n is guaranteed to be a power of 2 *)
-        let l = Misc.log2 n in
-        `	{emit_string sragi}	{emit_gpr 0}, {emit_reg i.arg.(0)}, {emit_int l}\n`;
-        `	addze	{emit_gpr 0}, {emit_gpr 0}\n`;
-        `	{emit_string slgi}	{emit_gpr 0}, {emit_gpr 0}, {emit_int l}\n`;
-        `	subfc	{emit_reg i.res.(0)}, {emit_gpr 0}, {emit_reg i.arg.(0)}\n`
     | Lop(Iintop_imm(Icomp cmp, n)) ->
         begin match cmp with
           Isigned c ->
@@ -769,11 +756,13 @@ let rec emit_instr i dslot =
         `	{emit_string lg}	{emit_gpr 29}, {emit_int size_addr}({emit_gpr 1})\n`;
         `	addi	{emit_gpr 1}, {emit_gpr 1}, 16\n`;
         stack_offset := !stack_offset - 16
-    | Lraise ->
-        if !Clflags.debug && supports_backtraces then begin
+    | Lraise k ->
+        begin match !Clflags.debug && supports_backtraces, k with
+        | true, (Lambda.Raise_regular | Lambda.Raise_reraise) ->
           `	bl	{emit_symbol "caml_raise_exn"}\n`;
           record_frame Reg.Set.empty i.dbg
-        end else begin
+        | false, _
+        | true, Lambda.Raise_notrace ->
           `	{emit_string lg}	{emit_gpr 0}, 0({emit_gpr 29})\n`;
           `	mr	{emit_gpr 1}, {emit_gpr 29}\n`;
           `	mtlr	{emit_gpr 0}\n`;
@@ -821,7 +810,7 @@ let rec emit_all i =
   match i with
     {desc = Lend} -> ()
   | {next = {desc = (Lcondbranch(_, _) | Lcondbranch3(_, _, _))}}
-    when is_simple_instr i & no_interference i.res i.next.arg ->
+    when is_simple_instr i && no_interference i.res i.next.arg ->
       emit_instr i.next (Some i);
       emit_all i.next.next
   | _ ->
@@ -846,7 +835,7 @@ let fundecl fundecl =
   else
   `	.globl	{emit_symbol fundecl.fun_name}\n`;
   begin match Config.system with
-  | "elf" | "bsd" ->
+  | "elf" | "bsd" | "bsd_elf" ->
       `	.type	{emit_symbol fundecl.fun_name}, @function\n`
   | _ -> ()
   end;
@@ -891,8 +880,11 @@ let fundecl fundecl =
 
 let declare_global_data s =
   `	.globl	{emit_symbol s}\n`;
-  if Config.system = "elf" || Config.system = "bsd" then
+  match Config.system with
+  | "elf" | "bsd" | "bsd_elf" ->
     `	.type	{emit_symbol s}, @object\n`
+  | "rhapsody" -> ()
+  | _ -> assert false
 
 let emit_item = function
     Cglobal_symbol s ->

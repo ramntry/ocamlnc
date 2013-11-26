@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Selection of pseudo-instructions, assignment of pseudo-registers,
    sequentialization. *)
 
@@ -35,7 +33,7 @@ let oper_result_type = function
       end
   | Calloc -> typ_addr
   | Cstore c -> typ_void
-  | Caddi | Csubi | Cmuli | Cdivi | Cmodi |
+  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi |
     Cand | Cor | Cxor | Clsl | Clsr | Casr |
     Ccmpi _ | Ccmpa _ | Ccmpf _ -> typ_int
   | Cadda | Csuba -> typ_addr
@@ -155,7 +153,7 @@ let join_array rs =
 let debuginfo_op = function
   | Capply(_, dbg) -> dbg
   | Cextcall(_, _, _, dbg) -> dbg
-  | Craise dbg -> dbg
+  | Craise (_, dbg) -> dbg
   | Ccheckbound dbg -> dbg
   | _ -> Debuginfo.none
 
@@ -204,7 +202,7 @@ method virtual is_immediate : int -> bool
 (* Selection of addressing modes *)
 
 method virtual select_addressing :
-  Cmm.expression -> Arch.addressing_mode * Cmm.expression
+  Cmm.memory_chunk -> Cmm.expression -> Arch.addressing_mode * Cmm.expression
 
 (* Default instruction selection for stores (of words) *)
 
@@ -219,10 +217,10 @@ method select_operation op args =
   | (Capply(ty, dbg), _) -> (Icall_ind, args)
   | (Cextcall(s, ty, alloc, dbg), _) -> (Iextcall(s, alloc), args)
   | (Cload chunk, [arg]) ->
-      let (addr, eloc) = self#select_addressing arg in
+      let (addr, eloc) = self#select_addressing chunk arg in
       (Iload(chunk, addr), [eloc])
   | (Cstore chunk, [arg1; arg2]) ->
-      let (addr, eloc) = self#select_addressing arg1 in
+      let (addr, eloc) = self#select_addressing chunk arg1 in
       if chunk = Word then begin
         let (op, newarg2) = self#select_store addr arg2 in
         (op, [newarg2; eloc])
@@ -233,19 +231,10 @@ method select_operation op args =
   | (Calloc, _) -> (Ialloc 0, args)
   | (Caddi, _) -> self#select_arith_comm Iadd args
   | (Csubi, _) -> self#select_arith Isub args
-  | (Cmuli, [arg1; Cconst_int n]) ->
-      let l = Misc.log2 n in
-      if n = 1 lsl l
-      then (Iintop_imm(Ilsl, l), [arg1])
-      else self#select_arith_comm Imul args
-  | (Cmuli, [Cconst_int n; arg1]) ->
-      let l = Misc.log2 n in
-      if n = 1 lsl l
-      then (Iintop_imm(Ilsl, l), [arg1])
-      else self#select_arith_comm Imul args
   | (Cmuli, _) -> self#select_arith_comm Imul args
-  | (Cdivi, _) -> self#select_arith Idiv args
-  | (Cmodi, _) -> self#select_arith_comm Imod args
+  | (Cmulhi, _) -> self#select_arith_comm Imulh args
+  | (Cdivi, _) -> (Iintop Idiv, args)
+  | (Cmodi, _) -> (Iintop Imod, args)
   | (Cand, _) -> self#select_arith_comm Iand args
   | (Cor, _) -> self#select_arith_comm Ior args
   | (Cxor, _) -> self#select_arith_comm Ixor args
@@ -366,7 +355,7 @@ method insert_move src dst =
     self#insert (Iop Imove) [|src|] [|dst|]
 
 method insert_moves src dst =
-  for i = 0 to Array.length src - 1 do
+  for i = 0 to min (Array.length src) (Array.length dst) - 1 do
     self#insert_move src.(i) dst.(i)
   done
 
@@ -389,8 +378,7 @@ method insert_op_debug op dbg rs rd =
   rd
 
 method insert_op op rs rd =
-  self#insert (Iop op) rs rd;
-  rd
+  self#insert_op_debug op Debuginfo.none rs rd
 
 (* Add the instructions for the given expression
    at the end of the self sequence *)
@@ -444,13 +432,13 @@ method emit_expr env exp =
       | Some(simple_list, ext_env) ->
           Some(self#emit_tuple ext_env simple_list)
       end
-  | Cop(Craise dbg, [arg]) ->
+  | Cop(Craise (k, dbg), [arg]) ->
       begin match self#emit_expr env arg with
         None -> None
       | Some r1 ->
           let rd = [|Proc.loc_exn_bucket|] in
           self#insert (Iop Imove) r1 rd;
-          self#insert_debug Iraise dbg rd [||];
+          self#insert_debug (Iraise k) dbg rd [||];
           None
       end
   | Cop(Ccmpf comp, args) ->
@@ -490,9 +478,8 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
-              let loc_res = Proc.loc_external_results rd in
-              self#insert_debug (Iop(Iextcall(lbl, alloc))) dbg
-                             loc_arg loc_res;
+              let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
+                                    loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
@@ -821,12 +808,13 @@ method emit_fundecl f =
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;
     fun_body = self#extract;
-    fun_fast = f.Cmm.fun_fast }
+    fun_fast = f.Cmm.fun_fast;
+    fun_dbg  = f.Cmm.fun_dbg }
 
 end
 
 (* Tail call criterion (estimated).  Assumes:
-- all arguments are of type "int" (always the case for Caml function calls)
+- all arguments are of type "int" (always the case for OCaml function calls)
 - one extra argument representing the closure environment (conservative).
 *)
 

@@ -11,14 +11,10 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #include <mlvalues.h>
 #include <alloc.h>
 #include <fail.h>
-#if defined (_WIN32)
-#include <winsock.h>
-#else
+#ifndef _WIN32
 #include <sys/param.h>
 #endif
 #include "unixsupport.h"

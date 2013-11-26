@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #include <string.h>
 #include "config.h"
 #include "fail.h"
@@ -73,13 +71,14 @@ static void clear_table (struct caml_ref_table *tbl)
     tbl->limit = tbl->threshold;
 }
 
+/* size in bytes */
 void caml_set_minor_heap_size (asize_t size)
 {
   char *new_heap;
   void *new_heap_base;
 
-  Assert (size >= Minor_heap_min);
-  Assert (size <= Minor_heap_max);
+  Assert (size >= Bsize_wsize(Minor_heap_min));
+  Assert (size <= Bsize_wsize(Minor_heap_max));
   Assert (size % sizeof (value) == 0);
   if (caml_young_ptr != caml_young_end) caml_minor_collection ();
                                     Assert (caml_young_ptr == caml_young_end);
@@ -160,9 +159,14 @@ void caml_oldify_one (value v, value *p)
 
         Assert (tag == Forward_tag);
         if (Is_block (f)){
-          vv = Is_in_value_area(f);
-          if (vv) {
+          if (Is_young (f)){
+            vv = 1;
             ft = Tag_val (Hd_val (f) == 0 ? Field (f, 0) : f);
+          }else{
+            vv = Is_in_value_area(f);
+            if (vv){
+              ft = Tag_val (f);
+            }
           }
         }
         if (!vv || ft == Forward_tag || ft == Lazy_tag || ft == Double_tag){

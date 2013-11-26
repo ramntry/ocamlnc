@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -29,8 +30,7 @@ let flag_and_dep tags cmd_spec =
   dep tags ps
 
 let stdlib_dir = lazy begin
-  (* FIXME *)
-  let ocamlc_where = sprintf "%s/ocamlc.where" (Pathname.pwd / !Options.build_dir) in
+  let ocamlc_where = !Options.build_dir / (Pathname.mk "ocamlc.where") in
   let () = Command.execute ~quiet:true (Cmd(S[!Options.ocamlc; A"-where"; Sh">"; P ocamlc_where])) in
   String.chomp (read_file ocamlc_where)
 end
@@ -65,17 +65,18 @@ let path_importance path x =
   end
   else if ignore_stdlib x then `just_try else `mandatory
 
-let expand_module include_dirs module_name exts =
-  let dirname = Pathname.dirname module_name in
-  let basename = Pathname.basename module_name in
-  let module_name_cap = dirname/(String.capitalize basename) in
-  let module_name_uncap = dirname/(String.uncapitalize basename) in
-  List.fold_right begin fun include_dir ->
-    List.fold_right begin fun ext acc ->
-      include_dir/(module_name_uncap-.-ext) ::
-      include_dir/(module_name_cap-.-ext) :: acc
-    end exts
-  end include_dirs []
+let expand_module =
+  memo3 (fun include_dirs module_name exts ->
+    let dirname = Pathname.dirname module_name in
+    let basename = Pathname.basename module_name in
+    let module_name_cap = dirname/(String.capitalize basename) in
+    let module_name_uncap = dirname/(String.uncapitalize basename) in
+    List.fold_right begin fun include_dir ->
+      List.fold_right begin fun ext acc ->
+        include_dir/(module_name_uncap-.-ext) ::
+          include_dir/(module_name_cap-.-ext) :: acc
+      end exts
+    end include_dirs [])
 
 let string_list_of_file file =
   with_input_file file begin fun ic ->
@@ -117,6 +118,10 @@ let ocaml_lib ?(extern=false) ?(byte=true) ?(native=true) ?dir ?tag_name libpath
     if not extern then dep tags [lib] (* cannot happen? *)
   in
   Hashtbl.replace info_libraries tag_name (libpath, extern);
+  (* adding [tag_name] to [info_libraries] will make this tag
+     affect include-dir lookups, so it is used even if not
+     mentioned explicitly in any rule. *)
+  Flags.mark_tag_used tag_name;
   if extern then begin
     if byte then
       flag_and_dep ["ocaml"; tag_name; "link"; "byte"] (libpath^".cma");
@@ -145,7 +150,7 @@ let read_path_dependencies =
     with_input_file depends begin fun ic ->
       let ocamldep_output =
         try Lexers.ocamldep_output (Lexing.from_channel ic)
-        with Lexers.Error msg -> raise (Ocamldep_error(Printf.sprintf "Ocamldep.ocamldep: bad output (%s)" msg)) in
+        with Lexers.Error (msg,_) -> raise (Ocamldep_error(Printf.sprintf "Ocamldep.ocamldep: bad output (%s)" msg)) in
       let deps =
         List.fold_right begin fun (path, deps) acc ->
           let module_name' = module_name_of_pathname path in

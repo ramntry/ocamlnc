@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Analysis of source files. This module is strongly inspired from
     driver/main.ml :-) *)
@@ -43,63 +42,12 @@ let initial_env () =
 
 (** Optionally preprocess a source file *)
 let preprocess sourcefile =
-  match !Clflags.preprocessor with
-    None -> sourcefile
-  | Some pp ->
-      let tmpfile = Filename.temp_file "camlpp" "" in
-      let comm = Printf.sprintf "%s %s > %s" pp sourcefile tmpfile in
-      if Ccomp.command comm <> 0 then begin
-        remove_file tmpfile;
-        Printf.eprintf "Preprocessing error\n";
-        exit 2
-      end;
-      tmpfile
-
-(** Remove the input file if this file was the result of a preprocessing.*)
-let remove_preprocessed inputfile =
-  match !Clflags.preprocessor with
-    None -> ()
-  | Some _ -> remove_file inputfile
-
-let remove_preprocessed_if_ast inputfile =
-  match !Clflags.preprocessor with
-    None -> ()
-  | Some _ -> if inputfile <> !Location.input_name then remove_file inputfile
-
-exception Outdated_version
-
-(** Parse a file or get a dumped syntax tree in it *)
-let parse_file inputfile parse_fun ast_magic =
-  let ic = open_in_bin inputfile in
-  let is_ast_file =
-    try
-      let buffer = String.create (String.length ast_magic) in
-      really_input ic buffer 0 (String.length ast_magic);
-      if buffer = ast_magic then true
-      else if String.sub buffer 0 9 = String.sub ast_magic 0 9 then
-        raise Outdated_version
-      else false
-    with
-      Outdated_version ->
-        fatal_error "Ocaml and preprocessor have incompatible versions"
-    | _ -> false
-  in
-  let ast =
-    try
-      if is_ast_file then begin
-        Location.input_name := input_value ic;
-        input_value ic
-      end else begin
-        seek_in ic 0;
-        Location.input_name := inputfile;
-        let lexbuf = Lexing.from_channel ic in
-        Location.init lexbuf inputfile;
-        parse_fun lexbuf
-      end
-    with x -> close_in ic; raise x
-  in
-  close_in ic;
-  ast
+  try
+    Pparse.preprocess sourcefile
+  with Pparse.Error err ->
+    Format.eprintf "Preprocessing error@.%a@."
+      Pparse.report_error err;
+    exit 2
 
 let (++) x f = f x
 
@@ -113,8 +61,11 @@ let process_implementation_file ppf sourcefile =
   let inputfile = preprocess sourcefile in
   let env = initial_env () in
   try
-    let parsetree = parse_file inputfile Parse.implementation ast_impl_magic_number in
-    let typedtree = Typemod.type_implementation sourcefile prefixname modulename env parsetree in
+    let parsetree = Pparse.file Format.err_formatter inputfile Parse.implementation ast_impl_magic_number in
+    let typedtree =
+      Typemod.type_implementation
+        sourcefile prefixname modulename env parsetree
+    in
     (Some (parsetree, typedtree), inputfile)
   with
     e ->
@@ -138,7 +89,7 @@ let process_interface_file ppf sourcefile =
   let modulename = String.capitalize(Filename.basename prefixname) in
   Env.set_unit_name modulename;
   let inputfile = preprocess sourcefile in
-  let ast = parse_file inputfile Parse.interface ast_intf_magic_number in
+  let ast = Pparse.file Format.err_formatter inputfile Parse.interface ast_intf_magic_number in
   let sg = Typemod.transl_signature (initial_env()) ast in
   Warnings.check_fatal ();
   (ast, sg, inputfile)
@@ -149,57 +100,16 @@ module Ast_analyser = Odoc_ast.Analyser (Odoc_comments.Basic_info_retriever)
 (** The module used to analyse the parse tree and typed tree of an interface file.*)
 module Sig_analyser = Odoc_sig.Analyser (Odoc_comments.Basic_info_retriever)
 
-(** Handle an error. This is a partial copy of the compiler
-   driver/error.ml file. We do this because there are
-   some differences between the possibly raised exceptions
-   in the bytecode (error.ml) and opt (opterros.ml) compilers
-   and we don't want to take care of this. Besises, these
-   differences only concern code generation (i believe).*)
+(** Handle an error. *)
+
 let process_error exn =
-  let report ppf = function
-  | Lexer.Error(err, loc) ->
-      Location.print_error ppf loc;
-      Lexer.report_error ppf err
-  | Syntaxerr.Error err ->
-      Syntaxerr.report_error ppf err
-  | Env.Error err ->
-      Location.print_error_cur_file ppf;
-      Env.report_error ppf err
-  | Ctype.Tags(l, l') ->
-      Location.print_error_cur_file ppf;
-      fprintf ppf
-      "In this program,@ variant constructors@ `%s and `%s@ \
-       have the same hash value." l l'
-  | Typecore.Error(loc, err) ->
-      Location.print_error ppf loc; Typecore.report_error ppf err
-  | Typetexp.Error(loc, err) ->
-      Location.print_error ppf loc; Typetexp.report_error ppf err
-  | Typedecl.Error(loc, err) ->
-      Location.print_error ppf loc; Typedecl.report_error ppf err
-  | Includemod.Error err ->
-      Location.print_error_cur_file ppf;
-      Includemod.report_error ppf err
-  | Typemod.Error(loc, err) ->
-      Location.print_error ppf loc; Typemod.report_error ppf err
-  | Translcore.Error(loc, err) ->
-      Location.print_error ppf loc; Translcore.report_error ppf err
-  | Sys_error msg ->
-      Location.print_error_cur_file ppf;
-      fprintf ppf "I/O error: %s" msg
-  | Typeclass.Error(loc, err) ->
-      Location.print_error ppf loc; Typeclass.report_error ppf err
-  | Translclass.Error(loc, err) ->
-      Location.print_error ppf loc; Translclass.report_error ppf err
-  | Warnings.Errors (n) ->
-      Location.print_error_cur_file ppf;
-      fprintf ppf "Error-enabled warnings (%d occurrences)" n
-  | x ->
-      fprintf ppf "@]";
-      fprintf ppf
-        "Compilation error(%s). Use the OCaml compiler to get more details."
-        (Printexc.to_string x)
-  in
-  Format.fprintf Format.err_formatter "@[%a@]@." report exn
+  match Location.error_of_exn exn with
+  | Some err ->
+      fprintf Format.err_formatter "@[%a@]@." Location.report_error err
+  | None ->
+      fprintf Format.err_formatter
+        "Compilation error(%s). Use the OCaml compiler to get more details.@."
+        (Printexc.to_string exn)
 
 (** Process the given file, according to its extension. Return the Module.t created, if any.*)
 let process_file ppf sourcefile =
@@ -233,7 +143,7 @@ let process_file ppf sourcefile =
                 print_string Odoc_messages.ok;
                 print_newline ()
                );
-             remove_preprocessed input_file;
+             Pparse.remove_preprocessed input_file;
              Some file_module
        with
        | Sys_error s
@@ -252,7 +162,7 @@ let process_file ppf sourcefile =
        try
          let (ast, signat, input_file) = process_interface_file ppf file in
          let file_module = Sig_analyser.analyse_signature file
-             !Location.input_name ast signat
+             !Location.input_name ast signat.sig_type
          in
 
          file_module.Odoc_module.m_top_deps <- Odoc_dep.intf_dependencies ast ;
@@ -262,7 +172,7 @@ let process_file ppf sourcefile =
             print_string Odoc_messages.ok;
             print_newline ()
            );
-         remove_preprocessed input_file;
+         Pparse.remove_preprocessed input_file;
          Some file_module
        with
        | Sys_error s
@@ -279,7 +189,11 @@ let process_file ppf sourcefile =
       Location.input_name := file;
       try
         let mod_name =
-          String.capitalize (Filename.basename (Filename.chop_extension file))
+          let s =
+            try Filename.chop_extension file
+            with _ -> file
+          in
+          String.capitalize (Filename.basename s)
         in
         let txt =
           try Odoc_text.Texter.text_of_string (Odoc_misc.input_file_as_string file)
@@ -289,7 +203,7 @@ let process_file ppf sourcefile =
         let m =
           {
             Odoc_module.m_name = mod_name ;
-            Odoc_module.m_type = Types.Tmty_signature [] ;
+            Odoc_module.m_type = Types.Mty_signature [] ;
             Odoc_module.m_info = None ;
             Odoc_module.m_is_interface = true ;
             Odoc_module.m_file = file ;
@@ -297,7 +211,7 @@ let process_file ppf sourcefile =
               [Odoc_module.Element_module_comment txt] ;
             Odoc_module.m_loc =
               { Odoc_types.loc_impl = None ;
-                Odoc_types.loc_inter = Some (file, 0) } ;
+                Odoc_types.loc_inter = Some (Location.in_file file) } ;
             Odoc_module.m_top_deps = [] ;
             Odoc_module.m_code = None ;
             Odoc_module.m_code_intf = None ;

@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Main module for bytecode.
 @todo coucou le todo*)
@@ -30,8 +29,8 @@ let (plugins, paths) =
   let rec iter (files, incs) = function
       [] | _ :: [] -> (List.rev files, List.rev incs)
     | "-g" :: file :: q when
-        ((Filename.check_suffix file "cmo") or
-         (Filename.check_suffix file "cma") or
+        ((Filename.check_suffix file "cmo") ||
+         (Filename.check_suffix file "cma") ||
            (Filename.check_suffix file "cmxs")) ->
       iter (file :: files, incs) q
   | "-i" :: dir :: q ->

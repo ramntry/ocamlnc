@@ -10,8 +10,6 @@
 ;(*                                                                     *)
 ;(***********************************************************************)
 
-;(* $Id$ *)
-
 ; An emacs-lisp complement to the "-annot" option of ocamlc and ocamlopt.
 
 ;; XEmacs compatibility
@@ -38,7 +36,7 @@ Their format is:
   <SP> is a space character (ASCII 0x20)
   <LF> is a line-feed character (ASCII 0x0A)
   num is a sequence of decimal digits
-  filename is a string with the lexical conventions of O'Caml
+  filename is a string with the lexical conventions of OCaml
   open-paren is an open parenthesis (ASCII 0x28)
   close-paren is a closed parenthesis (ASCII 0x29)
   data is any sequence of characters where <LF> is always followed by
@@ -55,6 +53,8 @@ Their format is:
 The current list of keywords is:
 type call ident"
 )
+
+(defvar caml-types-position-re nil)
 
 (let* ((caml-types-filename-re "\"\\(\\([^\\\"]\\|\\\\.\\)*\\)\"")
        (caml-types-number-re "\\([0-9]*\\)"))
@@ -331,7 +331,8 @@ See `caml-types-location-re' for annotation file format.
                  caml-types-annotation-date
                  (not (caml-types-date< caml-types-annotation-date type-date)))
       (if (and type-date target-date (caml-types-date< type-date target-date))
-          (error (format "`%s' is more recent than `%s'" target-path type-path)))
+          (error (format "`%s' is more recent than `%s'"
+                         target-path type-path)))
       (message "Reading annotation file...")
       (let* ((type-buf (caml-types-find-file type-path))
              (tree (with-current-buffer type-buf
@@ -411,8 +412,7 @@ See `caml-types-location-re' for annotation file format.
         (unless (caml-types-not-in-file l-file r-file target-file)
           (setq annotation ())
           (while (next-annotation)
-            (cond ((looking-at
-                    "^\\([a-z]+\\)(\n  \\(\\([^\n)]\\|.)\\|\n[^)]\\)*\\)\n)")
+            (cond ((looking-at "^\\([a-z]+\\)(\n  \\(\\(.*\n  \\)*.*\\)\n)")
                    (let ((kind (caml-types-hcons (match-string 1) table))
                          (info (caml-types-hcons (match-string 2) table)))
                      (setq annotation (cons (cons kind info) annotation))))))
@@ -595,7 +595,7 @@ The function uses two overlays.
  . One overlay delimits the largest region whose all subnodes
    are well-typed.
  . Another overlay delimits the current node under the mouse (whose type
-   annotation is beeing displayed).
+   annotation is being displayed).
 "
   (interactive "e")
   (set-buffer (window-buffer (caml-event-window event)))
@@ -687,30 +687,30 @@ The function uses two overlays.
                            target-pos
                            (vector target-file target-line target-bol cnum))
                      (save-excursion
-                       (setq node (caml-types-find-location "type"
-                                   target-pos () target-tree))
+                       (setq node (caml-types-find-location target-pos "type" ()
+                                                            target-tree))
                        (set-buffer caml-types-buffer)
                        (erase-buffer)
                        (cond
-                        (node
-                         (setq Left
-                               (caml-types-get-pos target-buf (elt node 0))
-                               Right
-                               (caml-types-get-pos target-buf (elt node 1)))
-                         (move-overlay
-                          caml-types-expr-ovl Left Right target-buf)
-                         (setq limits
-                               (caml-types-find-interval target-buf
-                                                         target-pos node)
-                               type (elt node 2))
-                         )
-                        (t
+                        ((null node)
                          (delete-overlay caml-types-expr-ovl)
                          (setq type "*no type information*")
                          (setq limits
                                (caml-types-find-interval
-                                target-buf target-pos target-tree))
+                                target-buf target-pos target-tree)))
+                        (t
+                         (let ((left
+                                (caml-types-get-pos target-buf (elt node 0)))
+                               (right
+                                (caml-types-get-pos target-buf (elt node 1))))
+                         (move-overlay
+                          caml-types-expr-ovl left right target-buf)
+                         (setq limits
+                               (caml-types-find-interval target-buf
+                                                         target-pos node)
+                               type (cdr (assoc "type" (elt node 2))))
                          ))
+                        )
                        (setq mes (format "type: %s" type))
                        (insert type)
                        ))

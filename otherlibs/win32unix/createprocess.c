@@ -11,12 +11,10 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
-#include <windows.h>
 #include <mlvalues.h>
-#include <osdeps.h>
 #include "unixsupport.h"
+#include <windows.h>
+#include <osdeps.h>
 
 static int win_has_console(void);
 
@@ -83,4 +81,9 @@ static int win_has_console(void)
     CloseHandle(h);
     return 1;
   }
+}
+
+CAMLprim value win_terminate_process(value v_pid)
+{
+  return (Val_bool(TerminateProcess((HANDLE) Long_val(v_pid), 0)));
 }

@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (** Operations on objects *)
 
 val copy : (< .. > as 'a) -> 'a
@@ -30,6 +28,9 @@ external id : < .. > -> int = "%field1"
   *)
 
 (**/**)
+
+(* The following is for system use only. Do not call directly. *)
+
 (** For internal use (CamlIDL) *)
 val new_method : string -> CamlinternalOO.tag
 val public_method_label : string -> CamlinternalOO.tag

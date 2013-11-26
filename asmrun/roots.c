@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* To walk the memory roots for garbage collection */
 
 #include "finalise.h"
@@ -129,7 +127,7 @@ void caml_init_frame_descriptors(void)
 
 char * caml_top_of_stack;
 char * caml_bottom_of_stack = NULL; /* no stack initially */
-uintnat caml_last_return_address = 1; /* not in Caml code initially */
+uintnat caml_last_return_address = 1; /* not in OCaml code initially */
 value * caml_gc_regs;
 intnat caml_globals_inited = 0;
 static intnat caml_globals_scanned = 0;
@@ -369,5 +367,3 @@ uintnat caml_stack_usage (void)
     sz += (*caml_stack_usage_hook)();
   return sz;
 }
-
-

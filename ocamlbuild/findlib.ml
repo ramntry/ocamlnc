@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -109,11 +110,27 @@ let rec query name =
           (* TODO: Improve to differenciate whether ocamlfind cannot be
              run or is not installed *)
           error Cannot_run_ocamlfind
-      | Lexers.Error s ->
+      | Lexers.Error (s,_) ->
           error (Cannot_parse_query (name, s))
 
+let split_nl s =
+  let x = ref [] in
+  let rec go s =
+    let pos = String.index s '\n' in
+    x := (String.before s pos)::!x;
+    go (String.after s (pos + 1))
+  in
+  try
+    go s
+  with Not_found -> !x
+
+let before_space s =
+  try
+    String.before s (String.index s ' ')
+  with Not_found -> s
+
 let list () =
-  run_and_parse Lexers.blank_sep_strings "%s list | cut -d' ' -f1" ocamlfind
+  List.map before_space (split_nl & run_and_read "%s list" ocamlfind)
 
 (* The closure algorithm is easy because the dependencies are already closed
 and sorted for each package. We only have to make the union. We could also

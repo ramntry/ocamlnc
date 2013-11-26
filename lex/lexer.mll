@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* The lexical analyzer for lexer definitions. Bootstrapped! *)
 
 {
@@ -36,10 +34,10 @@ let store_string_char c = Buffer.add_char string_buff c
 let get_stored_string () = Buffer.contents string_buff
 
 let char_for_backslash = function
-    'n' -> '\n'
-  | 't' -> '\t'
-  | 'b' -> '\b'
-  | 'r' -> '\r'
+    'n' -> '\010'
+  | 'r' -> '\013'
+  | 'b' -> '\008'
+  | 't' -> '\009'
   | c   -> c
 
 let raise_lexical_error lexbuf msg =
@@ -114,7 +112,7 @@ let identstart =
 let identbody =
   ['A'-'Z' 'a'-'z' '_' '\192'-'\214' '\216'-'\246' '\248'-'\255' '\'' '0'-'9']
 let backslash_escapes =
-  ['\\' '"' '\'' 'n' 't' 'b' 'r']
+  ['\\' '\'' '"' 'n' 't' 'b' 'r' ' ']
 
 rule main = parse
     [' ' '\013' '\009' '\012' ] +
@@ -168,12 +166,13 @@ rule main = parse
     }
   | '{'
     { let p = Lexing.lexeme_end_p lexbuf in
+      let f = p.Lexing.pos_fname in
       let n1 = p.Lexing.pos_cnum
       and l1 = p.Lexing.pos_lnum
       and s1 = p.Lexing.pos_bol in
       brace_depth := 1;
       let n2 = handle_lexical_error action lexbuf in
-      Taction({start_pos = n1; end_pos = n2;
+      Taction({loc_file = f; start_pos = n1; end_pos = n2;
                start_line = l1; start_col = n1 - s1}) }
   | '='  { Tequal }
   | '|'  { Tor }

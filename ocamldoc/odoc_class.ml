@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Representation and manipulation of classes and class types.*)
 
@@ -115,7 +114,7 @@ let rec class_elements ?(trans=true) cl =
     | Class_constraint (c_kind, ct_kind) ->
         iter_kind c_kind
       (* A VOIR : utiliser le c_kind ou le ct_kind ?
-         Pour l'instant, comme le ct_kind n'est pas analysé,
+         Pour l'instant, comme le ct_kind n'est pas analyse,
          on cherche dans le c_kind
          class_type_elements ~trans: trans
          { clt_name = "" ; clt_info = None ;
@@ -248,6 +247,3 @@ let class_type_parameter_text_by_name clt label =
       with
         Not_found ->
           None
-
-
-(* eof $Id$ *)

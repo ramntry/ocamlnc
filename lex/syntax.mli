@@ -10,15 +10,15 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* The shallow abstract syntax *)
 
-type location =
-    { start_pos: int;
-      end_pos: int;
-      start_line: int;
-      start_col: int }
+type location = {
+  loc_file : string;
+  start_pos : int;
+  end_pos : int;
+  start_line : int;
+  start_col : int;
+}
 
 type regular_expression =
     Epsilon

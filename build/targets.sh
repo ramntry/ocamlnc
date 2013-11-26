@@ -10,11 +10,8 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 . config/config.sh
 . build/otherlibs-targets.sh
-. build/camlp4-targets.sh
 
 INSTALL_BIN="$BINDIR"
 export INSTALL_BIN
@@ -62,3 +59,5 @@ if [ -x boot/myocamlbuild.native ]; then
 else
   OCAMLBUILD="./boot/ocamlrun boot/myocamlbuild"
 fi
+
+OCAMLBUILD="$OCAMLBUILD -no-ocamlfind"

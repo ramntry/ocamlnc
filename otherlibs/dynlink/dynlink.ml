@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Dynamic loading of .cmo files *)
 
 open Dynlinkaux  (* REMOVE_ME for ../../debugger/dynlink.ml *)
@@ -35,6 +33,39 @@ type error =
   | Inconsistent_implementation of string
 
 exception Error of error
+
+let () =
+  Printexc.register_printer
+    (function
+      | Error err ->
+          let msg = match err with
+          | Not_a_bytecode_file s ->
+              Printf.sprintf "Not_a_bytecode_file %S" s
+          | Inconsistent_import s ->
+              Printf.sprintf "Inconsistent_import %S" s
+          | Unavailable_unit s ->
+              Printf.sprintf "Unavailable_unit %S" s
+          | Unsafe_file ->
+              "Unsafe_file"
+          | Linking_error (s, Undefined_global s') ->
+              Printf.sprintf "Linking_error (%S, Dynlink.Undefined_global %S)"
+                             s s'
+          | Linking_error (s, Unavailable_primitive s') ->
+              Printf.sprintf "Linking_error (%S, Dynlink.Unavailable_primitive \
+                              %S)" s s'
+          | Linking_error (s, Uninitialized_global s') ->
+              Printf.sprintf "Linking_error (%S, Dynlink.Uninitialized_global \
+                              %S)" s s'
+          | Corrupted_interface s ->
+              Printf.sprintf "Corrupted_interface %S" s
+          | File_not_found s ->
+              Printf.sprintf "File_not_found %S" s
+          | Cannot_open_dll s ->
+              Printf.sprintf "Cannot_open_dll %S" s
+          | Inconsistent_implementation s ->
+              Printf.sprintf "Inconsistent_implementation %S" s in
+          Some (Printf.sprintf "Dynlink.Error(Dynlink.%s)" msg)
+      | _ -> None)
 
 (* Management of interface CRCs *)
 
@@ -121,19 +152,18 @@ let digest_interface unit loadpath =
       raise (Error(File_not_found shortname)) in
   let ic = open_in_bin filename in
   try
-    let buffer = String.create (String.length Config.cmi_magic_number) in
-    really_input ic buffer 0 (String.length Config.cmi_magic_number);
+    let buffer = Misc.input_bytes ic (String.length Config.cmi_magic_number) in
     if buffer <> Config.cmi_magic_number then begin
       close_in ic;
       raise(Error(Corrupted_interface filename))
     end;
-    ignore (input_value ic);
+    let cmi = Cmi_format.input_cmi ic in
+    close_in ic;
     let crc =
-      match input_value ic with
+      match cmi.Cmi_format.cmi_crcs with
         (_, crc) :: _ -> crc
       | _             -> raise(Error(Corrupted_interface filename))
     in
-    close_in ic;
     crc
   with End_of_file | Failure _ ->
     close_in ic;
@@ -159,7 +189,10 @@ let check_unsafe_module cu =
 
 (* Load in-core and execute a bytecode object file *)
 
-let load_compunit ic file_name compunit =
+external register_code_fragment: string -> int -> string -> unit
+                               = "caml_register_code_fragment"
+
+let load_compunit ic file_name file_digest compunit =
   check_consistency file_name compunit;
   check_unsafe_module compunit;
   seek_in ic compunit.cu_pos;
@@ -188,6 +221,11 @@ let load_compunit ic file_name compunit =
       | _ -> assert false in
     raise(Error(Linking_error (file_name, new_error)))
   end;
+  (* PR#5215: identify this code fragment by
+     digest of file contents + unit name.
+     Unit name is needed for .cma files, which produce several code fragments.*)
+  let digest = Digest.string (file_digest ^ compunit.cu_name) in
+  register_code_fragment code code_size digest;
   begin try
     ignore((Meta.reify_bytecode code code_size) ())
   with exn ->
@@ -197,18 +235,21 @@ let load_compunit ic file_name compunit =
 
 let loadfile file_name =
   init();
-  if not (Sys.file_exists file_name) then raise(Error (File_not_found file_name));
+  if not (Sys.file_exists file_name)
+    then raise (Error (File_not_found file_name));
   let ic = open_in_bin file_name in
+  let file_digest = Digest.channel ic (-1) in
+  seek_in ic 0;
   try
-    let buffer = String.create (String.length Config.cmo_magic_number) in
-    begin
-      try really_input ic buffer 0 (String.length Config.cmo_magic_number)
-      with End_of_file -> raise(Error(Not_a_bytecode_file file_name))
-    end;
+    let buffer =
+      try Misc.input_bytes ic (String.length Config.cmo_magic_number)
+      with End_of_file -> raise (Error (Not_a_bytecode_file file_name))
+    in
     if buffer = Config.cmo_magic_number then begin
       let compunit_pos = input_binary_int ic in  (* Go to descriptor *)
       seek_in ic compunit_pos;
-      load_compunit ic file_name (input_value ic : compilation_unit)
+      let cu = (input_value ic : compilation_unit) in
+      load_compunit ic file_name file_digest cu
     end else
     if buffer = Config.cma_magic_number then begin
       let toc_pos = input_binary_int ic in  (* Go to table of contents *)
@@ -220,7 +261,7 @@ let loadfile file_name =
       with Failure reason ->
         raise(Error(Cannot_open_dll reason))
       end;
-      List.iter (load_compunit ic file_name) lib.lib_units
+      List.iter (load_compunit ic file_name file_digest) lib.lib_units
     end else
       raise(Error(Not_a_bytecode_file file_name));
     close_in ic

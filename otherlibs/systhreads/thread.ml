@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id: thread_posix.ml 9547 2010-01-22 12:48:24Z doligez $ *)
-
 (* User-level threads *)
 
 type t
@@ -63,7 +61,7 @@ let _ =
   at_exit
     (fun () ->
         thread_cleanup();
-        (* In case of DLL-embedded Ocaml the preempt_signal handler
+        (* In case of DLL-embedded OCaml the preempt_signal handler
            will point to nowhere after DLL unloading and an accidental
            preempt_signal will crash the main program. So restore the
            default handler. *)
@@ -85,5 +83,6 @@ let select = Unix.select
 
 let wait_pid p = Unix.waitpid [] p
 
-external sigmask : Unix.sigprocmask_command -> int list -> int list = "caml_thread_sigmask"
+external sigmask : Unix.sigprocmask_command -> int list -> int list
+   = "caml_thread_sigmask"
 external wait_signal : int list -> int = "caml_wait_signal"

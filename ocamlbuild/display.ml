@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -120,7 +121,7 @@ let create
     match log_file with
     | None -> None
     | Some fn ->
-        let oc = open_out_gen [Open_text; Open_wronly; Open_creat; Open_trunc] 0o644 fn in
+        let oc = open_out_gen [Open_text; Open_wronly; Open_creat; Open_trunc] 0o666 fn in
         let f = Format.formatter_of_out_channel oc in
         Format.fprintf f "### Starting build.\n";
         Some (f, oc)
@@ -362,7 +363,11 @@ let event di ?(pretend=false) command target tags =
   match di.di_display_line with
   | Classic ->
       if pretend then
-        (if di.di_log_level >= 2 then Format.fprintf di.di_formatter "[cache hit] %s\n%!" command)
+        begin
+          (* This should work, even on Windows *)
+          let command = Filename.basename command in
+          if di.di_log_level >= 2 then Format.fprintf di.di_formatter "[cache hit] %s\n%!" command
+        end
       else
         (if di.di_log_level >= 1 then Format.fprintf di.di_formatter "%s\n%!" command)
   | Sophisticated ds ->

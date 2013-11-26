@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Handling of dynamically-linked libraries *)
 
 (* Extract the name of a DLLs from its external name (xxx.so or -lxxx) *)
@@ -45,6 +43,9 @@ val synchronize_primitive: int -> dll_address -> unit
 
 (* Add the given directories at the head of the search path for DLLs *)
 val add_path: string list -> unit
+
+(* Remove the given directories from the search path for DLLs *)
+val remove_path: string list -> unit
 
 (* Initialization for separate compilation.
    Initialize the DLL search path to the directories given in the

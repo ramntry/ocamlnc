@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* When you change this, you need to update the documentation:
    - man/ocamlc.m   in ocaml
    - man/ocamlopt.m in ocaml
@@ -22,7 +20,7 @@
 type t =
   | Comment_start                           (*  1 *)
   | Comment_not_end                         (*  2 *)
-  | Deprecated                              (*  3 *)
+  | Deprecated of string                    (*  3 *)
   | Fragile_match of string                 (*  4 *)
   | Partial_application                     (*  5 *)
   | Labels_omitted                          (*  6 *)
@@ -56,7 +54,17 @@ type t =
   | Unused_type_declaration of string       (* 34 *)
   | Unused_for_index of string              (* 35 *)
   | Unused_ancestor of string               (* 36 *)
-  | Unused_constructor of string            (* 37 *)
+  | Unused_constructor of string * bool * bool  (* 37 *)
+  | Unused_exception of string * bool       (* 38 *)
+  | Unused_rec_flag                         (* 39 *)
+  | Name_out_of_scope of string * string list * bool (* 40 *)
+  | Ambiguous_name of string list * string list *  bool    (* 41 *)
+  | Disambiguated_name of string            (* 42 *)
+  | Nonoptional_label of string             (* 43 *)
+  | Open_shadow_identifier of string * string (* 44 *)
+  | Open_shadow_label_constructor of string * string (* 45 *)
+  | Bad_env_variable of string * string     (* 46 *)
+  | Attribute_payload of string * string    (* 47 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -68,7 +76,7 @@ type t =
 let number = function
   | Comment_start -> 1
   | Comment_not_end -> 2
-  | Deprecated -> 3
+  | Deprecated _ -> 3
   | Fragile_match _ -> 4
   | Partial_application -> 5
   | Labels_omitted -> 6
@@ -103,9 +111,19 @@ let number = function
   | Unused_for_index _ -> 35
   | Unused_ancestor _ -> 36
   | Unused_constructor _ -> 37
+  | Unused_exception _ -> 38
+  | Unused_rec_flag -> 39
+  | Name_out_of_scope _ -> 40
+  | Ambiguous_name _ -> 41
+  | Disambiguated_name _ -> 42
+  | Nonoptional_label _ -> 43
+  | Open_shadow_identifier _ -> 44
+  | Open_shadow_label_constructor _ -> 45
+  | Bad_env_variable _ -> 46
+  | Attribute_payload _ -> 47
 ;;
 
-let last_warning_number = 37;;
+let last_warning_number = 47
 (* Must be the max number returned by the [number] function. *)
 
 let letter = function
@@ -121,7 +139,7 @@ let letter = function
   | 'h' -> []
   | 'i' -> []
   | 'j' -> []
-  | 'k' -> [32; 33; 34; 35; 36; 37]
+  | 'k' -> [32; 33; 34; 35; 36; 37; 38; 39]
   | 'l' -> [6]
   | 'm' -> [7]
   | 'n' -> []
@@ -142,6 +160,14 @@ let letter = function
 
 let active = Array.create (last_warning_number + 1) true;;
 let error = Array.create (last_warning_number + 1) false;;
+
+type state = bool array * bool array
+let backup () = (Array.copy active, Array.copy error)
+let restore (a, e) =
+  assert(Array.length a = Array.length active);
+  assert(Array.length e = Array.length error);
+  Array.blit a 0 active 0 (Array.length active);
+  Array.blit e 0 error 0 (Array.length error)
 
 let is_active x = active.(number x);;
 let is_error x = error.(number x);;
@@ -200,7 +226,7 @@ let parse_opt flags s =
 let parse_options errflag s = parse_opt (if errflag then error else active) s;;
 
 (* If you change these, don't forget to change them in man/ocamlc.m *)
-let defaults_w = "+a-4-6-7-9-27-29-32..37";;
+let defaults_w = "+a-4-6-7-9-27-29-32..39-41..42-44-45";;
 let defaults_warn_error = "-a";;
 
 let () = parse_options false defaults_w;;
@@ -209,7 +235,7 @@ let () = parse_options true defaults_warn_error;;
 let message = function
   | Comment_start -> "this is the start of a comment."
   | Comment_not_end -> "this is not the end of a comment."
-  | Deprecated -> "this syntax is deprecated."
+  | Deprecated s -> "deprecated feature: " ^ s
   | Fragile_match "" ->
       "this pattern-matching is fragile."
   | Fragile_match s ->
@@ -233,7 +259,7 @@ let message = function
        Here is an example of a value that is not matched:\n" ^ s
   | Non_closed_record_pattern s ->
       "the following labels are not bound in this record pattern:\n" ^ s ^
-      "\nEither bind these labels explicitly or add `; _' to the pattern."
+      "\nEither bind these labels explicitly or add '; _' to the pattern."
   | Statement_type ->
       "this expression should have type unit."
   | Unused_match -> "this match case is unused."
@@ -260,8 +286,8 @@ let message = function
       "this statement never returns (or has an unsound type.)"
   | Camlp4 s -> s
   | Useless_record_with ->
-      "this record is defined by a `with' expression,\n\
-       but no fields are borrowed from the original."
+      "all the fields are explicitly listed in this record:\n\
+       the 'with' clause is useless."
   | Bad_module_name (modname) ->
       "bad source file name: \"" ^ modname ^ "\" is not a valid module name."
   | All_clauses_guarded ->
@@ -283,7 +309,57 @@ let message = function
   | Unused_type_declaration s -> "unused type " ^ s ^ "."
   | Unused_for_index s -> "unused for-loop index " ^ s ^ "."
   | Unused_ancestor s -> "unused ancestor variable " ^ s ^ "."
-  | Unused_constructor s -> "unused constructor " ^ s ^ "."
+  | Unused_constructor (s, false, false) -> "unused constructor " ^ s ^ "."
+  | Unused_constructor (s, true, _) ->
+      "constructor " ^ s ^
+      " is never used to build values.\n\
+        (However, this constructor appears in patterns.)"
+  | Unused_constructor (s, false, true) ->
+      "constructor " ^ s ^
+      " is never used to build values.\n\
+        Its type is exported as a private type."
+  | Unused_exception (s, false) ->
+      "unused exception constructor " ^ s ^ "."
+  | Unused_exception (s, true) ->
+      "exception constructor " ^ s ^
+      " is never raised or used to build values.\n\
+        (However, this constructor appears in patterns.)"
+  | Unused_rec_flag ->
+      "unused rec flag."
+  | Name_out_of_scope (ty, [nm], false) ->
+      nm ^ " was selected from type " ^ ty ^
+      ".\nIt is not visible in the current scope, and will not \n\
+       be selected if the type becomes unknown."
+  | Name_out_of_scope (_, _, false) -> assert false
+  | Name_out_of_scope (ty, slist, true) ->
+      "this record of type "^ ty ^" contains fields that are \n\
+       not visible in the current scope: "
+      ^ String.concat " " slist ^ ".\n\
+       They will not be selected if the type becomes unknown."
+  | Ambiguous_name ([s], tl, false) ->
+      s ^ " belongs to several types: " ^ String.concat " " tl ^
+      "\nThe first one was selected. Please disambiguate if this is wrong."
+  | Ambiguous_name (_, _, false) -> assert false
+  | Ambiguous_name (slist, tl, true) ->
+      "these field labels belong to several types: " ^
+      String.concat " " tl ^
+      "\nThe first one was selected. Please disambiguate if this is wrong."
+  | Disambiguated_name s ->
+      "this use of " ^ s ^ " required disambiguation."
+  | Nonoptional_label s ->
+      "the label " ^ s ^ " is not optional."
+  | Open_shadow_identifier (kind, s) ->
+      Printf.sprintf
+        "this open statement shadows the %s identifier %s (which is later used)"
+        kind s
+  | Open_shadow_label_constructor (kind, s) ->
+      Printf.sprintf
+        "this open statement shadows the %s %s (which is later used)"
+        kind s
+  | Bad_env_variable (var, s) ->
+      Printf.sprintf "illegal environment variable %s : %s" var s
+  | Attribute_payload (a, s) ->
+      Printf.sprintf "illegal payload for attribute '%s'.\n%s" a s
 ;;
 
 let nerrors = ref 0;;
@@ -321,21 +397,21 @@ let descriptions =
   [
     1, "Suspicious-looking start-of-comment mark.";
     2, "Suspicious-looking end-of-comment mark.";
-    3, "Deprecated syntax.";
+    3, "Deprecated feature.";
     4, "Fragile pattern matching: matching that will remain complete even\n\
    \    if additional constructors are added to one of the variant types\n\
    \    matched.";
     5, "Partially applied function: expression whose result has function\n\
    \    type and is ignored.";
     6, "Label omitted in function application.";
-    7, "Some methods are overridden in the class where they are defined.";
+    7, "Method overridden.";
     8, "Partial match: missing cases in pattern-matching.";
     9, "Missing fields in a record pattern.";
    10, "Expression on the left-hand side of a sequence that doesn't have type\n\
    \    \"unit\" (and that is not a function, see warning number 5).";
    11, "Redundant case in a pattern matching (unused match case).";
    12, "Redundant sub-pattern in a pattern-matching.";
-   13, "Override of an instance variable.";
+   13, "Instance variable overridden.";
    14, "Illegal backslash escape in a string constant.";
    15, "Private method made public implicitly.";
    16, "Unerasable optional argument.";
@@ -346,11 +422,13 @@ let descriptions =
    21, "Non-returning statement.";
    22, "Camlp4 warning.";
    23, "Useless record \"with\" clause.";
-   24, "Bad module name: the source file name is not a valid OCaml module name.";
+   24, "Bad module name: the source file name is not a valid OCaml module \
+        name.";
    25, "Pattern-matching with all clauses guarded.  Exhaustiveness cannot be\n\
-   \    checked";
-   26, "Suspicious unused variable: unused variable that is bound with \"let\"\n\
-   \    or \"as\", and doesn't start with an underscore (\"_\") character.";
+   \    checked.";
+   26, "Suspicious unused variable: unused variable that is bound\n\
+   \    with \"let\" or \"as\", and doesn't start with an underscore (\"_\")\n\
+   \    character.";
    27, "Innocuous unused variable: unused variable that is not bound with\n\
    \    \"let\" nor \"as\", and doesn't start with an underscore (\"_\")\n\
    \    character.";
@@ -365,6 +443,16 @@ let descriptions =
    35, "Unused for-loop index.";
    36, "Unused ancestor variable.";
    37, "Unused constructor.";
+   38, "Unused exception constructor.";
+   39, "Unused rec flag.";
+   40, "Constructor or label name used out of scope.";
+   41, "Ambiguous constructor or label name.";
+   42, "Disambiguated constructor or label name.";
+   43, "Nonoptional label applied as optional.";
+   44, "Open statement shadows an already defined identifier.";
+   45, "Open statement shadows an already defined label or constructor.";
+   46, "Illegal environment variable";
+   47, "Illegal attribute payload";
   ]
 ;;
 

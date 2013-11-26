@@ -1,3 +1,15 @@
+#########################################################################
+#                                                                       #
+#                                 OCaml                                 #
+#                                                                       #
+#       Nicolas Pouillard, projet Gallium, INRIA Rocquencourt           #
+#                                                                       #
+#   Copyright 2007 Institut National de Recherche en Informatique et    #
+#   en Automatique.  All rights reserved.  This file is distributed     #
+#   under the terms of the Q Public License version 1.0.                #
+#                                                                       #
+#########################################################################
+
 _tags           # Defines tags to setup exceptions
 myocamlbuild.ml # Contains all needed rules that are differents
 boot/ocamldep
@@ -18,7 +30,6 @@ build/
   fastworld.sh         # Same as above but faster
     boot-c-parts.sh         # Compile byterun, ocamlyacc and asmrun with the Makefiles
     boot.sh                 # Compile the stdlib and ocamlc
-    camlp4-targets.sh       # Setup camlp4 targets
     otherlibs-targets.sh    # Setup otherlibs targets
     targets.sh              # All targets of the OCaml distribution
 
@@ -27,14 +38,9 @@ build/
   distclean.sh         # Clean all generated files
 
   myocamlbuild.sh      # Regenerate the boot/myocamlbuild program
-  mkconfig.sh          # Generate config/config.sh
-  mkmyocamlbuild_config.sh # Generate myocamlbuild_config.ml
+  mk_shell_and_ocamlbuild_config.sh # Generate config/config.sh and myocamlbuild_config.ml
 
-  camlp4-bootstrap.sh
-
-  # Partial stuffs (just camlp4 and ocamlbuild)
+  # Partial stuffs
   mixed-boot.sh
-  camlp4-byte-only.sh
-  camlp4-native-only.sh
   ocamlbuild-byte-only.sh
   ocamlbuild-native-only.sh

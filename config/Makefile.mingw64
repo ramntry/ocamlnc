@@ -11,13 +11,20 @@
 #                                                                       #
 #########################################################################
 
-# $Id: Makefile.mingw 11319 2011-12-16 17:02:48Z xleroy $
-
 # Configuration for Windows, Mingw compiler
 
 ######### General configuration
 
 PREFIX=C:/ocamlmgw64
+
+### Remove this to disable compiling ocamldebug
+WITH_DEBUGGER=ocamldebugger
+
+### Remove this to disable compiling ocamlbuild
+WITH_OCAMLBUILD=ocamlbuild
+
+### Remove this to disable compiling ocamldoc
+WITH_OCAMLDOC=ocamldoc
 
 ### Where to install the binaries
 BINDIR=$(PREFIX)/bin
@@ -39,14 +46,16 @@ MANDIR=$(PREFIX)/man
 TOOLCHAIN=mingw
 
 ### Toolchain prefix
-TOOLPREF=x86_64-w64-mingw32-
+TARGET=x86_64-w64-mingw32
+HOST=$(TARGET)
+
+TOOLPREF=$(TARGET)-
 
 CCOMPTYPE=cc
 O=o
 A=a
 S=s
 SO=s.o
-DO=d.o
 EXE=.exe
 EXT_DLL=.dll
 EXT_OBJ=.$(O)
@@ -57,8 +66,6 @@ SHARPBANGSCRIPTS=false
 PTHREAD_LINK=
 X11_INCLUDES=
 X11_LINK=
-DBM_INCLUDES=
-DBM_LINK=
 BYTECCRPATH=
 SUPPORTS_SHARED_LIBRARIES=true
 SHAREDCCCOMPOPTS=
@@ -66,18 +73,17 @@ MKSHAREDLIBRPATH=
 NATIVECCPROFOPTS=
 NATIVECCRPATH=
 ASM=$(TOOLPREF)as
-ASPP=gcc
+ASPP=$(TOOLPREF)gcc -c
 ASPPPROFFLAGS=
 PROFILING=noprof
-RUNTIMED=noruntimed
 DYNLINKOPTS=
-DEBUGGER=ocamldebugger
 CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 EXTRALIBS=
 NATDYNLINK=true
 CMXS=cmxs
 RUNTIMED=noruntimed
+ASM_CFI_SUPPORTED=false
 
 ########## Configuration for the bytecode compiler
 
@@ -101,7 +107,7 @@ NATIVECCLIBS=-lws2_32
 CPP=$(BYTECC) -E
 
 ### Flexlink
-FLEXLINK=flexlink -chain mingw64
+FLEXLINK=flexlink -chain mingw64 -stack 33554432
 FLEXDIR=$(shell $(FLEXLINK) -where)
 IFLEXDIR=-I"$(FLEXDIR)"
 MKDLL=$(FLEXLINK)
@@ -144,7 +150,7 @@ NATIVECCCOMPOPTS=-O -mms-bitfields -Wall -Wno-unused
 NATIVECCLINKOPTS=
 
 ### Build partially-linked object file
-PACKLD=$(TOOLPREF)ld -r $(NATIVECCLINKOPTS) -o #there must be a space after this '-o'
+PACKLD=$(TOOLPREF)ld -r $(NATIVECCLINKOPTS) -o # must have a space after '-o'
 
 ############# Configuration for the contributed libraries
 
@@ -154,11 +160,36 @@ OTHERLIBRARIES=win32unix str num win32graph dynlink bigarray systhreads
 BNG_ARCH=amd64
 BNG_ASM_LEVEL=1
 
-### Configuration for LablTk (not supported)
-TK_DEFS=
-TK_LINK=
-
 ############# Aliases for common commands
 
 MAKEREC=$(MAKE) -f Makefile.nt
 MAKECMD=$(MAKE)
+
+############# for the testsuite makefiles
+#ml let topdir = "" and wintopdir = "";;
+OTOPDIR=$(WINTOPDIR)
+CTOPDIR=$(TOPDIR)
+CYGPATH=cygpath -m
+DIFF=diff -q --strip-trailing-cr
+CANKILL=false
+SET_LD_PATH=PATH="$(PATH):$(LD_PATH)"
+
+THIS_MAKEFILE=$(filter %config/Makefile,$(MAKEFILE_LIST))
+ifeq ($(filter /%,$(THIS_MAKEFILE)),)
+ROOTDIR:=$(abspath $(dir $(CURDIR)/$(THIS_MAKEFILE))/..)
+else
+ROOTDIR:=$(abspath $(dir $(THIS_MAKEFILE))/..)
+endif
+CAMLRUN:=$(ROOTDIR)/boot/ocamlrun$(EXE)
+OCAMLRUN:=$(CAMLRUN)
+ROOTDIR_COMPAT:=$(shell $(CYGPATH) $(ROOTDIR))
+CAMLC_BIN_BOOT   = $(CAMLRUN) $(ROOTDIR_COMPAT)/boot/ocamlc
+CAMLC_BIN_BYTE   = $(CAMLRUN) $(ROOTDIR_COMPAT)/ocamlc
+CAMLC_BIN_OPT    = $(ROOTDIR_COMPAT)/ocamlc.opt
+CAMLOPT_BIN_BYTE = $(CAMLRUN) $(ROOTDIR_COMPAT)/ocamlopt
+CAMLOPT_BIN_OPT  = $(ROOTDIR_COMPAT)/ocamlopt.opt
+
+CAMLC_BIN   = @ . $(ROOTDIR)/config/ocamlcomp; PS4=""; set -x; $${CAMLC_BIN}
+CAMLOPT_BIN = @ . $(ROOTDIR)/config/ocamlcomp; PS4=""; set -x; $${CAMLOPT_BIN}
+CAMLC_BIN_CMD_TO_EVAL   = . $(ROOTDIR)/config/ocamlcomp; echo $${CAMLC_BIN}
+CAMLOPT_BIN_CMD_TO_EVAL = . $(ROOTDIR)/config/ocamlcomp; echo $${CAMLOPT_BIN}

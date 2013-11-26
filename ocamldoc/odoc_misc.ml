@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 let no_blanks s =
   let len = String.length s in
@@ -334,7 +333,7 @@ let rec get_before_dot s =
     let len = String.length s in
     let n = String.index s '.' in
     if n + 1 >= len then
-      (* le point est le dernier caractère *)
+      (* le point est le dernier caractere *)
       (true, s, "")
     else
       match s.[n+1] with

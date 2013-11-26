@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Printf;;
 
 let printers = ref []
@@ -60,8 +58,12 @@ let to_string x =
             sprintf locfmt file line char (char+6) "Undefined recursive module"
         | _ ->
             let x = Obj.repr x in
-            let constructor = (Obj.magic(Obj.field (Obj.field x 0) 0) : string) in
-            constructor ^ (fields x) in
+            if Obj.tag x <> 0 then
+              (Obj.magic (Obj.field x 0) : string)
+            else
+              let constructor =
+                (Obj.magic (Obj.field (Obj.field x 0) 0) : string) in
+              constructor ^ (fields x) in
   conv !printers
 
 let print fct arg =
@@ -80,6 +82,11 @@ let catch fct arg =
     eprintf "Uncaught exception: %s\n" (to_string x);
     exit 2
 
+type raw_backtrace
+
+external get_raw_backtrace:
+  unit -> raw_backtrace = "caml_get_exception_raw_backtrace"
+
 type loc_info =
   | Known_location of bool   (* is_raise *)
                     * string (* filename *)
@@ -88,8 +95,13 @@ type loc_info =
                     * int    (* end char *)
   | Unknown_location of bool (*is_raise*)
 
-external get_exception_backtrace:
-  unit -> loc_info array option = "caml_get_exception_backtrace"
+(* to avoid warning *)
+let _ = [Known_location (false, "", 0, 0, 0); Unknown_location false]
+
+type backtrace = loc_info array
+
+external convert_raw_backtrace:
+  raw_backtrace -> backtrace option = "caml_convert_raw_backtrace"
 
 let format_loc_info pos li =
   let is_raise =
@@ -110,8 +122,8 @@ let format_loc_info pos li =
       sprintf "%s unknown location"
               info
 
-let print_backtrace outchan =
-  match get_exception_backtrace() with
+let print_exception_backtrace outchan backtrace =
+  match backtrace with
   | None ->
       fprintf outchan
         "(Program not linked with -g, cannot print stack backtrace)\n"
@@ -121,8 +133,15 @@ let print_backtrace outchan =
           fprintf outchan "%s\n" (format_loc_info i a.(i))
       done
 
-let get_backtrace () =
-  match get_exception_backtrace() with
+let print_raw_backtrace outchan raw_backtrace =
+  print_exception_backtrace outchan (convert_raw_backtrace raw_backtrace)
+
+(* confusingly named: prints the global current backtrace *)
+let print_backtrace outchan =
+  print_raw_backtrace outchan (get_raw_backtrace ())
+
+let backtrace_to_string backtrace =
+  match backtrace with
   | None ->
      "(Program not linked with -g, cannot print stack backtrace)\n"
   | Some a ->
@@ -133,8 +152,35 @@ let get_backtrace () =
       done;
       Buffer.contents b
 
+let raw_backtrace_to_string raw_backtrace =
+  backtrace_to_string (convert_raw_backtrace raw_backtrace)
+
+(* confusingly named:
+   returns the *string* corresponding to the global current backtrace *)
+let get_backtrace () =
+  (* we could use the caml_get_exception_backtrace primitive here, but
+     we hope to deprecate it so it's better to just compose the
+     raw stuff *)
+  backtrace_to_string (convert_raw_backtrace (get_raw_backtrace ()))
+
 external record_backtrace: bool -> unit = "caml_record_backtrace"
 external backtrace_status: unit -> bool = "caml_backtrace_status"
 
 let register_printer fn =
   printers := fn :: !printers
+
+
+external get_callstack: int -> raw_backtrace = "caml_get_current_callstack"
+
+
+let exn_slot x =
+  let x = Obj.repr x in
+  if Obj.tag x = 0 then Obj.field x 0 else x
+
+let exn_slot_id x =
+  let slot = exn_slot x in
+  (Obj.obj (Obj.field slot 1) : int)
+
+let exn_slot_name x =
+  let slot = exn_slot x in
+  (Obj.obj (Obj.field slot 0) : string)

@@ -11,9 +11,7 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
-#include <misc.h>
+#include "misc.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>

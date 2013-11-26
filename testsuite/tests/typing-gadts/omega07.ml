@@ -10,7 +10,7 @@
 type ('a,'b) sum = Inl of 'a | Inr of 'b
 
 type zero = Zero
-type _ succ
+type 'a succ = Succ of 'a
 type _ nat =
   | NZ : zero nat
   | NS : 'a nat -> 'a succ nat
@@ -58,16 +58,16 @@ let rec app : type a n m. (a,n) seq -> (a,m) seq -> (a,n,m) app =
 
 (* We do not have kinds, but we can encode them as predicates *)
 
-type tp
-type nd
-type (_,_) fk
+type tp = TP
+type nd = ND
+type ('a,'b) fk = FK
 type _ shape =
   | Tp : tp shape
   | Nd : nd shape
   | Fk : 'a shape * 'b shape -> ('a,'b) fk shape
 ;;
-type tt
-type ff
+type tt = TT
+type ff = FF
 type _ boolean =
   | BT : tt boolean
   | BF : ff boolean
@@ -149,6 +149,27 @@ let rec sameNat : type a b. a nat -> b nat -> (a,b) equal option = fun a b ->
       | None -> None
       end
   | _ -> None
+;;
+
+(* Extra: associativity of addition *)
+
+let rec plus_func : type a b m n.
+  (a,b,m) plus -> (a,b,n) plus -> (m,n) equal =
+  fun p1 p2 ->
+  match p1, p2 with
+  | PlusZ _, PlusZ _ -> Eq
+  | PlusS p1', PlusS p2' ->
+      let Eq = plus_func p1' p2' in Eq
+
+let rec plus_assoc : type a b c ab bc m n.
+  (a,b,ab) plus -> (ab,c,m) plus ->
+  (b,c,bc) plus -> (a,bc,n) plus -> (m,n) equal = fun p1 p2 p3 p4 ->
+  match p1, p4 with
+  | PlusZ b, PlusZ bc ->
+      let Eq = plus_func p2 p3 in Eq
+  | PlusS p1', PlusS p4' ->
+      let PlusS p2' = p2 in
+      let Eq = plus_assoc p1' p2' p3 p4' in Eq
 ;;
 
 (* 3.9 Computing Programs and Properties Simultaneously *)
@@ -367,8 +388,8 @@ let delete x (Avl t) =
 
 (* Exercise 22: Red-black trees *)
 
-type red
-type black
+type red = RED
+type black = BLACK
 type (_,_) sub_tree =
   | Bleaf : (black, zero) sub_tree
   | Rnode :
@@ -537,8 +558,8 @@ let v4 = eval_term [] ex4
 
 (* 5.9/5.10 Language with binding *)
 
-type rnil
-type (_,_,_) rcons
+type rnil = RNIL
+type ('a,'b,'c) rcons = RCons of 'a * 'b * 'c
 
 type _ is_row =
   | Rnil  : rnil is_row
@@ -687,14 +708,14 @@ let v2 = eval_checked env0 c2 ;;
 
 (* 5.12 Soundness *)
 
-type pexp
-type pval
+type pexp = PEXP
+type pval = PVAL
 type _ mode =
   | Pexp : pexp mode
   | Pval : pval mode
 
-type (_,_) tarr
-type tint
+type ('a,'b) tarr = TARR
+type tint = TINT
 
 type (_,_) rel =
   | IntR : (tint, int) rel

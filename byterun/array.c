@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Operations on arrays */
 
 #include <string.h>
@@ -135,6 +133,16 @@ CAMLprim value caml_array_unsafe_set(value array, value index, value newval)
     return caml_array_unsafe_set_float(array, index, newval);
   else
     return caml_array_unsafe_set_addr(array, index, newval);
+}
+
+CAMLprim value caml_make_float_vect(value len)
+{
+  mlsize_t wsize = Long_val(len) * Double_wosize;
+  if (wsize == 0)
+    return Atom(0);
+  if (wsize > Max_wosize)
+    caml_invalid_argument("Array.make");
+  return caml_alloc(wsize, Double_array_tag);
 }
 
 CAMLprim value caml_make_vect(value len, value init)
@@ -321,11 +329,12 @@ static value caml_array_gather(intnat num_arrays,
            count--, src++, pos++) {
         caml_initialize(&Field(res, pos), *src);
       }
-      /* Many caml_initialize in a row can create a lot of old-to-young
-         refs.  Give the minor GC a chance to run if it needs to. */
-      res = caml_check_urgent_gc(res);
     }
     Assert(pos == size);
+
+    /* Many caml_initialize in a row can create a lot of old-to-young
+       refs.  Give the minor GC a chance to run if it needs to. */
+    res = caml_check_urgent_gc(res);
   }
   CAMLreturn (res);
 }

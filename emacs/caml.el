@@ -10,9 +10,7 @@
 ;(*                                                                     *)
 ;(***********************************************************************)
 
-;(* $Id$ *)
-
-;;; caml.el --- O'Caml code editing commands for Emacs
+;;; caml.el --- OCaml code editing commands for Emacs
 
 ;; Xavier Leroy, july 1993.
 
@@ -407,26 +405,27 @@ have caml-electric-indent on, which see.")
   "Syntax table in use in Caml mode buffers.")
 (if caml-mode-syntax-table
     ()
-  (setq caml-mode-syntax-table (make-syntax-table))
-  ; backslash is an escape sequence
-  (modify-syntax-entry ?\\ "\\" caml-mode-syntax-table)
-  ; ( is first character of comment start
-  (modify-syntax-entry ?\( "()1n" caml-mode-syntax-table)
-  ; * is second character of comment start,
-  ; and first character of comment end
-  (modify-syntax-entry ?*  ". 23n" caml-mode-syntax-table)
-  ; ) is last character of comment end
-  (modify-syntax-entry ?\) ")(4" caml-mode-syntax-table)
-  ; backquote was a string-like delimiter (for character literals)
-  ; (modify-syntax-entry ?` "\"" caml-mode-syntax-table)
-  ; quote and underscore are part of words
-  (modify-syntax-entry ?' "w" caml-mode-syntax-table)
-  (modify-syntax-entry ?_ "w" caml-mode-syntax-table)
-  ; ISO-latin accented letters and EUC kanjis are part of words
-  (let ((i 160))
-    (while (< i 256)
-      (modify-syntax-entry i "w" caml-mode-syntax-table)
-      (setq i (1+ i)))))
+  (let ((n (if (string-match "XEmacs" (emacs-version)) "" "n")))
+    (setq caml-mode-syntax-table (make-syntax-table))
+    ; backslash is an escape sequence
+    (modify-syntax-entry ?\\ "\\" caml-mode-syntax-table)
+    ; ( is first character of comment start
+    (modify-syntax-entry ?\( (concat "()1" n) caml-mode-syntax-table)
+    ; * is second character of comment start,
+    ; and first character of comment end
+    (modify-syntax-entry ?*  (concat ". 23" n) caml-mode-syntax-table)
+    ; ) is last character of comment end
+    (modify-syntax-entry ?\) ")(4" caml-mode-syntax-table)
+    ; backquote was a string-like delimiter (for character literals)
+    ; (modify-syntax-entry ?` "\"" caml-mode-syntax-table)
+    ; quote and underscore are part of words
+    (modify-syntax-entry ?' "w" caml-mode-syntax-table)
+    (modify-syntax-entry ?_ "w" caml-mode-syntax-table)
+    ; ISO-latin accented letters and EUC kanjis are part of words
+    (let ((i 160))
+      (while (< i 256)
+        (modify-syntax-entry i "w" caml-mode-syntax-table)
+        (setq i (1+ i))))))
 
 (defvar caml-mode-abbrev-table nil
   "Abbrev table used for Caml mode buffers.")
@@ -484,7 +483,7 @@ have caml-electric-indent on, which see.")
   "Hook for caml-mode")
 
 (defun caml-mode ()
-  "Major mode for editing Caml code.
+  "Major mode for editing OCaml code.
 
 \\{caml-mode-map}"
 
@@ -543,36 +542,41 @@ have caml-electric-indent on, which see.")
         (caml-show-imenu)))
   (run-hooks 'caml-mode-hook))
 
-(defun caml-set-compile-command ()
-  "Hook to set compile-command locally, unless there is a Makefile or
-   a _build directory or a _tags file in the current directory."
-  (interactive)
-  (unless (or (null buffer-file-name)
-              (file-exists-p "makefile")
-              (file-exists-p "Makefile")
-              (file-exists-p "_build")
-              (file-exists-p "_tags"))
-    (let* ((filename (file-name-nondirectory buffer-file-name))
-           (basename (file-name-sans-extension filename))
-           (command nil))
-      (cond
-       ((string-match ".*\\.mli\$" filename)
-        (setq command "ocamlc -c"))
-       ((string-match ".*\\.ml\$" filename)
-        (setq command "ocamlc -c") ; (concat "ocamlc -o " basename)
-        )
-       ((string-match ".*\\.mll\$" filename)
-        (setq command "ocamllex"))
-       ((string-match ".*\\.mll\$" filename)
-        (setq command "ocamlyacc"))
-       )
-      (if command
-          (progn
-            (make-local-variable 'compile-command)
-            (setq compile-command (concat command " " filename))))
-      )))
 
-(add-hook 'caml-mode-hook 'caml-set-compile-command)
+;; Disabled because it assumes make and does not play well with ocamlbuild.
+;; See PR#4469 for details.
+
+;; (defun caml-set-compile-command ()
+;;   "Hook to set compile-command locally, unless there is a Makefile or
+;;    a _build directory or a _tags file in the current directory."
+;;   (interactive)
+;;   (unless (or (null buffer-file-name)
+;;               (file-exists-p "makefile")
+;;               (file-exists-p "Makefile")
+;;               (file-exists-p "_build")
+;;               (file-exists-p "_tags"))
+;;     (let* ((filename (file-name-nondirectory buffer-file-name))
+;;            (basename (file-name-sans-extension filename))
+;;            (command nil))
+;;       (cond
+;;        ((string-match ".*\\.mli\$" filename)
+;;         (setq command "ocamlc -c"))
+;;        ((string-match ".*\\.ml\$" filename)
+;;         (setq command "ocamlc -c") ; (concat "ocamlc -o " basename)
+;;         )
+;;        ((string-match ".*\\.mll\$" filename)
+;;         (setq command "ocamllex"))
+;;        ((string-match ".*\\.mll\$" filename)
+;;         (setq command "ocamlyacc"))
+;;        )
+;;       (if command
+;;           (progn
+;;             (make-local-variable 'compile-command)
+;;             (setq compile-command (concat command " " filename))))
+;;       )))
+
+;; (add-hook 'caml-mode-hook 'caml-set-compile-command)
+
 
 ;;; Auxiliary function. Garrigue 96-11-01.
 
@@ -588,7 +592,7 @@ have caml-electric-indent on, which see.")
 ;;; subshell support
 
 (defun caml-eval-region (start end)
-  "Send the current region to the inferior Caml process."
+  "Send the current region to the inferior OCaml process."
   (interactive"r")
   (require 'inf-caml)
   (inferior-caml-eval-region start end))
@@ -596,7 +600,7 @@ have caml-electric-indent on, which see.")
 ;; old version ---to be deleted later
 ;
 ; (defun caml-eval-phrase ()
-;   "Send the current Caml phrase to the inferior Caml process."
+;   "Send the current OCaml phrase to the inferior Caml process."
 ;   (interactive)
 ;   (save-excursion
 ;     (let ((bounds (caml-mark-phrase)))
@@ -693,14 +697,14 @@ the current point."
        ((looking-at "[ \t]*method")
         (setq method-alist (cons index method-alist)))))
     ;; build menu
-    (mapcar
-     '(lambda (pair)
-        (if (symbol-value (cdr pair))
-            (setq menu-alist
-                  (cons
-                   (cons (car pair)
-                         (sort (symbol-value (cdr pair)) 'imenu--sort-by-name))
-                   menu-alist))))
+    (mapc
+     (lambda (pair)
+       (if (symbol-value (cdr pair))
+           (setq menu-alist
+                 (cons
+                  (cons (car pair)
+                        (sort (symbol-value (cdr pair)) 'imenu--sort-by-name))
+                  menu-alist))))
      '(("Values" . value-alist)
        ("Types" . type-alist)
        ("Modules" . module-alist)
@@ -789,17 +793,32 @@ variable caml-mode-indentation."
 ;; In Emacs 19, the regexps in compilation-error-regexp-alist do not
 ;; match the error messages when the language is not English.
 ;; Hence we add a regexp.
+;; FIXME do we (still) have i18n of error messages ???
 
 (defconst caml-error-regexp
   "^[ A-\377]+ \"\\([^\"\n]+\\)\", [A-\377]+ \\([0-9]+\\)[-,:]"
   "Regular expression matching the error messages produced by camlc.")
 
+;; Newer emacs versions support line/char ranges
+;; We will adapt OCaml to output error messages in a compatible format.
+;; In the meantime we add the new format here in addition to the old one.
+(defconst caml-error-regexp-newstyle
+  (concat "^[ A-\377]+ \"\\([^\"\n]+\\)\", line \\([0-9]+\\),"
+          "char \\([0-9]+\\) to line \\([0-9]+\\), char \\([0-9]+\\):")
+  "Regular expression matching the error messages produced by ocamlc/ocamlopt.")
+
 (if (boundp 'compilation-error-regexp-alist)
-    (or (assoc caml-error-regexp
-               compilation-error-regexp-alist)
-        (setq compilation-error-regexp-alist
-              (cons (list caml-error-regexp 1 2)
-               compilation-error-regexp-alist))))
+    (progn
+      (or (assoc caml-error-regexp
+                 compilation-error-regexp-alist)
+          (setq compilation-error-regexp-alist
+                (cons (list caml-error-regexp 1 2)
+                      compilation-error-regexp-alist)))
+      (or (assoc caml-error-regexp-newstyle
+                 compilation-error-regexp-alist)
+          (setq compilation-error-regexp-alist
+                (cons (list caml-error-regexp-newstyle 1 '(2 . 4) '(3 . 5))
+                      compilation-error-regexp-alist)))))
 
 ;; A regexp to extract the range info
 
@@ -825,7 +844,7 @@ from an error message produced by camlc.")
 ;that way we get our effect even when we do \C-x` in compilation buffer
 
 (defadvice next-error (after caml-next-error activate)
- "Reads the extra positional information provided by the Caml compiler.
+ "Reads the extra positional information provided by the OCaml compiler.
 
 Puts the point and the mark exactly around the erroneous program
 fragment. The erroneous fragment is also temporarily highlighted if
@@ -903,7 +922,7 @@ whole string."
 ;; itz Thu Sep 24 19:02:42 PDT 1998 this is to have some level of
 ;; comfort when sending phrases to the toplevel and getting errors.
 (defun caml-goto-phrase-error ()
-  "Find the error location in current Caml phrase."
+  "Find the error location in current OCaml phrase."
   (interactive)
   (require 'inf-caml)
   (let ((bounds (save-excursion (caml-mark-phrase))))
@@ -984,7 +1003,7 @@ to the end.
     beg))
 
 (defun caml-mark-phrase (&optional min-pos max-pos)
-  "Put mark at end of this Caml phrase, point at beginning.
+  "Put mark at end of this OCaml phrase, point at beginning.
 "
   (interactive)
   (let* ((beg (caml-find-phrase min-pos max-pos)) (end (point)))
@@ -1185,6 +1204,11 @@ Used to distinguish it from toplevel let construct.")
 (defconst caml-kwop-regexps (make-vector 9 nil)
   "Array of regexps representing caml keywords of different priorities.")
 
+(defun caml-in-shebang-line ()
+  (save-excursion
+    (beginning-of-line)
+    (and (= 1 (point)) (looking-at "#!"))))
+
 (defun caml-in-expr-p ()
   (let ((pos (point)) (in-expr t))
     (caml-find-kwop
@@ -1192,6 +1216,8 @@ Used to distinguish it from toplevel let construct.")
              caml-matching-kw-regexp "\\|"
              (aref caml-kwop-regexps caml-max-indent-priority)))
     (cond
+     ; special case for #! at beginning of file
+     ((caml-in-shebang-line) (setq in-expr nil))
      ; special case for ;;
      ((and (> (point) 1) (= (preceding-char) ?\;) (= (following-char) ?\;))
       (setq in-expr nil))
@@ -1756,7 +1782,7 @@ by |, insert one."
       (goto-char (match-end 0))))
 
 ;; to mark phrases, so that repeated calls will take several of them
-;; knows little about Ocaml appart literals and comments, so it should work
+;; knows little about OCaml except literals and comments, so it should work
 ;; with other dialects as long as ;; marks the end of phrase.
 
 (defun caml-indent-phrase (arg)
@@ -1912,7 +1938,7 @@ with prefix arg, indent that many phrases starting with the current phrase."
     (beginning-of-line 1)
     (backward-char 4)))
 
-(autoload 'run-caml "inf-caml" "Run an inferior Caml process." t)
+(autoload 'run-caml "inf-caml" "Run an inferior OCaml process." t)
 
 (autoload 'caml-types-show-type "caml-types"
   "Show the type of expression or pattern at point." t)

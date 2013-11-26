@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 external format_float: string -> float -> string
   = "caml_format_float"
 external format_int: string -> int -> string
@@ -66,7 +64,7 @@ end
 let bad_conversion sfmt i c =
   invalid_arg
     ("Printf: bad conversion %" ^ String.make 1 c ^ ", at char number " ^
-     string_of_int i ^ " in format string ``" ^ sfmt ^ "''")
+     string_of_int i ^ " in format string \'" ^ sfmt ^ "\'")
 ;;
 
 let bad_conversion_format fmt i c =
@@ -75,11 +73,12 @@ let bad_conversion_format fmt i c =
 
 let incomplete_format fmt =
   invalid_arg
-    ("Printf: premature end of format string ``" ^
-     Sformat.to_string fmt ^ "''")
+    ("Printf: premature end of format string \'" ^
+     Sformat.to_string fmt ^ "\'")
 ;;
 
-(* Parses a string conversion to return the specified length and the padding direction. *)
+(* Parses a string conversion to return the specified length and the
+   padding direction. *)
 let parse_string_conversion sfmt =
   let rec parse neg i =
     if i >= String.length sfmt then (0, neg) else
@@ -150,21 +149,21 @@ let extract_format fmt start stop widths =
 ;;
 
 let extract_format_int conv fmt start stop widths =
-   let sfmt = extract_format fmt start stop widths in
-   match conv with
-   | 'n' | 'N' ->
-     sfmt.[String.length sfmt - 1] <- 'u';
-     sfmt
-   | _ -> sfmt
+  let sfmt = extract_format fmt start stop widths in
+  match conv with
+  | 'n' | 'N' ->
+    sfmt.[String.length sfmt - 1] <- 'u';
+    sfmt
+  | _ -> sfmt
 ;;
 
 let extract_format_float conv fmt start stop widths =
-   let sfmt = extract_format fmt start stop widths in
-   match conv with
-   | 'F' ->
-     sfmt.[String.length sfmt - 1] <- 'g';
-     sfmt
-   | _ -> sfmt
+  let sfmt = extract_format fmt start stop widths in
+  match conv with
+  | 'F' ->
+    sfmt.[String.length sfmt - 1] <- 'g';
+    sfmt
+  | _ -> sfmt
 ;;
 
 (* Returns the position of the next character following the meta format
@@ -307,7 +306,7 @@ let ac_of_format fmt =
   ac
 ;;
 
-let count_arguments_of_format fmt =
+let count_printing_arguments_of_format fmt =
   let ac = ac_of_format fmt in
   (* For printing, only the regular arguments have to be counted. *)
   ac.ac_rglr
@@ -321,12 +320,12 @@ let list_iter_i f l =
   loop 0 l
 ;;
 
-(* ``Abstracting'' version of kprintf: returns a (curried) function that
+(* 'Abstracting' version of kprintf: returns a (curried) function that
    will print when totally applied.
    Note: in the following, we are careful not to be badly caught
    by the compiler optimizations for the representation of arrays. *)
 let kapr kpr fmt =
-  match count_arguments_of_format fmt with
+  match count_printing_arguments_of_format fmt with
   | 0 -> kpr fmt [||]
   | 1 -> Obj.magic (fun x ->
       let a = Array.make 1 (Obj.repr 0) in
@@ -372,17 +371,17 @@ type positional_specification =
 (* To scan an optional positional parameter specification,
    i.e. an integer followed by a [$].
 
-   Calling [got_spec] with appropriate arguments, we ``return'' a positional
+   Calling [got_spec] with appropriate arguments, we 'return' a positional
    specification and an index to go on scanning the [fmt] format at hand.
 
    Note that this is optimized for the regular case, i.e. no positional
-   parameter, since in this case we juste ``return'' the constant
-   [Spec_none]; in case we have a positional parameter, we ``return'' a
+   parameter, since in this case we juste 'return' the constant
+   [Spec_none]; in case we have a positional parameter, we 'return' a
    [Spec_index] [positional_specification] which is a bit more costly.
 
    Note also that we do not support [*$] specifications, since this would
    lead to type checking problems: a [*$] positional specification means
-   ``take the next argument to [printf] (which must be an integer value)'',
+   'take the next argument to [printf] (which must be an integer value)',
    name this integer value $n$; [*$] now designates parameter $n$.
 
    Unfortunately, the type of a parameter specified via a [*$] positional
@@ -455,10 +454,13 @@ let format_float_lexeme =
     valid_float_loop 0 in
 
   (fun sfmt x ->
-   let s = format_float sfmt x in
    match classify_float x with
-   | FP_normal | FP_subnormal | FP_zero -> make_valid_float_lexeme s
-   | FP_nan | FP_infinite -> s)
+   | FP_normal | FP_subnormal | FP_zero ->
+       make_valid_float_lexeme (format_float sfmt x)
+   | FP_infinite ->
+       if x < 0.0 then "neg_infinity" else "infinity"
+   | FP_nan ->
+       "nan")
 ;;
 
 (* Decode a format string and act on it.
@@ -467,11 +469,16 @@ let format_float_lexeme =
    After consuming the appropriate number of arguments and formatting
    them, one of the following five continuations described below is called:
 
-   - [cont_s] for outputting a string (arguments: arg num, string, next pos)
-   - [cont_a] for performing a %a action (arguments: arg num, fn, arg, next pos)
-   - [cont_t] for performing a %t action (arguments: arg num, fn, next pos)
-   - [cont_f] for performing a flush action (arguments: arg num, next pos)
-   - [cont_m] for performing a %( action (arguments: arg num, sfmt, next pos)
+   - [cont_s] for outputting a string
+     (arguments: arg num, string, next pos)
+   - [cont_a] for performing a %a action
+     (arguments: arg num, fn, arg, next pos)
+   - [cont_t] for performing a %t action
+     (arguments: arg num, fn, next pos)
+   - [cont_f] for performing a flush action
+     (arguments: arg num, next pos)
+   - [cont_m] for performing a %( action
+     (arguments: arg num, sfmt, next pos)
 
    "arg num" is the index in array [args] of the next argument to [printf].
    "next pos" is the position in [fmt] of the first character following
@@ -536,8 +543,11 @@ let scan_format fmt args n pos cont_s cont_a cont_t cont_f cont_m =
     | 'F' as conv ->
       let (x : float) = get_arg spec n in
       let s =
-        if widths = [] then Pervasives.string_of_float x else
-        format_float_lexeme (extract_format_float conv fmt pos i widths) x in
+        format_float_lexeme
+          (if widths = []
+           then "%.12g"
+           else extract_format_float conv fmt pos i widths)
+          x in
       cont_s (next_index spec n) s (succ i)
     | 'B' | 'b' ->
       let (x : bool) = get_arg spec n in
@@ -579,15 +589,15 @@ let scan_format fmt args n pos cont_s cont_a cont_t cont_f cont_m =
     | '{' | '(' as conv (* ')' '}' *) ->
       let (xf : ('a, 'b, 'c, 'd, 'e, 'f) format6) = get_arg spec n in
       let i = succ i in
-      let j = sub_format_for_printf conv fmt i in
+      let i = sub_format_for_printf conv fmt i in
       if conv = '{' (* '}' *) then
         (* Just print the format argument as a specification. *)
         cont_s
           (next_index spec n)
           (summarize_format_type xf)
-          j else
+          i else
         (* Use the format argument instead of the format specification. *)
-        cont_m (next_index spec n) xf j
+        cont_m (next_index spec n) xf i
     | (* '(' *) ')' ->
       cont_s n "" (succ i)
     | conv ->
@@ -601,6 +611,8 @@ let mkprintf to_s get_out outc outs flush k fmt =
   (* [out] is global to this definition of [pr], and must be shared by all its
      recursive calls (if any). *)
   let out = get_out fmt in
+  let outc c = outc out c in
+  let outs s = outs out s in
 
   let rec pr k n fmt v =
 
@@ -610,25 +622,28 @@ let mkprintf to_s get_out outc outs flush k fmt =
        if i >= len then Obj.magic (k out) else
        match Sformat.unsafe_get fmt i with
        | '%' -> scan_format fmt v n i cont_s cont_a cont_t cont_f cont_m
-       |  c  -> outc out c; doprn n (succ i)
+       |  c  -> outc c; doprn n (succ i)
+
     and cont_s n s i =
-      outs out s; doprn n i
+      outs s; doprn n i
     and cont_a n printer arg i =
       if to_s then
-        outs out ((Obj.magic printer : unit -> _ -> string) () arg)
+        outs ((Obj.magic printer : unit -> _ -> string) () arg)
       else
         printer out arg;
       doprn n i
     and cont_t n printer i =
       if to_s then
-        outs out ((Obj.magic printer : unit -> string) ())
+        outs ((Obj.magic printer : unit -> string) ())
       else
         printer out;
       doprn n i
     and cont_f n i =
       flush out; doprn n i
     and cont_m n xf i =
-      let m = Sformat.add_int_index (count_arguments_of_format xf) n in
+      let m =
+        Sformat.add_int_index
+          (count_printing_arguments_of_format xf) n in
       pr (Obj.magic (fun _ -> doprn m i)) n xf v in
 
     doprn n 0 in
@@ -638,12 +653,19 @@ let mkprintf to_s get_out outc outs flush k fmt =
   kapr kpr fmt
 ;;
 
+(**************************************************************
+
+  Defining [fprintf] and various flavors of [fprintf].
+
+ **************************************************************)
+
 let kfprintf k oc =
   mkprintf false (fun _ -> oc) output_char output_string flush k
 ;;
-let ifprintf _ = kapr (fun _ -> Obj.magic ignore);;
+let ikfprintf k oc = kapr (fun _ _ -> Obj.magic (k oc));;
 
 let fprintf oc = kfprintf ignore oc;;
+let ifprintf oc = ikfprintf ignore oc;;
 let printf fmt = fprintf stdout fmt;;
 let eprintf fmt = fprintf stderr fmt;;
 
@@ -671,7 +693,12 @@ let ksprintf k =
 
 let sprintf fmt = ksprintf (fun s -> s) fmt;;
 
-(* Obsolete and deprecated. *)
+(**************************************************************
+
+  Deprecated stuff.
+
+ **************************************************************)
+
 let kprintf = ksprintf;;
 
 (* For OCaml system internal use only: needed to implement modules [Format]
@@ -692,6 +719,9 @@ module CamlinternalPr = struct
     ;;
 
     let ac_of_format = ac_of_format;;
+
+    let count_printing_arguments_of_format =
+      count_printing_arguments_of_format;;
 
     let sub_format = sub_format;;
 

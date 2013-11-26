@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* To assign numbers to globals and primitives *)
 
 open Misc
@@ -126,7 +124,7 @@ let output_primitive_table outchan =
     fprintf outchan "  %s,\n" prim.(i)
   done;
   fprintf outchan "  (primitive) 0 };\n";
-  fprintf outchan "char * caml_names_of_builtin_cprim[] = {\n";
+  fprintf outchan "const char * caml_names_of_builtin_cprim[] = {\n";
   for i = 0 to Array.length prim - 1 do
     fprintf outchan "  \"%s\",\n" prim.(i)
   done;
@@ -136,13 +134,17 @@ let output_primitive_table outchan =
 
 let init () =
   (* Enter the predefined exceptions *)
-  Array.iter
-    (fun name ->
+  Array.iteri
+    (fun i name ->
       let id =
         try List.assoc name Predef.builtin_values
         with Not_found -> fatal_error "Symtable.init" in
       let c = slot_for_setglobal id in
-      let cst = Const_block(0, [Const_base(Const_string name)]) in
+      let cst = Const_block(Obj.object_tag,
+                            [Const_base(Const_string (name, None));
+                             Const_base(Const_int (-i-1))
+                            ])
+      in
       literal_table := (c, cst) :: !literal_table)
     Runtimedef.builtin_exceptions;
   (* Initialize the known C primitives *)
@@ -177,31 +179,34 @@ let init () =
 (* Must use the unsafe String.set here because the block may be
    a "fake" string as returned by Meta.static_alloc. *)
 
-let patch_int buff pos n =
-  String.unsafe_set buff pos (Char.unsafe_chr n);
-  String.unsafe_set buff (pos + 1) (Char.unsafe_chr (n asr 8));
-  String.unsafe_set buff (pos + 2) (Char.unsafe_chr (n asr 16));
-  String.unsafe_set buff (pos + 3) (Char.unsafe_chr (n asr 24))
+let gen_patch_int str_set buff pos n =
+  str_set buff pos (Char.unsafe_chr n);
+  str_set buff (pos + 1) (Char.unsafe_chr (n asr 8));
+  str_set buff (pos + 2) (Char.unsafe_chr (n asr 16));
+  str_set buff (pos + 3) (Char.unsafe_chr (n asr 24))
 
-let patch_object buff patchlist =
+let gen_patch_object str_set buff patchlist =
   List.iter
     (function
         (Reloc_literal sc, pos) ->
-          patch_int buff pos (slot_for_literal sc)
+          gen_patch_int str_set buff pos (slot_for_literal sc)
       | (Reloc_getglobal id, pos) ->
-          patch_int buff pos (slot_for_getglobal id)
+          gen_patch_int str_set buff pos (slot_for_getglobal id)
       | (Reloc_setglobal id, pos) ->
-          patch_int buff pos (slot_for_setglobal id)
+          gen_patch_int str_set buff pos (slot_for_setglobal id)
       | (Reloc_primitive name, pos) ->
-          patch_int buff pos (num_of_prim name))
+          gen_patch_int str_set buff pos (num_of_prim name))
     patchlist
+
+let patch_object = gen_patch_object String.unsafe_set
+let ls_patch_object = gen_patch_object LongString.set
 
 (* Translate structured constants *)
 
 let rec transl_const = function
     Const_base(Const_int i) -> Obj.repr i
   | Const_base(Const_char c) -> Obj.repr c
-  | Const_base(Const_string s) -> Obj.repr s
+  | Const_base(Const_string (s, _)) -> Obj.repr s
   | Const_base(Const_float f) -> Obj.repr (float_of_string f)
   | Const_base(Const_int32 i) -> Obj.repr i
   | Const_base(Const_int64 i) -> Obj.repr i
@@ -371,3 +376,10 @@ let report_error ppf = function
       fprintf ppf "Cannot find or execute the runtime system %s" s
   | Uninitialized_global s ->
       fprintf ppf "The value of the global `%s' is not yet computed" s
+
+let () =
+  Location.register_error_of_exn
+    (function
+      | Error err -> Some (Location.error_of_printer_file report_error err)
+      | _ -> None
+    )

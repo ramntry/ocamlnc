@@ -10,15 +10,12 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Instruction selection for the Intel x86 *)
 
 open Misc
 open Arch
 open Proc
 open Cmm
-open Reg
 open Mach
 
 (* Auxiliary for recognizing addressing modes *)
@@ -113,8 +110,12 @@ let pseudoregs_for_operation op arg res =
     Iintop(Iadd|Isub|Imul|Iand|Ior|Ixor) ->
       ([|res.(0); arg.(1)|], res, false)
   (* Two-address unary operations *)
-  | Iintop_imm((Iadd|Isub|Imul|Idiv|Iand|Ior|Ixor|Ilsl|Ilsr|Iasr), _) ->
+  | Iintop_imm((Iadd|Isub|Imul|Iand|Ior|Ixor|Ilsl|Ilsr|Iasr), _) ->
       (res, res, false)
+  (* For imull, first arg must be in eax, eax is clobbered, and result is in
+     edx. *)
+  | Iintop(Imulh) ->
+      ([| eax; arg.(1) |], [| edx |], true)
   (* For shifts with variable shift count, second arg must be in ecx *)
   | Iintop(Ilsl|Ilsr|Iasr) ->
       ([|res.(0); ecx|], res, false)
@@ -125,15 +126,11 @@ let pseudoregs_for_operation op arg res =
       ([| eax; ecx |], [| eax |], true)
   | Iintop(Imod) ->
       ([| eax; ecx |], [| edx |], true)
-  (* For mod with immediate operand, arg must not be in eax.
-     Keep it simple, force it in edx. *)
-  | Iintop_imm(Imod, _) ->
-      ([| edx |], [| edx |], true)
   (* For floating-point operations and floating-point loads,
      the result is always left at the top of the floating-point stack *)
   | Iconst_float _ | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iload((Single | Double | Double_u), _)
-  | Ispecific(Isubfrev | Idivfrev | Ifloatarithmem(_, _, _) | Ifloatspecial _) ->
+  | Ispecific(Isubfrev | Idivfrev | Ifloatarithmem _ | Ifloatspecial _) ->
       (arg, [| tos |], false)           (* don't move it immediately *)
   (* For storing a byte, the argument must be in eax...edx.
      (But for a short, any reg will do!)
@@ -168,7 +165,7 @@ method! is_simple_expr e =
   | _ ->
       super#is_simple_expr e
 
-method select_addressing exp =
+method select_addressing chunk exp =
   match select_addr exp with
     (Asymbol s, d) ->
       (Ibased(s, d), Ctuple [])
@@ -200,40 +197,29 @@ method! select_operation op args =
   match op with
   (* Recognize the LEA instruction *)
     Caddi | Cadda | Csubi | Csuba ->
-      begin match self#select_addressing (Cop(op, args)) with
+      begin match self#select_addressing Word (Cop(op, args)) with
         (Iindexed d, _) -> super#select_operation op args
       | (Iindexed2 0, _) -> super#select_operation op args
       | (addr, arg) -> (Ispecific(Ilea addr), [arg])
-      end
-  (* Recognize (x / cst) and (x % cst) only if cst is a power of 2. *)
-  | Cdivi ->
-      begin match args with
-        [arg1; Cconst_int n] when n = 1 lsl (Misc.log2 n) ->
-          (Iintop_imm(Idiv, n), [arg1])
-      | _ -> (Iintop Idiv, args)
-      end
-  | Cmodi ->
-      begin match args with
-        [arg1; Cconst_int n] when n = 1 lsl (Misc.log2 n) ->
-          (Iintop_imm(Imod, n), [arg1])
-      | _ -> (Iintop Imod, args)
       end
   (* Recognize float arithmetic with memory.
      In passing, apply Ershov's algorithm to reduce stack usage *)
   | Caddf ->
       self#select_floatarith Iaddf Iaddf Ifloatadd Ifloatadd args
   | Csubf ->
-      self#select_floatarith Isubf (Ispecific Isubfrev) Ifloatsub Ifloatsubrev args
+      self#select_floatarith Isubf (Ispecific Isubfrev) Ifloatsub Ifloatsubrev
+                             args
   | Cmulf ->
       self#select_floatarith Imulf Imulf Ifloatmul Ifloatmul args
   | Cdivf ->
-      self#select_floatarith Idivf (Ispecific Idivfrev) Ifloatdiv Ifloatdivrev args
+      self#select_floatarith Idivf (Ispecific Idivfrev) Ifloatdiv Ifloatdivrev
+                             args
   (* Recognize store instructions *)
   | Cstore Word ->
       begin match args with
         [loc; Cop(Caddi, [Cop(Cload _, [loc']); Cconst_int n])]
         when loc = loc' ->
-          let (addr, arg) = self#select_addressing loc in
+          let (addr, arg) = self#select_addressing Word loc in
           (Ispecific(Ioffset_loc(n, addr)), [arg])
       | _ ->
           super#select_operation op args
@@ -242,6 +228,9 @@ method! select_operation op args =
   | Cextcall(fn, ty_res, false, dbg)
     when !fast_math && List.mem fn inline_float_ops ->
       (Ispecific(Ifloatspecial fn), args)
+  (* i386 does not support immediate operands for multiply high signed *)
+  | Cmulhi ->
+      (Iintop Imulh, args)
   (* Default *)
   | _ -> super#select_operation op args
 
@@ -250,11 +239,11 @@ method! select_operation op args =
 method select_floatarith regular_op reversed_op mem_op mem_rev_op args =
   match args with
     [arg1; Cop(Cload chunk, [loc2])] ->
-      let (addr, arg2) = self#select_addressing loc2 in
+      let (addr, arg2) = self#select_addressing chunk loc2 in
       (Ispecific(Ifloatarithmem(chunk_double chunk, mem_op, addr)),
                  [arg1; arg2])
   | [Cop(Cload chunk, [loc1]); arg2] ->
-      let (addr, arg1) = self#select_addressing loc1 in
+      let (addr, arg1) = self#select_addressing chunk loc1 in
       (Ispecific(Ifloatarithmem(chunk_double chunk, mem_rev_op, addr)),
                  [arg2; arg1])
   | [arg1; arg2] ->
@@ -282,9 +271,6 @@ method! insert_op_debug op dbg rs rd =
   with Use_default ->
     super#insert_op_debug op dbg rs rd
 
-method! insert_op op rs rd =
-  self#insert_op_debug op Debuginfo.none rs rd
-
 (* Selection of push instructions for external calls *)
 
 method select_push exp =
@@ -295,10 +281,10 @@ method select_push exp =
   | Cconst_natpointer n -> (Ispecific(Ipush_int n), Ctuple [])
   | Cconst_symbol s -> (Ispecific(Ipush_symbol s), Ctuple [])
   | Cop(Cload Word, [loc]) ->
-      let (addr, arg) = self#select_addressing loc in
+      let (addr, arg) = self#select_addressing Word loc in
       (Ispecific(Ipush_load addr), arg)
   | Cop(Cload Double_u, [loc]) ->
-      let (addr, arg) = self#select_addressing loc in
+      let (addr, arg) = self#select_addressing Double_u loc in
       (Ispecific(Ipush_load_float addr), arg)
   | _ -> (Ispecific(Ipush), exp)
 

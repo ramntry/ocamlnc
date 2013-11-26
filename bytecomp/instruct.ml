@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Lambda
 
 type compilation_env =
@@ -87,7 +85,7 @@ type instruction =
   | Kboolnot
   | Kpushtrap of label
   | Kpoptrap
-  | Kraise
+  | Kraise of raise_kind
   | Kcheck_signals
   | Kccall of string * int
   | Knegint | Kaddint | Ksubint | Kmulint | Kdivint | Kmodint
@@ -107,5 +105,5 @@ let immed_min = -0x40000000
 and immed_max = 0x3FFFFFFF
 
 (* Actually the abstract machine accomodates -0x80000000 to 0x7FFFFFFF,
-   but these numbers overflow the Caml type int if the compiler runs on
+   but these numbers overflow the OCaml type int if the compiler runs on
    a 32-bit processor. *)

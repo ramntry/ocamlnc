@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -23,7 +24,12 @@ let is_simple_filename s =
     | _ -> false in
   loop 0
 let quote_filename_if_needed s =
-  if is_simple_filename s then s else Filename.quote s
+  if is_simple_filename s then s
+  (* We should probably be using [Filename.unix_quote] except that function
+   * isn't exported. Users on Windows will have to live with not being able to
+   * install OCaml into c:\o'caml. Too bad. *)
+  else if Sys.os_type = "Win32" then Printf.sprintf "'%s'" s
+  else Filename.quote s
 let chdir dir =
   reset_filesys_cache ();
   Sys.chdir dir
@@ -60,9 +66,9 @@ let cp_pf src dest =
   reset_filesys_cache_for_file dest;
   run["cp";"-pf";src;dest] dest
 
-(* L'Arrêté du 2007-03-07 prend en consideration
+(* L'Arrete du 2007-03-07 prend en consideration
    differement les archives. Pour les autres fichiers
-   le décret du 2007-02-01 est toujours valable :-) *)
+   le decret du 2007-02-01 est toujours valable :-) *)
 let cp src dst =
   if Filename.check_suffix src ".a"
   && Filename.check_suffix dst ".a"

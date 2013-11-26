@@ -10,17 +10,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Config
 open Clflags
-
-let output_prefix name =
-  let oname =
-    match !output_name with
-    | None -> name
-    | Some n -> if !compile_only then (output_name := None; n) else name in
-  Misc.chop_extension_if_any oname
+open Compenv
 
 let process_interface_file ppf name =
   Compile.interface ppf name (output_prefix name)
@@ -60,27 +52,17 @@ let process_file ppf name =
   else
     raise(Arg.Bad("don't know what to do with " ^ name))
 
-let print_version_and_library () =
-  print_string "The OCaml compiler, version ";
-  print_string Config.version; print_newline();
-  print_string "Standard library directory: ";
-  print_string Config.standard_library; print_newline();
-  exit 0
-
-let print_version_string () =
-  print_string Config.version; print_newline(); exit 0
-
-let print_standard_library () =
-  print_string Config.standard_library; print_newline(); exit 0
-
 let usage = "Usage: ocamlc <options> <files>\nOptions are:"
 
 let ppf = Format.err_formatter
 
 (* Error messages to standard error formatter *)
-let anonymous = process_file ppf;;
-let impl = process_implementation_file ppf;;
-let intf = process_interface_file ppf;;
+let anonymous filename =
+  readenv ppf Before_compile; process_file ppf filename;;
+let impl filename =
+  readenv ppf Before_compile; process_implementation_file ppf filename;;
+let intf filename =
+  readenv ppf Before_compile; process_interface_file ppf filename;;
 
 let show_config () =
   Config.print_config stdout;
@@ -93,10 +75,12 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _a = set make_archive
   let _absname = set Location.absname
   let _annot = set annotations
+  let _binannot = set binary_annotations
   let _c = set compile_only
   let _cc s = c_compiler := Some s
   let _cclib s = ccobjs := Misc.rev_split_words s @ !ccobjs
-  let _ccopt s = ccopts := s :: !ccopts
+  let _ccopt s = first_ccopts := s :: !first_ccopts
+  let _compat_32 = set bytecode_compatible_32
   let _config = show_config
   let _custom = set custom_runtime
   let _dllib s = dllibs := Misc.rev_split_words s @ !dllibs
@@ -107,6 +91,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _impl = impl
   let _intf = intf
   let _intf_suffix s = Config.interface_suffix := s
+  let _keep_locs = set keep_locs
   let _labels = unset classic
   let _linkall = set link_everything
   let _make_runtime () =
@@ -120,16 +105,18 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _output_obj () = output_c_object := true; custom_runtime := true
   let _pack = set make_package
   let _pp s = preprocessor := Some s
+  let _ppx s = first_ppx := s :: !first_ppx
   let _principal = set principal
   let _rectypes = set recursive_types
   let _runtime_variant s = runtime_variant := s
+  let _short_paths = unset real_paths
   let _strict_sequence = set strict_sequence
   let _thread = set use_threads
   let _vmthread = set use_vmthreads
   let _unsafe = set fast
   let _use_prims s = use_prims := s
   let _use_runtime s = use_runtime := s
-  let _v = print_version_and_library
+  let _v () = print_version_and_library "compiler"
   let _version = print_version_string
   let _vnum = print_version_string
   let _w = (Warnings.parse_options false)
@@ -138,28 +125,20 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _where = print_standard_library
   let _verbose = set verbose
   let _nopervasives = set nopervasives
+  let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
+  let _dtypedtree = set dump_typedtree
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
   let _dinstr = set dump_instr
   let anonymous = anonymous
 end)
 
-let fatal err =
-  prerr_endline err;
-  exit 2
-
-let extract_output = function
-  | Some s -> s
-  | None -> fatal "Please specify the name of the output file, using option -o"
-
-let default_output = function
-  | Some s -> s
-  | None -> Config.default_executable_name
-
 let main () =
   try
+    readenv ppf Before_args;
     Arg.parse Options.list anonymous usage;
+    readenv ppf Before_link;
     if
       List.length (List.filter (fun x -> !x)
                       [make_archive;make_package;compile_only;output_c_object])
@@ -170,17 +149,18 @@ let main () =
       else
         fatal "Please specify at most one of -pack, -a, -c, -output-obj";
     if !make_archive then begin
-      Compile.init_path();
+      Compmisc.init_path false;
 
-      Bytelibrarian.create_archive ppf  (List.rev !objfiles)
-                                   (extract_output !output_name)
+      Bytelibrarian.create_archive ppf  (Compenv.get_objfiles ())
+                                   (extract_output !output_name);
+      Warnings.check_fatal ();
     end
     else if !make_package then begin
-      Compile.init_path();
-      let exctracted_output = extract_output !output_name in
-      let revd = List.rev !objfiles in
-      Bytepackager.package_files ppf (revd)
-        (exctracted_output)
+      Compmisc.init_path false;
+      let extracted_output = extract_output !output_name in
+      let revd = get_objfiles () in
+      Bytepackager.package_files ppf revd (extracted_output);
+      Warnings.check_fatal ();
     end
     else if not !compile_only && !objfiles <> [] then begin
       let target =
@@ -199,12 +179,13 @@ let main () =
         else
           default_output !output_name
       in
-      Compile.init_path();
-      Bytelink.link ppf (List.rev !objfiles) target
+      Compmisc.init_path false;
+      Bytelink.link ppf (get_objfiles ()) target;
+      Warnings.check_fatal ();
     end;
     exit 0
   with x ->
-    Errors.report_error ppf x;
+    Location.report_exception ppf x;
     exit 2
 
 let _ = main ()

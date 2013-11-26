@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Machine-specific command-line options *)
 
 let fast_math = ref false
@@ -22,7 +20,6 @@ let command_line_options =
 
 (* Specific operations for the Intel 386 processor *)
 
-open Misc
 open Format
 
 type addressing_mode =
@@ -58,6 +55,12 @@ let big_endian = false
 let size_addr = 4
 let size_int = 4
 let size_float = 8
+
+let allow_unaligned_access = true
+
+(* Behavior of division *)
+
+let division_crashes_on_overflow = true
 
 (* Operations on addressing modes *)
 

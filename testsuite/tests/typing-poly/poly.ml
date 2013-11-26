@@ -1,4 +1,3 @@
-(* $Id$ *)
 (*
    Polymorphic methods are now available in the main branch.
    Enjoy.
@@ -170,7 +169,7 @@ let p0 = new point ~x:3 ~y:5
 let p1 = new point ~x:10 ~y:13
 let cp = new color_point ~x:12 ~y:(-5) ~color:"green"
 let c = new circle p0 ~r:2
-let d = c#distance cp
+let d = floor (c#distance cp)
 ;;
 let f (x : < m : 'a. 'a -> 'a >) = (x : < m : 'b. 'b -> 'b >)
 ;;
@@ -448,7 +447,7 @@ function `B,1 -> 1 | _,1 -> 2;;
 function 1,`B -> 1 | 1,_ -> 2;;
 
 (* pass typetexp, but fails during Typedecl.check_recursion *)
-type ('a, 'b) a = 'a -> unit constraint 'a = [> `B of ('a, 'b) b as 'b] 
+type ('a, 'b) a = 'a -> unit constraint 'a = [> `B of ('a, 'b) b as 'b]
 and  ('a, 'b) b = 'b -> unit constraint 'b = [> `A of ('a, 'b) a as 'a];;
 
 (* PR#1917: expanding may change original in Ctype.unify2 *)
@@ -459,12 +458,12 @@ class type ['a, 'b] a = object
   method as_a: ('a, 'b) a
 end and ['a, 'b] b = object
   method a: ('a, 'b) #a as 'a
-  method as_b: ('a, 'b) b 
+  method as_b: ('a, 'b) b
 end
 
 class type ['b] ca = object ('s) inherit ['s, 'b] a end
 class type ['a] cb = object ('s) inherit ['a, 's] b end
-	  
+
 type bt = 'b ca cb as 'b
 ;;
 
@@ -633,8 +632,8 @@ let l : t = { f = lazy (raise Not_found)};;
 
 (* variant *)
 type t = {f: 'a. 'a -> unit};;
-{f=fun ?x y -> ()};;
-{f=fun ?x y -> y};; (* fail *)
+let f ?x y = () in {f};;
+let f ?x y = y in {f};; (* fail *)
 
 (* Polux Moon caml-list 2011-07-26 *)
 module Polux = struct
@@ -643,3 +642,28 @@ module Polux = struct
   class alias = object method alias : 'a . 'a t -> 'a = ident end
   let f (x : <m : 'a. 'a t>) = (x : <m : 'a. 'a>)
 end;;
+
+(* PR#5560 *)
+
+let (a, b) = (raise Exit : int * int);;
+type t = { foo : int }
+let {foo} = (raise Exit : t);;
+type s = A of int
+let (A x) = (raise Exit : s);;
+
+(* PR#5224 *)
+
+type 'x t = < f : 'y. 'y t >;;
+
+(* PR#6056, PR#6057 *)
+let using_match b =
+  let f =
+    match b with
+    | true -> fun x -> x
+    | false -> fun x -> x
+  in
+  f 0,f
+;;
+
+match (fun x -> x), fun x -> x with x, y -> x, y;;
+match fun x -> x with x -> x, x;;

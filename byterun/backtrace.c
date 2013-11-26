@@ -11,17 +11,18 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Stack backtrace for uncaught exceptions */
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
+#include <string.h>
+
 #include "config.h"
 #ifdef HAS_UNISTD
 #include <unistd.h>
 #endif
+
 #include "mlvalues.h"
 #include "alloc.h"
 #include "io.h"
@@ -92,11 +93,11 @@ CAMLprim value caml_backtrace_status(value vunit)
 /* Store the return addresses contained in the given stack fragment
    into the backtrace array */
 
-void caml_stash_backtrace(value exn, code_t pc, value * sp)
+void caml_stash_backtrace(value exn, code_t pc, value * sp, int reraise)
 {
   code_t end_code = (code_t) ((char *) caml_start_code + caml_code_size);
   if (pc != NULL) pc = pc - 1;
-  if (exn != caml_backtrace_last_exn) {
+  if (exn != caml_backtrace_last_exn || !reraise) {
     caml_backtrace_pos = 0;
     caml_backtrace_last_exn = exn;
   }
@@ -106,6 +107,7 @@ void caml_stash_backtrace(value exn, code_t pc, value * sp)
   }
   if (caml_backtrace_pos >= BACKTRACE_BUFFER_SIZE) return;
   if (pc >= caml_start_code && pc < end_code){
+    /* testing the code region is needed: PR#1554 */
     caml_backtrace_buffer[caml_backtrace_pos++] = pc;
   }
   for (/*nothing*/; sp < caml_trapsp; sp++) {
@@ -117,14 +119,83 @@ void caml_stash_backtrace(value exn, code_t pc, value * sp)
   }
 }
 
+/* returns the next frame pointer (or NULL if none is available);
+   updates *sp to point to the following one, and *trapsp to the next
+   trap frame, which we will skip when we reach it  */
+
+code_t caml_next_frame_pointer(value ** sp, value ** trapsp)
+{
+  code_t end_code = (code_t) ((char *) caml_start_code + caml_code_size);
+
+  while (*sp < caml_stack_high) {
+    code_t *p = (code_t*) (*sp)++;
+    if(&Trap_pc(*trapsp) == p) {
+      *trapsp = Trap_link(*trapsp);
+      continue;
+    }
+    if (*p >= caml_start_code && *p < end_code) return *p;
+  }
+  return NULL;
+}
+
+/* Stores upto [max_frames_value] frames of the current call stack to
+   return to the user. This is used not in an exception-raising
+   context, but only when the user requests to save the trace
+   (hopefully less often). Instead of using a bounded buffer as
+   [caml_stash_backtrace], we first traverse the stack to compute the
+   right size, then allocate space for the trace. */
+
+CAMLprim value caml_get_current_callstack(value max_frames_value) {
+  CAMLparam1(max_frames_value);
+  CAMLlocal1(trace);
+
+  /* we use `intnat` here because, were it only `int`, passing `max_int`
+     from the OCaml side would overflow on 64bits machines. */
+  intnat max_frames = Long_val(max_frames_value);
+  intnat trace_size;
+
+  /* first compute the size of the trace */
+  {
+    value * sp = caml_extern_sp;
+    value * trapsp = caml_trapsp;
+
+    for (trace_size = 0; trace_size < max_frames; trace_size++) {
+      code_t p = caml_next_frame_pointer(&sp, &trapsp);
+      if (p == NULL) break;
+    }
+  }
+
+  trace = caml_alloc(trace_size, Abstract_tag);
+
+  /* then collect the trace */
+  {
+    value * sp = caml_extern_sp;
+    value * trapsp = caml_trapsp;
+    uintnat trace_pos;
+
+    for (trace_pos = 0; trace_pos < trace_size; trace_pos++) {
+      code_t p = caml_next_frame_pointer(&sp, &trapsp);
+      Assert(p != NULL);
+      /* The assignment below is safe without [caml_initialize], even
+         if the trace is large and allocated on the old heap, because
+         we assign values that are outside the OCaml heap. */
+      Assert(!(Is_block((value) p) && Is_in_heap((value) p)));
+      Field(trace, trace_pos) = (value) p;
+    }
+  }
+
+  CAMLreturn(trace);
+}
+
 /* Read the debugging info contained in the current bytecode executable.
-   Return a Caml array of Caml lists of debug_event records in "events",
+   Return an OCaml array of OCaml lists of debug_event records in "events",
    or Val_false on failure. */
 
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
 
+static char *read_debug_info_error = "";
 static value read_debug_info(void)
 {
   CAMLparam0();
@@ -142,10 +213,14 @@ static value read_debug_info(void)
     exec_name = caml_exe_name;
   }
   fd = caml_attempt_open(&exec_name, &trail, 1);
-  if (fd < 0) CAMLreturn(Val_false);
+  if (fd < 0){
+    read_debug_info_error = "executable program file not found";
+    CAMLreturn(Val_false);
+  }
   caml_read_section_descriptors(fd, &trail);
   if (caml_seek_optional_section(fd, &trail, "DBUG") == -1) {
     close(fd);
+    read_debug_info_error = "program not linked with -g";
     CAMLreturn(Val_false);
   }
   chan = caml_open_descriptor_in(fd);
@@ -207,7 +282,8 @@ static void extract_location_info(value events, code_t pc,
   value ev, ev_start;
 
   ev = event_for_location(events, pc);
-  li->loc_is_raise = caml_is_instruction(*pc, RAISE);
+  li->loc_is_raise = caml_is_instruction(*pc, RAISE) ||
+    caml_is_instruction(*pc, RERAISE);
   if (ev == Val_false) {
     li->loc_valid = 0;
     return;
@@ -224,7 +300,7 @@ static void extract_location_info(value events, code_t pc,
     - Int_val (Field (ev_start, POS_BOL));
 }
 
-/* Print location information */
+/* Print location information -- same behavior as in Printexc */
 
 static void print_location(struct loc_info * li, int index)
 {
@@ -264,8 +340,8 @@ CAMLexport void caml_print_exception_backtrace(void)
 
   events = read_debug_info();
   if (events == Val_false) {
-    fprintf(stderr,
-            "(Program not linked with -g, cannot print stack backtrace)\n");
+    fprintf(stderr, "(Cannot print stack backtrace: %s)\n",
+            read_debug_info_error);
     return;
   }
   for (i = 0; i < caml_backtrace_pos; i++) {
@@ -274,11 +350,11 @@ CAMLexport void caml_print_exception_backtrace(void)
   }
 }
 
-/* Convert the backtrace to a data structure usable from Caml */
+/* Convert the backtrace to a data structure usable from OCaml */
 
-CAMLprim value caml_get_exception_backtrace(value unit)
+CAMLprim value caml_convert_raw_backtrace(value backtrace)
 {
-  CAMLparam0();
+  CAMLparam1(backtrace);
   CAMLlocal5(events, res, arr, p, fname);
   int i;
   struct loc_info li;
@@ -287,9 +363,9 @@ CAMLprim value caml_get_exception_backtrace(value unit)
   if (events == Val_false) {
     res = Val_int(0);           /* None */
   } else {
-    arr = caml_alloc(caml_backtrace_pos, 0);
-    for (i = 0; i < caml_backtrace_pos; i++) {
-      extract_location_info(events, caml_backtrace_buffer[i], &li);
+    arr = caml_alloc(Wosize_val(backtrace), 0);
+    for (i = 0; i < Wosize_val(backtrace); i++) {
+      extract_location_info(events, (code_t)Field(backtrace, i), &li);
       if (li.loc_valid) {
         fname = caml_copy_string(li.loc_filename);
         p = caml_alloc_small(5, 0);
@@ -306,5 +382,29 @@ CAMLprim value caml_get_exception_backtrace(value unit)
     }
     res = caml_alloc_small(1, 0); Field(res, 0) = arr; /* Some */
   }
+  CAMLreturn(res);
+}
+
+/* Get a copy of the latest backtrace */
+
+CAMLprim value caml_get_exception_raw_backtrace(value unit)
+{
+  CAMLparam0();
+  CAMLlocal1(res);
+  res = caml_alloc(caml_backtrace_pos, Abstract_tag);
+  if(caml_backtrace_buffer != NULL)
+    memcpy(&Field(res, 0), caml_backtrace_buffer,
+           caml_backtrace_pos * sizeof(code_t));
+  CAMLreturn(res);
+}
+
+/* the function below is deprecated: see asmrun/backtrace.c */
+
+CAMLprim value caml_get_exception_backtrace(value unit)
+{
+  CAMLparam0();
+  CAMLlocal2(raw, res);
+  raw = caml_get_exception_raw_backtrace(unit);
+  res = caml_convert_raw_backtrace(raw);
   CAMLreturn(res);
 }

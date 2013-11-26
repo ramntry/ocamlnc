@@ -10,18 +10,15 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* The lexer generator. Command-line parsing. *)
 
 open Syntax
-open Lexgen
 
 let ml_automata = ref false
 let source_name = ref None
 let output_name = ref None
 
-let usage = "usage: ocamlex [options] sourcefile"
+let usage = "usage: ocamllex [options] sourcefile"
 
 let print_version_string () =
   print_string "The OCaml lexer generator, version ";
@@ -35,7 +32,8 @@ let print_version_num () =
 
 let specs =
   ["-ml", Arg.Set ml_automata,
-    " Output code that does not use the Lexing module built-in automata interpreter";
+    " Output code that does not use the Lexing module built-in automata \
+     interpreter";
    "-o", Arg.String (fun x -> output_name := Some x),
     " <file>  Set output file name to <file>";
    "-q", Arg.Set Common.quiet_mode, " Do not display informational messages";

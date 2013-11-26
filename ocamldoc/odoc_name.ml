@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Representation of element names. *)
 
@@ -52,11 +51,11 @@ let strip_string s =
         else
           match s.[n] with
             ' ' | '\t' | '\n' | '\r' -> iter_last (n-1)
-          |	_ -> Some n
+          | _ -> Some n
       in
       match iter_last (len-1) with
         None -> String.sub s first 1
-      |	Some last -> String.sub s first ((last-first)+1)
+      | Some last -> String.sub s first ((last-first)+1)
 
 let parens_if_infix name =
   match strip_string name with
@@ -151,10 +150,10 @@ let depth name =
     _ -> 1
 
 let prefix n1 n2 =
-  (n1 <> n2) &
+  (n1 <> n2) &&
   (try
     let len1 = String.length n1 in
-    ((String.sub n2 0 len1) = n1) &
+    ((String.sub n2 0 len1) = n1) &&
     (n2.[len1] = '.')
   with _ -> false)
 
@@ -162,10 +161,10 @@ let rec get_relative_raw n1 n2 =
   let (f1,s1) = head_and_tail n1 in
   let (f2,s2) = head_and_tail n2 in
   if f1 = f2 then
-    if f2 = s2 or s2 = "" then
+    if f2 = s2 || s2 = "" then
       s2
     else
-      if f1 = s1 or s1 = "" then
+      if f1 = s1 || s1 = "" then
         s2
       else
         get_relative_raw s1 s2
@@ -215,3 +214,9 @@ let to_path n =
   | Some p -> p
 
 let from_longident = Odoc_misc.string_of_longident
+
+module Set = Set.Make (struct
+  type z = t
+  type t = z
+  let compare = String.compare
+end)

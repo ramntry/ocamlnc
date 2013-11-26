@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* The type of the instructions of the abstract machine *)
 
 open Lambda
@@ -107,7 +105,7 @@ type instruction =
   | Kboolnot
   | Kpushtrap of label
   | Kpoptrap
-  | Kraise
+  | Kraise of raise_kind
   | Kcheck_signals
   | Kccall of string * int
   | Knegint | Kaddint | Ksubint | Kmulint | Kdivint | Kmodint

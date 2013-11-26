@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* System configuration *)
 
 val version: string
@@ -36,8 +34,8 @@ val native_c_compiler: string
 val native_c_libraries: string
         (* The C libraries to link with native-code programs *)
 val native_pack_linker: string
-        (* The linker to use for packaging (ocamlopt -pack) and for partial links
-           (ocamlopt -output-obj). *)
+        (* The linker to use for packaging (ocamlopt -pack) and for partial
+           links (ocamlopt -output-obj). *)
 val mkdll: string
         (* The linker command line to build dynamic libraries. *)
 val mkexe: string
@@ -75,6 +73,8 @@ val ast_impl_magic_number: string
         (* Magic number for file holding an implementation syntax tree *)
 val cmxs_magic_number: string
         (* Magic number for dynamically-loadable plugins *)
+val cmt_magic_number: string
+        (* Magic number for compiled interface files *)
 
 val max_tag: int
         (* Biggest tag that can be stored in the header of a regular block. *)
@@ -99,6 +99,11 @@ val asm: string
         (* The assembler (and flags) to use for assembling
            ocamlopt-generated code. *)
 
+val asm_cfi_supported: bool
+        (* Whether assembler understands CFI directives *)
+val with_frame_pointers : bool
+        (* Whether assembler should maintain frame pointers *)
+
 val ext_obj: string
         (* Extension for object files, e.g. [.o] under Unix. *)
 val ext_asm: string
@@ -114,5 +119,11 @@ val default_executable_name: string
 
 val systhread_supported : bool
         (* Whether the system thread library is implemented *)
+
+val host : string
+        (* Whether the compiler is a cross-compiler *)
+
+val target : string
+        (* Whether the compiler is a cross-compiler *)
 
 val print_config : out_channel -> unit;;

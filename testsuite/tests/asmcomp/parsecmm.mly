@@ -10,8 +10,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* A simple parser for C-- */
 
 %{
@@ -110,7 +108,7 @@ let access_array base numelt size =
 %token OR
 %token <int> POINTER
 %token PROJ
-%token RAISE
+%token <Lambda.raise_kind> RAISE
 %token RBRACKET
 %token RPAREN
 %token SEQ
@@ -149,7 +147,8 @@ phrase:
 fundecl:
     LPAREN FUNCTION STRING LPAREN params RPAREN sequence RPAREN
       { List.iter (fun (id, ty) -> unbind_ident id) $5;
-        {fun_name = $3; fun_args = $5; fun_body = $7; fun_fast = true} }
+        {fun_name = $3; fun_args = $5; fun_body = $7; fun_fast = true;
+         fun_dbg = Debuginfo.none} }
 ;
 params:
     oneparam params     { $1 :: $2 }
@@ -248,7 +247,7 @@ unaryop:
   | ALLOC                       { Calloc }
   | FLOATOFINT                  { Cfloatofint }
   | INTOFFLOAT                  { Cintoffloat }
-  | RAISE                       { Craise Debuginfo.none }
+  | RAISE                       { Craise ($1, Debuginfo.none) }
   | ABSF                        { Cabsf }
 ;
 binaryop:
@@ -324,4 +323,3 @@ dataitem:
   | SKIP INTCONST               { Cskip $2 }
   | ALIGN INTCONST              { Calign $2 }
 ;
-

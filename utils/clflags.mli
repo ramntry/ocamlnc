@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 val objfiles : string list ref
 val ccobjs : string list ref
 val dllibs : string list ref
@@ -25,12 +23,15 @@ val debug : bool ref
 val fast : bool ref
 val link_everything : bool ref
 val custom_runtime : bool ref
+val bytecode_compatible_32: bool ref
 val output_c_object : bool ref
-val ccopts : string list ref
+val all_ccopts : string list ref
 val classic : bool ref
 val nopervasives : bool ref
 val preprocessor : string option ref
+val all_ppx : string list ref
 val annotations : bool ref
+val binary_annotations : bool ref
 val use_threads : bool ref
 val use_vmthreads : bool ref
 val noassert : bool ref
@@ -38,9 +39,11 @@ val verbose : bool ref
 val noprompt : bool ref
 val nopromptcont : bool ref
 val init_file : string option ref
+val noinit : bool ref
 val use_prims : string ref
 val use_runtime : string ref
 val principal : bool ref
+val real_paths : bool ref
 val recursive_types : bool ref
 val strict_sequence : bool ref
 val applicative_functors : bool ref
@@ -52,9 +55,12 @@ val dllpaths : string list ref
 val make_package : bool ref
 val for_package : string option ref
 val error_size : int ref
+val dump_source : bool ref
 val dump_parsetree : bool ref
+val dump_typedtree : bool ref
 val dump_rawlambda : bool ref
 val dump_lambda : bool ref
+val dump_clambda : bool ref
 val dump_instr : bool ref
 val keep_asm_file : bool ref
 val optimize_for_speed : bool ref
@@ -79,3 +85,5 @@ val std_include_dir : unit -> string list
 val shared : bool ref
 val dlcode : bool ref
 val runtime_variant : string ref
+val force_slash : bool ref
+val keep_locs : bool ref

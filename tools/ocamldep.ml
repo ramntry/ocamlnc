@@ -10,23 +10,19 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
-open Format
-open Location
-open Longident
+open Compenv
 open Parsetree
 
-
+let ppf = Format.err_formatter
 (* Print the dependencies *)
 
 type file_kind = ML | MLI;;
 
+let include_dirs = ref []
 let load_path = ref ([] : (string * string array) list)
 let ml_synonyms = ref [".ml"]
 let mli_synonyms = ref [".mli"]
 let native_only = ref false
-let force_slash = ref false
 let error_occurred = ref false
 let raw_dependencies = ref false
 let sort_files = ref false
@@ -46,20 +42,39 @@ let fix_slash s =
     r
   end
 
+(* Since we reinitialize load_path after reading OCAMLCOMP,
+  we must use a cache instead of calling Sys.readdir too often. *)
+module StringMap = Map.Make(String)
+let dirs = ref StringMap.empty
+let readdir dir =
+  try
+    StringMap.find dir !dirs
+  with Not_found ->
+    let contents =
+      try
+        Sys.readdir dir
+      with Sys_error msg ->
+        Format.fprintf Format.err_formatter "@[Bad -I option: %s@]@." msg;
+        error_occurred := true;
+        [||]
+    in
+    dirs := StringMap.add dir contents !dirs;
+    contents
+
 let add_to_load_path dir =
   try
     let dir = Misc.expand_directory Config.standard_library dir in
-    let contents = Sys.readdir dir in
-    load_path := !load_path @ [dir, contents]
+    let contents = readdir dir in
+    load_path := (dir, contents) :: !load_path
   with Sys_error msg ->
-    fprintf Format.err_formatter "@[Bad -I option: %s@]@." msg;
+    Format.fprintf Format.err_formatter "@[Bad -I option: %s@]@." msg;
     error_occurred := true
 
 let add_to_synonym_list synonyms suffix =
   if (String.length suffix) > 1 && suffix.[0] = '.' then
     synonyms := suffix :: !synonyms
   else begin
-    fprintf Format.err_formatter "@[Bad suffix: '%s'@]@." suffix;
+    Format.fprintf Format.err_formatter "@[Bad suffix: '%s'@]@." suffix;
     error_occurred := true
   end
 
@@ -135,7 +150,7 @@ let find_dependency target_kind modname (byt_deps, opt_deps) =
 let (depends_on, escaped_eol) = (":", " \\\n    ")
 
 let print_filename s =
-  let s = if !force_slash then fix_slash s else s in
+  let s = if !Clflags.force_slash then fix_slash s else s in
   if not (String.contains s ' ') then begin
     print_string s;
   end else begin
@@ -187,80 +202,60 @@ let print_raw_dependencies source_file deps =
     deps;
   print_char '\n'
 
-(* Optionally preprocess a source file *)
-
-let preprocessor = ref None
-
-exception Preprocessing_error
-
-let preprocess sourcefile =
-  match !preprocessor with
-    None -> sourcefile
-  | Some pp ->
-      flush Pervasives.stdout;
-      let tmpfile = Filename.temp_file "camlpp" "" in
-      let comm = Printf.sprintf "%s %s > %s" pp sourcefile tmpfile in
-      if Sys.command comm <> 0 then begin
-        Misc.remove_file tmpfile;
-        raise Preprocessing_error
-      end;
-      tmpfile
-
-let remove_preprocessed inputfile =
-  match !preprocessor with
-    None -> ()
-  | Some _ -> Misc.remove_file inputfile
-
-(* Parse a file or get a dumped syntax tree in it *)
-
-let is_ast_file ic ast_magic =
-  try
-    let buffer = String.create (String.length ast_magic) in
-    really_input ic buffer 0 (String.length ast_magic);
-    if buffer = ast_magic then true
-    else if String.sub buffer 0 9 = String.sub ast_magic 0 9 then
-      failwith "Ocaml and preprocessor have incompatible versions"
-    else false
-  with End_of_file -> false
-
-let parse_use_file ic =
-  if is_ast_file ic Config.ast_impl_magic_number then
-    let _source_file = input_value ic in
-    [Ptop_def (input_value ic : Parsetree.structure)]
-  else begin
-    seek_in ic 0;
-    let lb = Lexing.from_channel ic in
-    Parse.use_file lb
-  end
-
-let parse_interface ic =
-  if is_ast_file ic Config.ast_intf_magic_number then
-    let _source_file = input_value ic in
-    (input_value ic : Parsetree.signature)
-  else begin
-    seek_in ic 0;
-    let lb = Lexing.from_channel ic in
-    Parse.interface lb
-  end
 
 (* Process one file *)
 
-let ml_file_dependencies source_file =
+let report_err source_file exn =
+  error_occurred := true;
+  match exn with
+    | Sys_error msg ->
+        Format.fprintf Format.err_formatter "@[I/O error:@ %s@]@." msg
+    | x ->
+        match Location.error_of_exn x with
+        | Some err ->
+            Format.fprintf Format.err_formatter "@[%a@]@."
+              Location.report_error err
+        | None -> raise x
+
+let read_parse_and_extract parse_function extract_function magic source_file =
   Depend.free_structure_names := Depend.StringSet.empty;
-  let input_file = preprocess source_file in
-  let ic = open_in_bin input_file in
   try
-    let ast = parse_use_file ic in
-    Depend.add_use_file Depend.StringSet.empty ast;
-    if !sort_files then
-      files := (source_file, ML, !Depend.free_structure_names) :: !files
-    else
+    let input_file = Pparse.preprocess source_file in
+    begin try
+      let ast =
+        Pparse.file Format.err_formatter input_file parse_function magic in
+      extract_function Depend.StringSet.empty ast;
+      Pparse.remove_preprocessed input_file;
+      !Depend.free_structure_names
+    with x ->
+      Pparse.remove_preprocessed input_file;
+      raise x
+    end
+  with x ->
+    report_err source_file x;
+    Depend.StringSet.empty
+
+let ml_file_dependencies source_file =
+  let parse_use_file_as_impl lexbuf =
+    let f x =
+      match x with
+      | Ptop_def s -> s
+      | Ptop_dir _ -> []
+    in
+    List.flatten (List.map f (Parse.use_file lexbuf))
+  in
+  let extracted_deps =
+    read_parse_and_extract parse_use_file_as_impl Depend.add_implementation
+                           Config.ast_impl_magic_number source_file
+  in
+  if !sort_files then
+    files := (source_file, ML, !Depend.free_structure_names) :: !files
+  else
     if !raw_dependencies then begin
-      print_raw_dependencies source_file !Depend.free_structure_names
+      print_raw_dependencies source_file extracted_deps
     end else begin
       let basename = Filename.chop_extension source_file in
-      let byte_targets =
-        if !native_only then [] else [ basename ^ ".cmo" ] in
+      let byte_targets = [ basename ^ ".cmo" ] in
       let native_targets =
         if !all_dependencies
         then [ basename ^ ".cmx"; basename ^ ".o" ]
@@ -268,43 +263,45 @@ let ml_file_dependencies source_file =
       let init_deps = if !all_dependencies then [source_file] else [] in
       let cmi_name = basename ^ ".cmi" in
       let init_deps, extra_targets =
-        if List.exists (fun ext -> Sys.file_exists (basename ^ ext)) !mli_synonyms
+        if List.exists (fun ext -> Sys.file_exists (basename ^ ext))
+                       !mli_synonyms
         then (cmi_name :: init_deps, cmi_name :: init_deps), []
-        else (init_deps, init_deps), ( if !all_dependencies then [cmi_name] else [] ) in
+        else (init_deps, init_deps),
+             (if !all_dependencies then [cmi_name] else [])
+      in
       let (byt_deps, native_deps) =
         Depend.StringSet.fold (find_dependency ML)
-                              !Depend.free_structure_names init_deps in
-      if not !native_only then print_dependencies (byte_targets @ extra_targets) byt_deps;
+          extracted_deps init_deps in
+      print_dependencies (byte_targets @ extra_targets) byt_deps;
       print_dependencies (native_targets @ extra_targets) native_deps;
-    end;
-    close_in ic; remove_preprocessed input_file
-  with x ->
-    close_in ic; remove_preprocessed input_file; raise x
+    end
 
 let mli_file_dependencies source_file =
-  Depend.free_structure_names := Depend.StringSet.empty;
-  let input_file = preprocess source_file in
-  let ic = open_in_bin input_file in
-  try
-    let ast = parse_interface ic in
-    Depend.add_signature Depend.StringSet.empty ast;
-    if !sort_files then
-      files := (source_file, MLI, !Depend.free_structure_names) :: !files
-    else
+  let extracted_deps =
+    read_parse_and_extract Parse.interface Depend.add_signature
+                           Config.ast_intf_magic_number source_file
+  in
+  if !sort_files then
+    files := (source_file, MLI, extracted_deps) :: !files
+  else
     if !raw_dependencies then begin
-      print_raw_dependencies source_file !Depend.free_structure_names
+      print_raw_dependencies source_file extracted_deps
     end else begin
       let basename = Filename.chop_extension source_file in
       let (byt_deps, opt_deps) =
         Depend.StringSet.fold (find_dependency MLI)
-                              !Depend.free_structure_names ([], []) in
+          extracted_deps ([], []) in
       print_dependencies [basename ^ ".cmi"] byt_deps
-    end;
-    close_in ic; remove_preprocessed input_file
-  with x ->
-    close_in ic; remove_preprocessed input_file; raise x
+    end
 
 let file_dependencies_as kind source_file =
+  Compenv.readenv ppf Before_compile;
+  load_path := [];
+  List.iter add_to_load_path (
+      (!Compenv.last_include_dirs @
+       !include_dirs @
+       !Compenv.first_include_dirs
+      ));
   Location.input_name := source_file;
   try
     if Sys.file_exists source_file then begin
@@ -312,22 +309,7 @@ let file_dependencies_as kind source_file =
       | ML -> ml_file_dependencies source_file
       | MLI -> mli_file_dependencies source_file
     end
-  with x ->
-    let report_err = function
-    | Lexer.Error(err, range) ->
-        fprintf Format.err_formatter "@[%a%a@]@."
-        Location.print_error range  Lexer.report_error err
-    | Syntaxerr.Error err ->
-        fprintf Format.err_formatter "@[%a@]@."
-        Syntaxerr.report_error err
-    | Sys_error msg ->
-        fprintf Format.err_formatter "@[I/O error:@ %s@]@." msg
-    | Preprocessing_error ->
-        fprintf Format.err_formatter "@[Preprocessing error on file %s@]@."
-            source_file
-    | x -> raise x in
-    error_occurred := true;
-    report_err x
+  with x -> report_err source_file x
 
 let file_dependencies source_file =
   if List.exists (Filename.check_suffix source_file) !ml_synonyms then
@@ -394,16 +376,16 @@ let sort_files_by_dependencies files =
   done;
 
   if !worklist <> [] then begin
-    fprintf Format.err_formatter
+    Format.fprintf Format.err_formatter
       "@[Warning: cycle in dependencies. End of list is not sorted.@]@.";
     Hashtbl.iter (fun _ (file, deps) ->
-      fprintf Format.err_formatter "\t@[%s: " file;
+      Format.fprintf Format.err_formatter "\t@[%s: " file;
       List.iter (fun (modname, kind) ->
-        fprintf Format.err_formatter "%s.%s " modname
+        Format.fprintf Format.err_formatter "%s.%s " modname
           (if kind=ML then "ml" else "mli");
       ) !deps;
-      fprintf Format.err_formatter "@]@.";
-      Printf.printf "%s@ " file) h;
+      Format.fprintf Format.err_formatter "@]@.";
+      Printf.printf "%s " file) h;
   end;
   Printf.printf "\n%!";
   ()
@@ -414,51 +396,53 @@ let sort_files_by_dependencies files =
 let usage = "Usage: ocamldep [options] <source files>\nOptions are:"
 
 let print_version () =
-  printf "ocamldep, version %s@." Sys.ocaml_version;
+  Format.printf "ocamldep, version %s@." Sys.ocaml_version;
   exit 0;
 ;;
 
 let print_version_num () =
-  printf "%s@." Sys.ocaml_version;
+  Format.printf "%s@." Sys.ocaml_version;
   exit 0;
 ;;
 
 let _ =
   Clflags.classic := false;
-  add_to_load_path Filename.current_dir_name;
+  first_include_dirs := Filename.current_dir_name :: !first_include_dirs;
+  Compenv.readenv ppf Before_args;
   Arg.parse [
-     "-I", Arg.String add_to_load_path,
+     "-absname", Arg.Set Location.absname,
+        " Show absolute filenames in error messages";
+     "-all", Arg.Set all_dependencies,
+        " Generate dependencies on all files";
+     "-I", Arg.String (fun s -> include_dirs := s :: !include_dirs),
         "<dir>  Add <dir> to the list of include directories";
      "-impl", Arg.String (file_dependencies_as ML),
-           "<f> Process <f> as a .ml file";
+        "<f>  Process <f> as a .ml file";
      "-intf", Arg.String (file_dependencies_as MLI),
-           "<f> Process <f> as a .mli file";
+        "<f>  Process <f> as a .mli file";
      "-ml-synonym", Arg.String(add_to_synonym_list ml_synonyms),
-       "<e> Consider <e> as a synonym of the .ml extension";
+        "<e>  Consider <e> as a synonym of the .ml extension";
      "-mli-synonym", Arg.String(add_to_synonym_list mli_synonyms),
-       "<e> Consider <e> as a synonym of the .mli extension";
-     "-ml-synonym", Arg.String(add_to_synonym_list ml_synonyms),
-       "<e> Consider <e> as a synonym of the .ml extension";
-     "-mli-synonym", Arg.String(add_to_synonym_list mli_synonyms),
-       "<e> Consider <e> as a synonym of the .mli extension";
-     "-sort", Arg.Set sort_files,
-              " Sort files according to their dependencies";
+        "<e>  Consider <e> as a synonym of the .mli extension";
      "-modules", Arg.Set raw_dependencies,
-              " Print module dependencies in raw form (not suitable for make)";
+        " Print module dependencies in raw form (not suitable for make)";
      "-native", Arg.Set native_only,
-             "  Generate dependencies for a pure native-code project (no .cmo files)";
-     "-all", Arg.Set all_dependencies,
-             "  Generate dependencies on all files (not accommodating for make shortcomings)";
+        " Generate dependencies for native-code only (no .cmo files)";
      "-one-line", Arg.Set one_line,
-             "  Output one line per file, regardless of the length";
-     "-pp", Arg.String(fun s -> preprocessor := Some s),
-         "<cmd> Pipe sources through preprocessor <cmd>";
-     "-slash", Arg.Set force_slash,
-            "   (Windows) Use forward slash / instead of backslash \\ in file paths";
+        " Output one line per file, regardless of the length";
+     "-pp", Arg.String(fun s -> Clflags.preprocessor := Some s),
+         "<cmd>  Pipe sources through preprocessor <cmd>";
+     "-ppx", Arg.String(fun s -> first_ppx := s :: !first_ppx),
+         "<cmd>  Pipe abstract syntax trees through preprocessor <cmd>";
+     "-slash", Arg.Set Clflags.force_slash,
+         " (Windows) Use forward slash / instead of backslash \\ in file paths";
+     "-sort", Arg.Set sort_files,
+        " Sort files according to their dependencies";
      "-version", Arg.Unit print_version,
-              " Print version and exit";
+         " Print version and exit";
      "-vnum", Arg.Unit print_version_num,
-           "    Print version number and exit";
+         " Print version number and exit";
     ] file_dependencies usage;
+  Compenv.readenv ppf Before_link;
   if !sort_files then sort_files_by_dependencies !files;
   exit (if !error_occurred then 2 else 0)

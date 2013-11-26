@@ -10,20 +10,18 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Auxiliary a.s.t. types used by parsetree and typedtree. *)
 
 type constant =
     Const_int of int
   | Const_char of char
-  | Const_string of string
+  | Const_string of string * string option
   | Const_float of string
   | Const_int32 of int32
   | Const_int64 of int64
   | Const_nativeint of nativeint
 
-type rec_flag = Nonrecursive | Recursive | Default
+type rec_flag = Nonrecursive | Recursive
 
 type direction_flag = Upto | Downto
 
@@ -38,3 +36,14 @@ type override_flag = Override | Fresh
 type closed_flag = Closed | Open
 
 type label = string
+
+type 'a loc = 'a Location.loc = {
+  txt : 'a;
+  loc : Location.t;
+}
+
+
+type variance =
+  | Covariant
+  | Contravariant
+  | Invariant

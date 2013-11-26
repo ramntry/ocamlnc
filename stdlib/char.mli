@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (** Character operations. *)
 
 external code : char -> int = "%identity"
@@ -44,5 +42,7 @@ val compare: t -> t -> int
     {!Set.Make} and {!Map.Make}. *)
 
 (**/**)
+
+(* The following is for system use only. Do not call directly. *)
 
 external unsafe_chr : int -> char = "%identity"

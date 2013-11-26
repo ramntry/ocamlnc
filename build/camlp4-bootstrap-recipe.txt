@@ -1,3 +1,15 @@
+#########################################################################
+#                                                                       #
+#                                 OCaml                                 #
+#                                                                       #
+#       Nicolas Pouillard, projet Gallium, INRIA Rocquencourt           #
+#                                                                       #
+#   Copyright 2010 Institut National de Recherche en Informatique et    #
+#   en Automatique.  All rights reserved.  This file is distributed     #
+#   under the terms of the Q Public License version 1.0.                #
+#                                                                       #
+#########################################################################
+
 === Initial setup ===
   make clean
   ./build/distclean.sh
@@ -121,7 +133,7 @@
 
  In Camlp4/Printers/OCaml.ml:
    | <:expr< let open $i$ in $e$ >> ->
-       pp f "@[<2>let open %a@]@ @[<2>in@ %a@]" 
+       pp f "@[<2>let open %a@]@ @[<2>in@ %a@]"
              o#ident i o#reset_semi#expr e
  And at the end of #simple_expr:
    <:expr< let open $_$ in $_$ >>

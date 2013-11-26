@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Representation of types and declarations *)
 
 open Asttypes
@@ -87,6 +85,7 @@ type value_description =
   { val_type: type_expr;                (* Type of the value *)
     val_kind: value_kind;
     val_loc: Location.t;
+    val_attributes: Parsetree.attributes;
    }
 
 and value_kind =
@@ -104,21 +103,25 @@ and value_kind =
 (* Constructor descriptions *)
 
 type constructor_description =
-  { cstr_res: type_expr;                (* Type of the result *)
+  { cstr_name: string;                  (* Constructor name *)
+    cstr_res: type_expr;                (* Type of the result *)
     cstr_existentials: type_expr list;  (* list of existentials *)
     cstr_args: type_expr list;          (* Type of the arguments *)
     cstr_arity: int;                    (* Number of arguments *)
     cstr_tag: constructor_tag;          (* Tag for heap blocks *)
-    cstr_consts: int;                   (* Number of constant constructors *) 
+    cstr_consts: int;                   (* Number of constant constructors *)
     cstr_nonconsts: int;                (* Number of non-const constructors *)
     cstr_normal: int;                   (* Number of non generalized constrs *)
     cstr_generalized: bool;             (* Constrained return type? *)
-    cstr_private: private_flag }        (* Read-only constructor? *)
+    cstr_private: private_flag;         (* Read-only constructor? *)
+    cstr_loc: Location.t;
+    cstr_attributes: Parsetree.attributes;
+   }
 
 and constructor_tag =
     Cstr_constant of int                (* Constant constructor (an int) *)
   | Cstr_block of int                   (* Regular constructor (a block) *)
-  | Cstr_exception of Path.t            (* Exception constructor *)
+  | Cstr_exception of Path.t * Location.t (* Exception constructor *)
 
 (* Record label descriptions *)
 
@@ -130,11 +133,33 @@ type label_description =
     lbl_pos: int;                       (* Position in block *)
     lbl_all: label_description array;   (* All the labels in this type *)
     lbl_repres: record_representation;  (* Representation for this record *)
-    lbl_private: private_flag }         (* Read-only field? *)
+    lbl_private: private_flag;          (* Read-only field? *)
+    lbl_loc: Location.t;
+    lbl_attributes: Parsetree.attributes;
+  }
 
 and record_representation =
     Record_regular                      (* All fields are boxed / tagged *)
   | Record_float                        (* All fields are floats *)
+
+(* Variance *)
+
+module Variance : sig
+  type t
+  type f = May_pos | May_neg | May_weak | Inj | Pos | Neg | Inv
+  val null : t                          (* no occurence *)
+  val full : t                          (* strictly invariant *)
+  val covariant : t                     (* strictly covariant *)
+  val may_inv : t                       (* maybe invariant *)
+  val union  : t -> t -> t
+  val inter  : t -> t -> t
+  val subset : t -> t -> bool
+  val set : f -> bool -> t -> t
+  val mem : f -> t -> bool
+  val conjugate : t -> t                (* exchange positive and negative *)
+  val get_upper : t -> bool * bool                  (* may_pos, may_neg   *)
+  val get_lower : t -> bool * bool * bool * bool    (* pos, neg, inv, inj *)
+end
 
 (* Type definitions *)
 
@@ -144,69 +169,112 @@ type type_declaration =
     type_kind: type_kind;
     type_private: private_flag;
     type_manifest: type_expr option;
-    type_variance: (bool * bool * bool) list;
-    (* covariant, contravariant, weakly contravariant *)
+    type_variance: Variance.t list;
+    (* covariant, contravariant, weakly contravariant, injective *)
     type_newtype_level: (int * int) option;
     (* definition level * expansion level *)
-    type_loc: Location.t }
+    type_loc: Location.t;
+    type_attributes: Parsetree.attributes;
+  }
 
 and type_kind =
     Type_abstract
-  | Type_record of
-      (string * mutable_flag * type_expr) list * record_representation
-  | Type_variant of (string * type_expr list * type_expr option) list
+  | Type_record of label_declaration list  * record_representation
+  | Type_variant of constructor_declaration list
 
-type exception_declaration = type_expr list
+and label_declaration =
+  {
+    ld_id: Ident.t;
+    ld_mutable: mutable_flag;
+    ld_type: type_expr;
+    ld_loc: Location.t;
+    ld_attributes: Parsetree.attributes;
+  }
+
+and constructor_declaration =
+  {
+    cd_id: Ident.t;
+    cd_args: type_expr list;
+    cd_res: type_expr option;
+    cd_loc: Location.t;
+    cd_attributes: Parsetree.attributes;
+  }
+
+and type_transparence =
+    Type_public      (* unrestricted expansion *)
+  | Type_new         (* "new" type *)
+  | Type_private     (* private type *)
+
+type exception_declaration =
+    { exn_args: type_expr list;
+      exn_loc: Location.t;
+      exn_attributes: Parsetree.attributes;
+    }
 
 (* Type expressions for the class language *)
 
 module Concr : Set.S with type elt = string
 
 type class_type =
-    Tcty_constr of Path.t * type_expr list * class_type
-  | Tcty_signature of class_signature
-  | Tcty_fun of label * type_expr * class_type
+    Cty_constr of Path.t * type_expr list * class_type
+  | Cty_signature of class_signature
+  | Cty_arrow of label * type_expr * class_type
 
 and class_signature =
-  { cty_self: type_expr;
-    cty_vars: (mutable_flag * virtual_flag * type_expr) Vars.t;
-    cty_concr: Concr.t;
-    cty_inher: (Path.t * type_expr list) list }
+  { csig_self: type_expr;
+    csig_vars:
+      (Asttypes.mutable_flag * Asttypes.virtual_flag * type_expr) Vars.t;
+    csig_concr: Concr.t;
+    csig_inher: (Path.t * type_expr list) list }
 
 type class_declaration =
   { cty_params: type_expr list;
     mutable cty_type: class_type;
     cty_path: Path.t;
     cty_new: type_expr option;
-    cty_variance: (bool * bool) list }
+    cty_variance: Variance.t list;
+    cty_loc: Location.t;
+    cty_attributes: Parsetree.attributes;
+  }
 
-type cltype_declaration =
+type class_type_declaration =
   { clty_params: type_expr list;
     clty_type: class_type;
     clty_path: Path.t;
-    clty_variance: (bool * bool) list }
+    clty_variance: Variance.t list;
+    clty_loc: Location.t;
+    clty_attributes: Parsetree.attributes;
+  }
 
 (* Type expressions for the module language *)
 
 type module_type =
-    Tmty_ident of Path.t
-  | Tmty_signature of signature
-  | Tmty_functor of Ident.t * module_type * module_type
+    Mty_ident of Path.t
+  | Mty_signature of signature
+  | Mty_functor of Ident.t * module_type * module_type
 
 and signature = signature_item list
 
 and signature_item =
-    Tsig_value of Ident.t * value_description
-  | Tsig_type of Ident.t * type_declaration * rec_status
-  | Tsig_exception of Ident.t * exception_declaration
-  | Tsig_module of Ident.t * module_type * rec_status
-  | Tsig_modtype of Ident.t * modtype_declaration
-  | Tsig_class of Ident.t * class_declaration * rec_status
-  | Tsig_cltype of Ident.t * cltype_declaration * rec_status
+    Sig_value of Ident.t * value_description
+  | Sig_type of Ident.t * type_declaration * rec_status
+  | Sig_exception of Ident.t * exception_declaration
+  | Sig_module of Ident.t * module_declaration * rec_status
+  | Sig_modtype of Ident.t * modtype_declaration
+  | Sig_class of Ident.t * class_declaration * rec_status
+  | Sig_class_type of Ident.t * class_type_declaration * rec_status
+
+and module_declaration =
+  {
+    md_type: module_type;
+    md_attributes: Parsetree.attributes;
+  }
 
 and modtype_declaration =
-    Tmodtype_abstract
-  | Tmodtype_manifest of module_type
+  {
+    mtd_type: module_type option;  (* Nonte: abstract *)
+    mtd_attributes: Parsetree.attributes;
+  }
 
 and rec_status =
     Trec_not                            (* not recursive *)

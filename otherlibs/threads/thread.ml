@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* User-level threads *)
 
 type t
@@ -28,6 +26,11 @@ type resumption_status =
       Unix.file_descr list * Unix.file_descr list * Unix.file_descr list
   | Resumed_wait of int * Unix.process_status
 
+(* to avoid warning *)
+let _ = [Resumed_wakeup; Resumed_delay; Resumed_join;
+         Resumed_io; Resumed_select ([], [], []);
+         Resumed_wait (0, Unix.WEXITED 0)]
+
 (* It is mucho important that the primitives that reschedule are called
    through an ML function call, not directly. That's because when such a
    primitive returns, the bytecode interpreter is only semi-obedient:
@@ -39,7 +42,8 @@ type resumption_status =
    must take exactly one argument. *)
 
 external thread_initialize : unit -> unit = "thread_initialize"
-external thread_initialize_preemption : unit -> unit = "thread_initialize_preemption"
+external thread_initialize_preemption : unit -> unit
+   = "thread_initialize_preemption"
 external thread_new : (unit -> unit) -> t = "thread_new"
 external thread_yield : unit -> unit = "thread_yield"
 external thread_request_reschedule : unit -> unit = "thread_request_reschedule"

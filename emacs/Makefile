@@ -10,8 +10,6 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 include ../config/Makefile
 
 # Files to install
@@ -37,10 +35,12 @@ COMPILECMD=(progn \
 	      (byte-compile-file "inf-caml.el") \
 	      (byte-compile-file "caml-help.el") \
 	      (byte-compile-file "caml-types.el") \
+	      (byte-compile-file "caml-font.el") \
 	      (byte-compile-file "camldebug.el"))
 
 install:
 	@if test "$(EMACSDIR)" = ""; then \
+	  $(EMACS) --batch --eval 't; see PR#5403'; \
 	  set xxx `($(EMACS) --batch --eval "(mapcar 'print load-path)") \
 				2>/dev/null | \
 	           sed -n -e 's/^"\(.*\/site-lisp\).*/\1/gp' | \
@@ -79,4 +79,4 @@ compile-only:
 	$(EMACS) --batch --eval '$(COMPILECMD)'
 
 clean:
-	rm -f ocamltags *~ #*# *.elc
+	rm -f ocamltags *~ \#*# *.elc

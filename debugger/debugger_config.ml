@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (**************************** Configuration file ***********************)
 
 open Int64ops
@@ -80,3 +78,7 @@ let make_checkpoints = ref
   (match Sys.os_type with
     "Win32" -> false
   | _ -> true)
+
+(*** Environment variables for debugee. ***)
+
+let environment = ref []

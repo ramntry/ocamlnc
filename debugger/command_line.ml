@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (************************ Reading and executing commands ***************)
 
 open Int64ops
@@ -126,7 +124,7 @@ let add_breakpoint_at_pc pc =
     new_breakpoint (any_event_at_pc pc)
   with
   | Not_found ->
-    eprintf "Can't add breakpoint at pc %i : no event there.@." pc;
+    eprintf "Can't add breakpoint at pc %i: no event there.@." pc;
     raise Toplevel
 
 let add_breakpoint_after_pc pc =
@@ -187,6 +185,8 @@ let interprete_line ppf line =
     with
     | Parsing.Parse_error ->
         error "Syntax error."
+    | Failure "int_of_string" ->
+      error "Integer overflow"
 
 let line_loop ppf line_buffer =
   resume_user_input ();
@@ -209,8 +209,8 @@ let line_loop ppf line_buffer =
     with
     | Exit ->
         stop_user_input ()
-    | Sys_error s ->
-        error ("System error : " ^ s)
+(*    | Sys_error s ->
+        error ("System error: " ^ s) *)
 
 (** Instructions. **)
 let instr_cd ppf lexbuf =
@@ -230,6 +230,22 @@ let instr_shell ppf lexbuf =
   if (err != 0) then
     eprintf "Shell command %S failed with exit code %d\n%!" cmd err
 
+let instr_env ppf lexbuf =
+  let cmdarg = argument_list_eol argument lexbuf in
+  let cmdarg = string_trim (String.concat " " cmdarg) in
+  if cmdarg <> "" then
+    try
+      if (String.index cmdarg '=') > 0 then
+        Debugger_config.environment := cmdarg :: !Debugger_config.environment
+      else
+        eprintf "Environment variables should not have an empty name\n%!"
+    with Not_found ->
+      eprintf "Environment variables should have the \"name=value\" format\n%!"
+  else
+    List.iter
+      (printf "%s\n%!")
+      (List.rev !Debugger_config.environment)
+
 let instr_pwd ppf lexbuf =
   eol lexbuf;
   fprintf ppf "%s@." (Sys.getcwd ())
@@ -247,16 +263,18 @@ let instr_dir ppf lexbuf =
     else begin
       let new_directory' = List.rev new_directory in
       match new_directory' with
-      | mdl :: for_keyw :: tl when (String.lowercase for_keyw) = "for" && (List.length tl) > 0 ->
+      | mdl :: for_keyw :: tl
+        when (String.lowercase for_keyw) = "for" && (List.length tl) > 0 ->
           List.iter (function x -> add_path_for mdl (expand_path x)) tl
       | _ ->
           List.iter (function x -> add_path (expand_path x)) new_directory'
     end;
     let print_dirs ppf l = List.iter (function x -> fprintf ppf "@ %s" x) l in
-    fprintf ppf "@[<2>Directories :%a@]@." print_dirs !Config.load_path;
+    fprintf ppf "@[<2>Directories: %a@]@." print_dirs !Config.load_path;
     Hashtbl.iter
       (fun mdl dirs ->
-        fprintf ppf "@[<2>Source directories for %s :%a@]@." mdl print_dirs dirs)
+         fprintf ppf "@[<2>Source directories for %s: %a@]@." mdl print_dirs
+                 dirs)
       Debugger_config.load_path_for
 
 let instr_kill ppf lexbuf =
@@ -355,11 +373,11 @@ let instr_quit _ =
 
 let print_variable_list ppf =
   let pr_vars ppf = List.iter (fun v -> fprintf ppf "%s@ " v.var_name) in
-  fprintf ppf "List of variables :%a@." pr_vars !variable_list
+  fprintf ppf "List of variables: %a@." pr_vars !variable_list
 
 let print_info_list ppf =
   let pr_infos ppf = List.iter (fun i -> fprintf ppf "%s@ " i.info_name)  in
-  fprintf ppf "List of info commands :%a@." pr_infos !info_list
+  fprintf ppf "List of info commands: %a@." pr_infos !info_list
 
 let instr_complete ppf lexbuf =
   let ppf = Format.err_formatter in
@@ -415,7 +433,7 @@ let instr_help ppf lexbuf =
   | Some x ->
       let print_help nm hlp =
         eol lexbuf;
-        fprintf ppf "%s : %s@." nm hlp in
+        fprintf ppf "%s: %s@." nm hlp in
       begin match matching_instructions x with
       | [] ->
           eol lexbuf;
@@ -451,10 +469,10 @@ let instr_help ppf lexbuf =
           print_help i.instr_name i.instr_help
       | l ->
           eol lexbuf;
-          fprintf ppf "Ambiguous command \"%s\" : %a@." x pr_instrs l
+          fprintf ppf "Ambiguous command \"%s\": %a@." x pr_instrs l
       end
   | None ->
-      fprintf ppf "List of commands :%a@." pr_instrs !instruction_list
+      fprintf ppf "List of commands: %a@." pr_instrs !instruction_list
 
 (* Printing values *)
 
@@ -467,12 +485,18 @@ let print_expr depth ev env ppf expr =
     Eval.report_error ppf msg;
     raise Toplevel
 
+let env_of_event =
+  function
+    None    -> Env.empty
+  | Some ev ->
+      Envaux.env_from_summary ev.Instruct.ev_typenv ev.Instruct.ev_typsubst
+
 let print_command depth ppf lexbuf =
   let exprs = expression_list_eol Lexer.lexeme lexbuf in
   ensure_loaded ();
   let env =
     try
-      Envaux.env_of_event !selected_event
+      env_of_event !selected_event
     with
     | Envaux.Error msg ->
         Envaux.report_error ppf msg;
@@ -532,7 +556,7 @@ let instr_show =
     (function ppf ->
        List.iter
          (function {var_name = nm; var_action = (_, funct)} ->
-              fprintf ppf "%s : " nm;
+              fprintf ppf "%s: " nm;
               funct ppf)
          !variable_list)
 
@@ -557,7 +581,7 @@ let instr_break ppf lexbuf =
     | BA_function expr ->                       (* break FUNCTION *)
         let env =
           try
-            Envaux.env_of_event !selected_event
+            env_of_event !selected_event
           with
           | Envaux.Error msg ->
               Envaux.report_error ppf msg;
@@ -600,7 +624,9 @@ let instr_break ppf lexbuf =
                raise Toplevel)
     | BA_pos2 (mdle, position) ->             (* break @ [MODULE] # POSITION *)
         try
-          new_breakpoint (event_near_pos (convert_module (module_of_longident mdle)) position)
+          new_breakpoint
+            (event_near_pos (convert_module (module_of_longident mdle))
+                            position)
         with
         | Not_found ->
             eprintf "Can't find any event there.@."
@@ -827,18 +853,18 @@ let follow_fork_variable =
 
 let pr_modules ppf mods =
  let pr_mods ppf = List.iter (function x -> fprintf ppf "%s@ " x) in
- fprintf ppf "Used modules :@.%a@?" pr_mods mods
+ fprintf ppf "Used modules: @.%a@?" pr_mods mods
 
 let info_modules ppf lexbuf =
   eol lexbuf;
   ensure_loaded ();
   pr_modules ppf !modules
 (********
-  print_endline "Opened modules :";
+  print_endline "Opened modules: ";
   if !opened_modules_names = [] then
     print_endline "(no module opened)."
   else
-    (List.iter (function x -> print_string x; print_space) !opened_modules_names;
+    (List.iter (function x -> print_string x;print_space) !opened_modules_names;
      print_newline ())
 *********)
 
@@ -876,8 +902,10 @@ let info_breakpoints ppf lexbuf =
 
 let info_events ppf lexbuf =
   ensure_loaded ();
-  let mdle = convert_module (module_of_longident (opt_longident_eol Lexer.lexeme lexbuf)) in
-    print_endline ("Module : " ^ mdle);
+  let mdle =
+    convert_module (module_of_longident (opt_longident_eol Lexer.lexeme lexbuf))
+  in
+    print_endline ("Module: " ^ mdle);
     print_endline "   Address  Characters        Kind      Repr.";
     List.iter
       (function ev ->
@@ -962,6 +990,9 @@ With no argument, reset the search path." };
      { instr_name = "shell"; instr_prio = false;
        instr_action = instr_shell; instr_repeat = true; instr_help =
 "Execute a given COMMAND thru the system shell." };
+     { instr_name = "environment"; instr_prio = false;
+       instr_action = instr_env; instr_repeat = false; instr_help =
+"environment variable to give to program being debugged when it is started." };
       (* Displacements *)
      { instr_name = "run"; instr_prio = true;
        instr_action = instr_run; instr_repeat = true; instr_help =
@@ -1081,10 +1112,10 @@ using \"load_printer\"." };
        var_action = loading_mode_variable ppf;
        var_help =
 "mode of loading.\n\
-It can be either :\n\
-  direct : the program is directly called by the debugger.\n\
-  runtime : the debugger execute `ocamlrun programname arguments'.\n\
-  manual : the program is not launched by the debugger,\n\
+It can be either:\n\
+  direct: the program is directly called by the debugger.\n\
+  runtime: the debugger execute `ocamlrun programname arguments'.\n\
+  manual: the program is not launched by the debugger,\n\
     but manually by the user." };
      { var_name = "processcount";
        var_action = integer_variable false 1 "Must be >= 1."
@@ -1128,8 +1159,8 @@ It can be either :\n\
        var_help =
 "process to follow after forking.\n\
 It can be either :
-  child : the newly created process.\n\
-  parent : the process that called fork.\n" }];
+  child: the newly created process.\n\
+  parent: the process that called fork.\n" }];
 
   info_list :=
     (* info name, function, help *)

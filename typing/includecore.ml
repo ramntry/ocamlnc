@@ -10,11 +10,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Inclusion checks for the core language *)
 
-open Misc
 open Asttypes
 open Path
 open Types
@@ -118,18 +115,12 @@ type type_mismatch =
   | Constraint
   | Manifest
   | Variance
-  | Field_type of string
-  | Field_mutable of string
-  | Field_arity of string
-  | Field_names of int * string * string
-  | Field_missing of bool * string
+  | Field_type of Ident.t
+  | Field_mutable of Ident.t
+  | Field_arity of Ident.t
+  | Field_names of int * Ident.t * Ident.t
+  | Field_missing of bool * Ident.t
   | Record_representation of bool
-
-let nth n =
-  if n = 1 then "first" else
-  if n = 2 then "2nd" else
-  if n = 3 then "3rd" else
-  string_of_int n ^ "th"
 
 let report_type_mismatch0 first second decl ppf err =
   let pr fmt = Format.fprintf ppf fmt in
@@ -141,17 +132,17 @@ let report_type_mismatch0 first second decl ppf err =
   | Manifest -> ()
   | Variance -> pr "Their variances do not agree"
   | Field_type s ->
-      pr "The types for field %s are not equal" s
+      pr "The types for field %s are not equal" (Ident.name s)
   | Field_mutable s ->
-      pr "The mutability of field %s is different" s
+      pr "The mutability of field %s is different" (Ident.name s)
   | Field_arity s ->
-      pr "The arities for field %s differ" s
+      pr "The arities for field %s differ" (Ident.name s)
   | Field_names (n, name1, name2) ->
-      pr "Their %s fields have different names, %s and %s"
-        (nth n) name1 name2
+      pr "Fields number %i have different names, %s and %s"
+        n (Ident.name name1) (Ident.name name2)
   | Field_missing (b, s) ->
       pr "The field %s is only present in %s %s"
-        s (if b then second else first) decl
+        (Ident.name s) (if b then second else first) decl
   | Record_representation b ->
       pr "Their internal representations differ:@ %s %s %s"
         (if b then second else first) decl
@@ -166,51 +157,63 @@ let report_type_mismatch first second decl ppf =
 let rec compare_variants env decl1 decl2 n cstrs1 cstrs2 =
   match cstrs1, cstrs2 with
     [], []           -> []
-  | [], (cstr2,_,_)::_ -> [Field_missing (true, cstr2)]
-  | (cstr1,_,_)::_, [] -> [Field_missing (false, cstr1)]
-  | (cstr1, arg1, ret1)::rem1, (cstr2, arg2,ret2)::rem2 ->
-      if cstr1 <> cstr2 then [Field_names (n, cstr1, cstr2)] else
-      if List.length arg1 <> List.length arg2 then [Field_arity cstr1] else
-      match ret1, ret2 with
-      | Some r1, Some r2 when not (Ctype.equal env true [r1] [r2]) -> 
-	  [Field_type cstr1]
+  | [], c::_ -> [Field_missing (true, c.Types.cd_id)]
+  | c::_, [] -> [Field_missing (false, c.Types.cd_id)]
+  | {Types.cd_id=cstr1; cd_args=arg1; cd_res=ret1}::rem1,
+    {Types.cd_id=cstr2; cd_args=arg2; cd_res=ret2}::rem2 ->
+      if Ident.name cstr1 <> Ident.name cstr2 then
+        [Field_names (n, cstr1, cstr2)]
+      else if List.length arg1 <> List.length arg2 then
+        [Field_arity cstr1]
+      else match ret1, ret2 with
+      | Some r1, Some r2 when not (Ctype.equal env true [r1] [r2]) ->
+          [Field_type cstr1]
       | Some _, None | None, Some _ ->
-	  [Field_type cstr1]
-      | _ ->      
-	  if Misc.for_all2
-	      (fun ty1 ty2 ->
-		Ctype.equal env true (ty1::decl1.type_params)
-		  (ty2::decl2.type_params))
-	      (arg1) (arg2) 
-	  then 
-	    compare_variants env decl1 decl2 (n+1) rem1 rem2
-	  else [Field_type cstr1]
-	      
-	    
+          [Field_type cstr1]
+      | _ ->
+          if Misc.for_all2
+              (fun ty1 ty2 ->
+                Ctype.equal env true (ty1::decl1.type_params)
+                  (ty2::decl2.type_params))
+              (arg1) (arg2)
+          then
+            compare_variants env decl1 decl2 (n+1) rem1 rem2
+          else [Field_type cstr1]
+
+
 let rec compare_records env decl1 decl2 n labels1 labels2 =
   match labels1, labels2 with
     [], []           -> []
-  | [], (lab2,_,_)::_ -> [Field_missing (true, lab2)]
-  | (lab1,_,_)::_, [] -> [Field_missing (false, lab1)]
-  | (lab1, mut1, arg1)::rem1, (lab2, mut2, arg2)::rem2 ->
-      if lab1 <> lab2 then [Field_names (n, lab1, lab2)] else
-      if mut1 <> mut2 then [Field_mutable lab1] else
+  | [], l::_ -> [Field_missing (true, l.ld_id)]
+  | l::_, [] -> [Field_missing (false, l.ld_id)]
+  | {Types.ld_id=lab1; ld_mutable=mut1; ld_type=arg1}::rem1,
+    {Types.ld_id=lab2; ld_mutable=mut2; ld_type=arg2}::rem2 ->
+      if Ident.name lab1 <> Ident.name lab2
+      then [Field_names (n, lab1, lab2)]
+      else if mut1 <> mut2 then [Field_mutable lab1] else
       if Ctype.equal env true (arg1::decl1.type_params)
                               (arg2::decl2.type_params)
       then compare_records env decl1 decl2 (n+1) rem1 rem2
       else [Field_type lab1]
 
-let type_declarations env id decl1 decl2 =
+let type_declarations ?(equality = false) env name decl1 id decl2 =
   if decl1.type_arity <> decl2.type_arity then [Arity] else
   if not (private_flags decl1 decl2) then [Privacy] else
   let err = match (decl1.type_kind, decl2.type_kind) with
       (_, Type_abstract) -> []
     | (Type_variant cstrs1, Type_variant cstrs2) ->
-        let name = Ident.name id in
-        if decl1.type_private = Private || decl2.type_private = Public then
+        let mark cstrs usage name decl =
           List.iter
-            (fun (c, _, _) -> Env.mark_constructor_used name decl1 c)
-            cstrs1;
+            (fun c ->
+              Env.mark_constructor_used usage name decl (Ident.name c.Types.cd_id))
+            cstrs
+        in
+        let usage =
+          if decl1.type_private = Private || decl2.type_private = Public
+          then Env.Positive else Env.Privatize
+        in
+        mark cstrs1 usage name decl1;
+        if equality then mark cstrs2 Env.Positive (Ident.name id) decl2;
         compare_variants env decl1 decl2 1 cstrs1 cstrs2
     | (Type_record(labels1,rep1), Type_record(labels2,rep2)) ->
         let err = compare_records env decl1 decl2 1 labels1 labels2 in
@@ -237,23 +240,26 @@ let type_declarations env id decl1 decl2 =
         else [Constraint]
   in
   if err <> [] then err else
-  if match decl2.type_kind with
-  | Type_record (_,_) | Type_variant _ -> decl2.type_private = Private
-  | Type_abstract ->
-      match decl2.type_manifest with
-      | None -> true
-      | Some ty -> Btype.has_constr_row (Ctype.expand_head env ty)
-  then
-    if List.for_all2
-        (fun (co1,cn1,ct1) (co2,cn2,ct2) -> (not co1 || co2)&&(not cn1 || cn2))
-        decl1.type_variance decl2.type_variance
-    then [] else [Variance]
-  else []
+  let abstr =
+    decl2.type_private = Private ||
+    decl2.type_kind = Type_abstract && decl2.type_manifest = None in
+  if List.for_all2
+      (fun ty (v1,v2) ->
+        let open Variance in
+        let imp a b = not a || b in
+        let (co1,cn1) = get_upper v1 and (co2,cn2) = get_upper v2 in
+        imp abstr (imp co1 co2 && imp cn1 cn2) &&
+        (abstr || Btype.(is_Tvar (repr ty)) || co1 = co2 && cn1 = cn2) &&
+        let (p1,n1,i1,j1) = get_lower v1 and (p2,n2,i2,j2) = get_lower v2 in
+        imp abstr (imp p2 p1 && imp n2 n1 && imp i2 i1 && imp j2 j1))
+      decl2.type_params (List.combine decl1.type_variance decl2.type_variance)
+  then [] else [Variance]
 
 (* Inclusion between exception declarations *)
 
 let exception_declarations env ed1 ed2 =
-  Misc.for_all2 (fun ty1 ty2 -> Ctype.equal env false [ty1] [ty2]) ed1 ed2
+  Misc.for_all2 (fun ty1 ty2 -> Ctype.equal env false [ty1] [ty2])
+    ed1.exn_args ed2.exn_args
 
 (* Inclusion between class types *)
 let encode_val (mut, ty) rem =

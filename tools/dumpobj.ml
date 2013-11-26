@@ -10,21 +10,19 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Disassembler for executable and .cmo object files *)
 
 open Asttypes
 open Config
-open Emitcode
 open Instruct
 open Lambda
 open Location
-open Obj
 open Opcodes
 open Opnames
 open Cmo_format
 open Printf
+
+let print_locations = ref true
 
 (* Read signed and unsigned integers *)
 
@@ -84,7 +82,7 @@ let print_float f =
 let rec print_struct_const = function
     Const_base(Const_int i) -> printf "%d" i
   | Const_base(Const_float f) -> print_float f
-  | Const_base(Const_string s) -> printf "%S" s
+  | Const_base(Const_string (s, _)) -> printf "%S" s
   | Const_immstring s -> printf "%S" s
   | Const_base(Const_char c) -> printf "%C" c
   | Const_base(Const_int32 i) -> printf "%ldl" i
@@ -399,11 +397,12 @@ let op_shapes = [
 ];;
 
 let print_event ev =
-  let ls = ev.ev_loc.loc_start in
-  let le = ev.ev_loc.loc_end in
-  printf "File \"%s\", line %d, characters %d-%d:\n" ls.Lexing.pos_fname
-         ls.Lexing.pos_lnum (ls.Lexing.pos_cnum - ls.Lexing.pos_bol)
-         (le.Lexing.pos_cnum - ls.Lexing.pos_bol)
+  if !print_locations then
+    let ls = ev.ev_loc.loc_start in
+    let le = ev.ev_loc.loc_end in
+    printf "File \"%s\", line %d, characters %d-%d:\n" ls.Lexing.pos_fname
+      ls.Lexing.pos_lnum (ls.Lexing.pos_cnum - ls.Lexing.pos_bol)
+      (le.Lexing.pos_cnum - ls.Lexing.pos_bol)
 
 let print_instr ic =
   let pos = currpos ic in
@@ -449,7 +448,7 @@ let print_instr ic =
         let nvars = inputu ic in
         let orig = currpc ic in
         print_int nvars;
-        for i = 0 to nfuncs - 1 do
+        for _i = 0 to nfuncs - 1 do
           print_string ", ";
           print_int (orig + inputs ic);
         done;
@@ -483,8 +482,7 @@ let print_reloc (info, pos) =
 (* Print a .cmo file *)
 
 let dump_obj filename ic =
-  let buffer = String.create (String.length cmo_magic_number) in
-  really_input ic buffer 0 (String.length cmo_magic_number);
+  let buffer = Misc.input_bytes ic (String.length cmo_magic_number) in
   if buffer <> cmo_magic_number then begin
     prerr_endline "Not an object file"; exit 2
   end;
@@ -503,8 +501,7 @@ let dump_obj filename ic =
 (* Read the primitive table from an executable *)
 
 let read_primitive_table ic len =
-  let p = String.create len in
-  really_input ic p 0 len;
+  let p = Misc.input_bytes ic len in
   let rec split beg cur =
     if cur >= len then []
     else if p.[cur] = '\000' then
@@ -531,7 +528,7 @@ let dump_exe ic =
   begin try
     ignore (Bytesections.seek_section ic "DBUG");
     let num_eventlists = input_binary_int ic in
-    for i = 1 to num_eventlists do
+    for _i = 1 to num_eventlists do
       let orig = input_binary_int ic in
       let evl = (input_value ic : debug_event list) in
       record_events orig evl
@@ -541,20 +538,30 @@ let dump_exe ic =
   let code_size = Bytesections.seek_section ic "CODE" in
   print_code ic code_size
 
-let main() =
-  for i = 1 to Array.length Sys.argv - 1 do
-    let filnam = Sys.argv.(i) in
-    let ic = open_in_bin filnam in
-    if i>1 then print_newline ();
-    printf "## start of ocaml dump of %S\n%!" filnam;
-    begin try
-      objfile := false; dump_exe ic
+let arg_list = [
+  "-noloc", Arg.Clear print_locations, " : don't print source information";
+]
+let arg_usage =
+  Printf.sprintf "%s [OPTIONS] FILES : dump content of bytecode files"
+                 Sys.argv.(0)
+
+let first_file = ref true
+
+let arg_fun filename =
+  let ic = open_in_bin filename in
+  if not !first_file then print_newline ();
+  first_file := false;
+  printf "## start of ocaml dump of %S\n%!" filename;
+  begin try
+          objfile := false; dump_exe ic
     with Bytesections.Bad_magic_number ->
-      objfile := true; seek_in ic 0; dump_obj (Sys.argv.(i)) ic
-    end;
-    close_in ic;
-    printf "## end of ocaml dump of %S\n%!" filnam;
-  done;
-  exit 0
+      objfile := true; seek_in ic 0; dump_obj filename ic
+  end;
+  close_in ic;
+  printf "## end of ocaml dump of %S\n%!" filename
+
+let main() =
+  Arg.parse arg_list arg_fun arg_usage;
+    exit 0
 
 let _ = main ()

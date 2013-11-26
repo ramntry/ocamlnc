@@ -11,11 +11,10 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 type extern_flags =
     No_sharing
   | Closures
+  | Compat_32
 
 external to_string: 'a -> extern_flags list -> string
     = "caml_output_value_to_string"

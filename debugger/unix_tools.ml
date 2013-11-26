@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (****************** Tools for Unix *************************************)
 
 open Misc
@@ -30,7 +28,7 @@ let convert_address address =
          ADDR_INET
            ((try inet_addr_of_string host with Failure _ ->
                try (gethostbyname host).h_addr_list.(0) with Not_found ->
-                 prerr_endline ("Unknown host : " ^ host);
+                 prerr_endline ("Unknown host: " ^ host);
                  failwith "Can't convert address"),
             (try int_of_string port with Failure _ ->
                prerr_endline "The port number should be an integer";
@@ -43,14 +41,14 @@ let convert_address address =
 (*** Report a unix error. ***)
 let report_error = function
   | Unix_error (err, fun_name, arg) ->
-     prerr_string "Unix error : '";
+     prerr_string "Unix error: '";
      prerr_string fun_name;
      prerr_string "' failed";
      if String.length arg > 0 then
        (prerr_string " on '";
         prerr_string arg;
         prerr_string "'");
-     prerr_string " : ";
+     prerr_string ": ";
      prerr_endline (error_message err)
   | _ -> fatal_error "report_error: not a Unix error"
 
@@ -58,6 +56,7 @@ let report_error = function
 (* Return the full path if found. *)
 (* Raise `Not_found' otherwise. *)
 let search_in_path name =
+  Printf.fprintf Pervasives.stderr "search_in_path [%s]\n%!" name;
   let check name =
     try access name [X_OK]; name with Unix_error _ -> raise Not_found
   in

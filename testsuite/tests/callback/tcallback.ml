@@ -1,7 +1,21 @@
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1995 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
+
 external mycallback1 : ('a -> 'b) -> 'a -> 'b = "mycallback1"
 external mycallback2 : ('a -> 'b -> 'c) -> 'a -> 'b -> 'c = "mycallback2"
-external mycallback3 : ('a -> 'b -> 'c -> 'd) -> 'a -> 'b -> 'c -> 'd = "mycallback3"
-external mycallback4 : ('a -> 'b -> 'c -> 'd -> 'e) -> 'a -> 'b -> 'c -> 'd -> 'e = "mycallback4"
+external mycallback3 : ('a -> 'b -> 'c -> 'd) -> 'a -> 'b -> 'c -> 'd
+    = "mycallback3"
+external mycallback4 :
+    ('a -> 'b -> 'c -> 'd -> 'e) -> 'a -> 'b -> 'c -> 'd -> 'e = "mycallback4"
 
 let rec tak (x, y, z as _tuple) =
   if x > y then tak(tak (x-1, y, z), tak (y-1, z, x), tak (z-1, x, y))
@@ -65,4 +79,3 @@ let _ =
   print_string(tripwire mycamlparam); print_newline();
   Sys.set_signal Sys.sigusr1 (Sys.Signal_handle sighandler);
   print_string(callbacksig ()); print_newline()
-

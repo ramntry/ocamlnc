@@ -10,7 +10,7 @@
 (*                                                                       *)
 (*************************************************************************)
 
-(* $Id$
+(*
 
 A testbed file for the module Scanf.
 
@@ -187,22 +187,7 @@ let unit fmt s =
 
 let test_fmt fmt s = unit fmt s = s;;
 
-(* The following test9_string is a result for test9 scanning.
-   Test9_string is the string "ï»¿",
-   that is character i tréma, followed by french right guillemet,
-   followed by inverted question mark.
-   It is NOT the string "Ôªø",
-   that is uppercase o with circonflex accent, followed by commercial a,
-   followed by empty set.
-
-   In other words, the string "ï»¿" has the following 3 characters
-   "\239\187\191".
-   It has NOT the characters "\212\170\248"!
-
-   Beware with automatic translation by your own local settings
-   (being your locale or your OS!)
-*)
-let test9_string = "ï»¿";;
+let test9_string = "\239\187\191";;
 
 let test_S = test_fmt "%S";;
 let test9 () =
@@ -245,10 +230,10 @@ let test10 () =
   Scanf.bscanf ib "%S" id in
 
   let res =
-    sscanf "Une chaîne: \"celle-ci\" et \"celle-là\"!"
+    sscanf "Une chaine: \"celle-ci\" et \"celle-la\"!"
            "%s %s %S %s %S %s"
            (fun s1 s2 s3 s4 s5 s6 -> s1 ^ s2 ^ s3 ^ s4 ^ s5 ^ s6) in
-  res = "Unechaîne:celle-cietcelle-là!" &&
+  res = "Unechaine:celle-cietcelle-la!" &&
   (* Testing the result of reading a %S string. *)
   unit "\"a\\\n  b\"" = "ab" &&
   unit "\"\\\n  ab\"" = "ab" &&
@@ -265,15 +250,15 @@ test (test10 ())
 
 (* %[] style *)
 let test11 () =
-  sscanf "Pierre	Weis	70" "%s %s %s"
+  sscanf "Pierre\tWeis\t70" "%s %s %s"
     (fun prenom nom poids ->
      prenom = "Pierre" && nom = "Weis" && int_of_string poids = 70)
   &&
-  sscanf "Jean-Luc	de Léage	68" "%[^	] %[^	] %d"
+  sscanf "Jean-Luc\tde Leage\t68" "%[^\t] %[^\t] %d"
     (fun prenom nom poids ->
-     prenom = "Jean-Luc" && nom = "de Léage" && poids = 68)
+     prenom = "Jean-Luc" && nom = "de Leage" && poids = 68)
   &&
-  sscanf "Daniel	de Rauglaudre	66" "%s@\t %s@\t %d"
+  sscanf "Daniel\tde Rauglaudre\t66" "%s@\t %s@\t %d"
     (fun prenom nom poids ->
      prenom = "Daniel" && nom = "de Rauglaudre" && poids = 66)
 ;;
@@ -585,7 +570,7 @@ and test27 () =
  (test27 ())
 ;;
 
-(* To scan a Caml string:
+(* To scan an OCaml string:
    the format is "\"%s@\"".
    A better way would be to add a %S (String.escaped), a %C (Char.escaped).
    This is now available. *)
@@ -950,7 +935,7 @@ test (test340 () && test35 ())
 
 (* The prefered reader functionnals. *)
 
-(* To read a list as in Caml (elements are ``blank + semicolon + blank''
+(* To read a list as in OCaml (elements are ``blank + semicolon + blank''
    separated, and the list is enclosed in brackets). *)
 let rec read_elems read_elem accu ib =
   kscanf ib (fun ib exc -> accu)
@@ -1355,7 +1340,7 @@ let get_lines fname =
     failwith (Printf.sprintf "in file %s, unexpected end of file" fname)
 ;;
 
-(* Simpy test that the list of lines read from the file are the list of lines
+(* Simply test that the list of lines read from the file is the list of lines
    written to it!. *)
 let test54 () =
   get_lines tscanf_data_file = tscanf_data_file_lines
@@ -1444,11 +1429,21 @@ let test57 () =
 test (test57 ())
 ;;
 
-(*
 let test58 () =
+     sscanf "string1%string2" "%s@%%s" id = "string1"
+  && sscanf "string1%string2" "%s@%%%s" (^) = "string1string2"
+  && sscanf "string1@string2" "%[a-z0-9]@%s" (^) = "string1string2"
+  && sscanf "string1@%string2" "%[a-z0-9]%@%%%s" (^) = "string1string2"
 ;;
 
 test (test58 ())
+;;
+
+(*
+let test59 () =
+;;
+
+test (test59 ())
 ;;
 *)
 

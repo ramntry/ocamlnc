@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Operations on core types *)
 
 open Asttypes
@@ -55,7 +53,6 @@ val none: type_expr
 val repr: type_expr -> type_expr
         (* Return the canonical representative of a type. *)
 
-val dummy_method: label
 val object_fields: type_expr -> type_expr
 val flatten_fields:
         type_expr -> (string * field_kind * type_expr) list * type_expr
@@ -116,10 +113,11 @@ val instance_def: type_expr -> type_expr
 val instance_list: Env.t -> type_expr list -> type_expr list
         (* Take an instance of a list of type schemes *)
 val instance_constructor:
-        ?in_pattern:Env.t ref * int -> 
+        ?in_pattern:Env.t ref * int ->
         constructor_description -> type_expr list * type_expr
         (* Same, for a constructor *)
 val instance_parameterized_type:
+        ?keep_names:bool ->
         type_expr list -> type_expr -> type_expr list * type_expr
 val instance_parameterized_type_2:
         type_expr list -> type_expr list -> type_expr ->
@@ -147,13 +145,19 @@ val expand_head_opt: Env.t -> type_expr -> type_expr
 (** The compiler's own version of [expand_head] necessary for type-based
     optimisations. *)
 val full_expand: Env.t -> type_expr -> type_expr
+val extract_concrete_typedecl:
+        Env.t -> type_expr -> Path.t * Path.t * type_declaration
+        (* Return the original path of the types, and the first concrete
+           type declaration found expanding it.
+           Raise [Not_found] if none appears or not a type constructor. *)
 
 val enforce_constraints: Env.t -> type_expr -> unit
 
 val unify: Env.t -> type_expr -> type_expr -> unit
         (* Unify the two types given. Raise [Unify] if not possible. *)
 val unify_gadt: newtype_level:int -> Env.t ref -> type_expr -> type_expr -> unit
-        (* Unify the two types given and update the environment with the local constraints. Raise [Unify] if not possible. *)
+        (* Unify the two types given and update the environment with the
+           local constraints. Raise [Unify] if not possible. *)
 val unify_var: Env.t -> type_expr -> type_expr -> unit
         (* Same as [unify], but allow free univars when first type
            is a variable. *)
@@ -175,18 +179,18 @@ val rigidify: type_expr -> type_expr list
         (* "Rigidify" a type and return its type variable *)
 val all_distinct_vars: Env.t -> type_expr list -> bool
         (* Check those types are all distinct type variables *)
-val matches : Env.t -> type_expr -> type_expr -> bool
+val matches: Env.t -> type_expr -> type_expr -> bool
         (* Same as [moregeneral false], implemented using the two above
            functions and backtracking. Ignore levels *)
 
 type class_match_failure =
     CM_Virtual_class
   | CM_Parameter_arity_mismatch of int * int
-  | CM_Type_parameter_mismatch of (type_expr * type_expr) list
-  | CM_Class_type_mismatch of class_type * class_type
-  | CM_Parameter_mismatch of (type_expr * type_expr) list
-  | CM_Val_type_mismatch of string * (type_expr * type_expr) list
-  | CM_Meth_type_mismatch of string * (type_expr * type_expr) list
+  | CM_Type_parameter_mismatch of Env.t * (type_expr * type_expr) list
+  | CM_Class_type_mismatch of Env.t * class_type * class_type
+  | CM_Parameter_mismatch of Env.t * (type_expr * type_expr) list
+  | CM_Val_type_mismatch of string * Env.t * (type_expr * type_expr) list
+  | CM_Meth_type_mismatch of string * Env.t * (type_expr * type_expr) list
   | CM_Non_mutable_value of string
   | CM_Non_concrete_value of string
   | CM_Missing_value of string
@@ -197,7 +201,7 @@ type class_match_failure =
   | CM_Private_method of string
   | CM_Virtual_method of string
 val match_class_types:
-        ?trace:bool -> Env.t -> class_type -> class_type -> class_match_failure list
+    ?trace:bool -> Env.t -> class_type -> class_type -> class_match_failure list
         (* Check if the first class type is more general than the second. *)
 val equal: Env.t -> bool -> type_expr list -> type_expr list -> bool
         (* [equal env [x1...xn] tau [y1...yn] sigma]
@@ -228,7 +232,7 @@ val nondep_class_declaration:
         Env.t -> Ident.t -> class_declaration -> class_declaration
         (* Same for class declarations. *)
 val nondep_cltype_declaration:
-        Env.t -> Ident.t -> cltype_declaration -> cltype_declaration
+        Env.t -> Ident.t -> class_type_declaration -> class_type_declaration
         (* Same for class type declarations. *)
 val correct_abbrev: Env.t -> Path.t -> type_expr list -> type_expr -> unit
 val cyclic_abbrev: Env.t -> Ident.t -> type_expr -> bool
@@ -259,3 +263,4 @@ val collapse_conj_params: Env.t -> type_expr list -> unit
         (* Collapse conjunctive types in class parameters *)
 
 val get_current_level: unit -> int
+val wrap_trace_gadt_instances: Env.t -> ('a -> 'b) -> 'a -> 'b

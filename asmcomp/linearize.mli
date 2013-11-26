@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Transformation of Mach code into a list of pseudo-instructions. *)
 
 type label = int
@@ -38,7 +36,7 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise
+  | Lraise of Lambda.raise_kind
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
@@ -49,6 +47,7 @@ val invert_test: Mach.test -> Mach.test
 type fundecl =
   { fun_name: string;
     fun_body: instruction;
-    fun_fast: bool }
+    fun_fast: bool;
+    fun_dbg : Debuginfo.t }
 
 val fundecl: Mach.fundecl -> fundecl

@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 type ref_kind =
     RK_module
@@ -22,6 +21,8 @@ type ref_kind =
   | RK_attribute
   | RK_method
   | RK_section of text
+  | RK_recfield
+  | RK_const
 
 and text_element =
   | Raw of string
@@ -91,8 +92,8 @@ let dummy_info = {
 }
 
 type location = {
-    loc_impl : (string * int) option ;
-    loc_inter : (string * int) option ;
+    loc_impl : Location.t option ;
+    loc_inter : Location.t option ;
   }
 
 let dummy_loc = { loc_impl = None ; loc_inter = None }

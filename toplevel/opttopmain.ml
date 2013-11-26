@@ -10,11 +10,10 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Clflags
 
-let usage = "Usage: ocamlnat <options> <object-files> [script-file]\noptions are:"
+let usage =
+   "Usage: ocamlnat <options> <object-files> [script-file]\noptions are:"
 
 let preload_objects = ref []
 
@@ -27,7 +26,7 @@ let prepare ppf =
     !Opttoploop.toplevel_startup_hook ();
     res
   with x ->
-    try Opterrors.report_error ppf x; false
+    try Location.report_exception ppf x; false
     with x ->
       Format.fprintf ppf "Uncaught exception: %s\n" (Printexc.to_string x);
       false
@@ -76,10 +75,13 @@ module Options = Main_args.Make_opttop_options (struct
   let _noprompt = set noprompt
   let _nopromptcont = set nopromptcont
   let _nostdlib = set no_std_include
+  let _ppx s = Compenv.first_ppx := s :: !Compenv.first_ppx
   let _principal = set principal
+  let _real_paths = set real_paths
   let _rectypes = set recursive_types
   let _strict_sequence = set strict_sequence
   let _S = set keep_asm_file
+  let _short_paths = clear real_paths
   let _stdin () = file_argument ""
   let _unsafe = set fast
   let _version () = print_version ()
@@ -88,9 +90,12 @@ module Options = Main_args.Make_opttop_options (struct
   let _warn_error s = Warnings.parse_options true s
   let _warn_help = Warnings.help_warnings
 
+  let _dsource = set dump_source
   let _dparsetree = set dump_parsetree
+  let _dtypedtree = set dump_typedtree
   let _drawlambda = set dump_rawlambda
   let _dlambda = set dump_lambda
+  let _dclambda = set dump_clambda
   let _dcmm = set dump_cmm
   let _dsel = set dump_selection
   let _dcombine = set dump_combine

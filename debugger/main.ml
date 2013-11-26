@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Input_handling
 open Question
 open Command_line
@@ -74,7 +72,8 @@ let rec protect ppf restart loop =
       protect ppf restart (function ppf ->
         let b =
           if !current_duration = -1L then begin
-            let msg = sprintf "Restart from time %Ld and try to get closer of the problem" time in
+            let msg = sprintf "Restart from time %Ld and try to get \
+                               closer of the problem" time in
             stop_user_input ();
             if yes_or_no msg then
               (current_duration := init_duration; true)
@@ -183,7 +182,11 @@ let speclist = [
       " Print version number and exit";
    ]
 
+let function_placeholder () =
+  raise Not_found
+
 let main () =
+  Callback.register "Debugger.function_placeholder" function_placeholder;
   try
     socket_name :=
       (match Sys.os_type with
@@ -218,6 +221,11 @@ let main () =
   | Env.Error e ->
       eprintf "Debugger [version %s] environment error:@ @[@;" Config.version;
       Env.report_error err_formatter e;
+      eprintf "@]@.";
+      exit 2
+  | Cmi_format.Error e ->
+      eprintf "Debugger [version %s] environment error:@ @[@;" Config.version;
+      Cmi_format.report_error err_formatter e;
       eprintf "@]@.";
       exit 2
 

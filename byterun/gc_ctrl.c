@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #include "alloc.h"
 #include "compact.h"
 #include "custom.h"
@@ -129,17 +127,22 @@ static value heap_stats (int returnstats)
          free_words = 0, free_blocks = 0, largest_free = 0,
          fragments = 0, heap_chunks = 0;
   char *chunk = caml_heap_start, *chunk_end;
-  char *cur_hp, *prev_hp;
+  char *cur_hp;
+#ifdef DEBUG
+  char *prev_hp;
+#endif
   header_t cur_hd;
 
 #ifdef DEBUG
-  caml_gc_message (-1, "### O'Caml runtime: heap check ###\n", 0);
+  caml_gc_message (-1, "### OCaml runtime: heap check ###\n", 0);
 #endif
 
   while (chunk != NULL){
     ++ heap_chunks;
     chunk_end = chunk + Chunk_size (chunk);
+#ifdef DEBUG
     prev_hp = NULL;
+#endif
     cur_hp = chunk;
     while (cur_hp < chunk_end){
       cur_hd = Hd_hp (cur_hp);
@@ -194,7 +197,9 @@ static value heap_stats (int returnstats)
         */
         break;
       }
+#ifdef DEBUG
       prev_hp = cur_hp;
+#endif
       cur_hp = Next (cur_hp);
     }                                          Assert (cur_hp == chunk_end);
     chunk = Chunk_next (chunk);
@@ -356,21 +361,12 @@ static intnat norm_minsize (intnat s)
   return s;
 }
 
-static intnat norm_policy (intnat p)
-{
-  if (p >= 0 && p <= 1){
-    return p;
-  }else{
-    return 1;
-  }
-}
-
 CAMLprim value caml_gc_set(value v)
 {
   uintnat newpf, newpm;
   asize_t newheapincr;
   asize_t newminsize;
-  uintnat newpolicy;
+  uintnat oldpolicy;
 
   caml_verb_gc = Long_val (Field (v, 3));
 
@@ -396,15 +392,16 @@ CAMLprim value caml_gc_set(value v)
     caml_gc_message (0x20, "New heap increment size: %luk bytes\n",
                      caml_major_heap_increment/1024);
   }
-  newpolicy = norm_policy (Long_val (Field (v, 6)));
-  if (newpolicy != caml_allocation_policy){
-    caml_gc_message (0x20, "New allocation policy: %d\n", newpolicy);
-    caml_set_allocation_policy (newpolicy);
+  oldpolicy = caml_allocation_policy;
+  caml_set_allocation_policy (Long_val (Field (v, 6)));
+  if (oldpolicy != caml_allocation_policy){
+    caml_gc_message (0x20, "New allocation policy: %d\n",
+                     caml_allocation_policy);
   }
 
     /* Minor heap size comes last because it will trigger a minor collection
        (thus invalidating [v]) and it can raise [Out_of_memory]. */
-  newminsize = norm_minsize (Bsize_wsize (Long_val (Field (v, 0))));
+  newminsize = Bsize_wsize (norm_minsize (Long_val (Field (v, 0))));
   if (newminsize != caml_minor_heap_size){
     caml_gc_message (0x20, "New minor heap size: %luk bytes\n",
                      newminsize/1024);

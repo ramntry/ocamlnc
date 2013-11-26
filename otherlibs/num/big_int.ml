@@ -419,19 +419,30 @@ let string_of_big_int bi =
   else string_of_nat bi.abs_value
 
 
-let sys_big_int_of_string_aux s ofs len sgn =
+let sys_big_int_of_string_aux s ofs len sgn base =
   if len < 1 then failwith "sys_big_int_of_string";
-  let n = sys_nat_of_string 10 s ofs len in
+  let n = sys_nat_of_string base s ofs len in
   if is_zero_nat n 0 (length_nat n) then zero_big_int
   else {sign = sgn; abs_value = n}
+;;
+
+let sys_big_int_of_string_base s ofs len sgn =
+  if len < 1 then failwith "sys_big_int_of_string";
+  if len < 2 then sys_big_int_of_string_aux s ofs len sgn 10
+  else
+    match (s.[ofs], s.[ofs+1]) with
+    | ('0', 'x') | ('0', 'X') -> sys_big_int_of_string_aux s (ofs+2) (len-2) sgn 16
+    | ('0', 'o') | ('0', 'O') -> sys_big_int_of_string_aux s (ofs+2) (len-2) sgn 8
+    | ('0', 'b') | ('0', 'B') -> sys_big_int_of_string_aux s (ofs+2) (len-2) sgn 2
+    | _ -> sys_big_int_of_string_aux s ofs len sgn 10
 ;;
 
 let sys_big_int_of_string s ofs len =
   if len < 1 then failwith "sys_big_int_of_string";
   match s.[ofs] with
-  | '-' -> sys_big_int_of_string_aux s (ofs+1) (len-1) (-1)
-  | '+' -> sys_big_int_of_string_aux s (ofs+1) (len-1) 1
-  | _ -> sys_big_int_of_string_aux s ofs len 1
+  | '-' -> sys_big_int_of_string_base s (ofs+1) (len-1) (-1)
+  | '+' -> sys_big_int_of_string_base s (ofs+1) (len-1) 1
+  | _ -> sys_big_int_of_string_base s ofs len 1
 ;;
 
 let big_int_of_string s =
@@ -451,7 +462,6 @@ let power_base_nat base nat off len =
     let res = make_nat n
     and res2 = make_nat (succ n)
     and l = num_bits_int n - 2 in
-    let p = ref (1 lsl l) in
       blit_nat res 0 power_base pmax 1;
       for i = l downto 0 do
         let len = num_digits_nat res 0 n in
@@ -459,14 +469,13 @@ let power_base_nat base nat off len =
         let succ_len2 = succ len2 in
           ignore (square_nat res2 0 len2 res 0 len);
           begin
-           if n land !p > 0
+           if n land (1 lsl i) > 0
               then (set_to_zero_nat res 0 len;
                     ignore (mult_digit_nat res 0 succ_len2
                               res2 0 len2 power_base pmax))
               else blit_nat res 0 res2 0 len2
           end;
-          set_to_zero_nat res2 0 len2;
-          p := !p lsr 1
+          set_to_zero_nat res2 0 len2
       done;
     if rem > 0
      then (ignore (mult_digit_nat res2 0 (succ n)
@@ -496,21 +505,19 @@ let power_big_int_positive_int bi n =
          let res = make_nat res_len
          and res2 = make_nat res_len
          and l = num_bits_int n - 2 in
-         let p = ref (1 lsl l) in
          blit_nat res 0 bi.abs_value 0 bi_len;
          for i = l downto 0 do
            let len = num_digits_nat res 0 res_len in
            let len2 = min res_len (2 * len) in
            set_to_zero_nat res2 0 len2;
            ignore (square_nat res2 0 len2 res 0 len);
-           if n land !p > 0 then begin
+           if n land (1 lsl i) > 0 then begin
              let lenp = min res_len (len2 + bi_len) in
              set_to_zero_nat res 0 lenp;
              ignore(mult_nat res 0 lenp res2 0 len2 (bi.abs_value) 0 bi_len)
            end else begin
              blit_nat res 0 res2 0 len2
-           end;
-           p := !p lsr 1
+           end
          done;
          {sign = if bi.sign >=  0 then bi.sign
                  else if n land 1 = 0 then 1 else -1;
@@ -743,7 +750,13 @@ let extract_big_int bi ofs n =
     if bi.sign < 0 then begin
       (* Two's complement *)
       complement_nat res 0 size_res;
-      ignore (incr_nat res 0 size_res 1)
+      (* PR#6010: need to increment res iff digits 0...ndigits-1 of bi are 0.
+         In this case, digits 0...ndigits-1 of not(bi) are all 0xFF...FF,
+         and adding 1 to them produces a carry out at ndigits. *)
+      let rec carry_incr i =
+        i >= ndigits || i >= size_bi ||
+          (is_digit_zero bi.abs_value i && carry_incr (i + 1)) in
+      if carry_incr 0 then ignore (incr_nat res 0 size_res 1)
     end;
     if nbits > 0 then begin
       let tmp = create_nat 1 in

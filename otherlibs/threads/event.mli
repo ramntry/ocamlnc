@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (** First-class synchronous communication.
 
    This module implements synchronous inter-thread communications over
@@ -59,8 +57,8 @@ val wrap_abort : 'a event -> (unit -> unit) -> 'a event
 
 val guard : (unit -> 'a event) -> 'a event
 (** [guard fn] returns the event that, when synchronized, computes
-   [fn()] and behaves as the resulting event. This allows to
-   compute events with side-effects at the time of the synchronization
+   [fn()] and behaves as the resulting event. This allows events with
+   side-effects to be computed at the time of the synchronization
    operation. *)
 
 val sync : 'a event -> 'a

@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 type machtype_component =
     Addr
   | Int
@@ -72,7 +70,7 @@ type operation =
   | Cload of memory_chunk
   | Calloc
   | Cstore of memory_chunk
-  | Caddi | Csubi | Cmuli | Cdivi | Cmodi
+  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
   | Ccmpi of comparison
   | Cadda | Csuba
@@ -81,7 +79,7 @@ type operation =
   | Caddf | Csubf | Cmulf | Cdivf
   | Cfloatofint | Cintoffloat
   | Ccmpf of comparison
-  | Craise of Debuginfo.t
+  | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
 
 type expression =
@@ -108,7 +106,8 @@ type fundecl =
   { fun_name: string;
     fun_args: (Ident.t * machtype) list;
     fun_body: expression;
-    fun_fast: bool }
+    fun_fast: bool;
+    fun_dbg : Debuginfo.t; }
 
 type data_item =
     Cdefine_symbol of string

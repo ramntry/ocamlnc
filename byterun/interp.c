@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* The bytecode interpreter */
 #include <stdio.h>
 #include "alloc.h"
@@ -113,7 +111,8 @@ sp is a local copy of the global variable caml_extern_sp. */
    For GCC, I have hand-assigned hardware registers for several architectures.
 */
 
-#if defined(__GNUC__) && !defined(DEBUG) && !defined(__INTEL_COMPILER) && !defined(__llvm__)
+#if defined(__GNUC__) && !defined(DEBUG) && !defined(__INTEL_COMPILER) \
+    && !defined(__llvm__)
 #ifdef __mips__
 #define PC_REG asm("$16")
 #define SP_REG asm("$17")
@@ -174,6 +173,12 @@ sp is a local copy of the global variable caml_extern_sp. */
 #define SP_REG asm("%r14")
 #define ACCU_REG asm("%r13")
 #endif
+#ifdef __aarch64__
+#define PC_REG asm("%x19")
+#define SP_REG asm("%x20")
+#define ACCU_REG asm("%x21")
+#define JUMPTBL_BASE_REG asm("%x22")
+#endif
 #endif
 
 /* Division and modulus madness */
@@ -217,7 +222,6 @@ value caml_interprete(code_t prog, asize_t prog_size)
   struct caml__roots_block * volatile initial_local_roots;
   volatile code_t saved_pc = NULL;
   struct longjmp_buffer raise_buf;
-  value * modify_dest, modify_newval;
 #ifndef THREADED_CODE
   opcode_t curr_instr;
 #endif
@@ -707,29 +711,26 @@ value caml_interprete(code_t prog, asize_t prog_size)
     }
 
     Instruct(SETFIELD0):
-      modify_dest = &Field(accu, 0);
-      modify_newval = *sp++;
-    modify:
-      Modify(modify_dest, modify_newval);
+      caml_modify(&Field(accu, 0), *sp++);
       accu = Val_unit;
       Next;
     Instruct(SETFIELD1):
-      modify_dest = &Field(accu, 1);
-      modify_newval = *sp++;
-      goto modify;
+      caml_modify(&Field(accu, 1), *sp++);
+      accu = Val_unit;
+      Next;
     Instruct(SETFIELD2):
-      modify_dest = &Field(accu, 2);
-      modify_newval = *sp++;
-      goto modify;
+      caml_modify(&Field(accu, 2), *sp++);
+      accu = Val_unit;
+      Next;
     Instruct(SETFIELD3):
-      modify_dest = &Field(accu, 3);
-      modify_newval = *sp++;
-      goto modify;
+      caml_modify(&Field(accu, 3), *sp++);
+      accu = Val_unit;
+      Next;
     Instruct(SETFIELD):
-      modify_dest = &Field(accu, *pc);
+      caml_modify(&Field(accu, *pc), *sp++);
+      accu = Val_unit;
       pc++;
-      modify_newval = *sp++;
-      goto modify;
+      Next;
     Instruct(SETFLOATFIELD):
       Store_double_field(accu, *pc, Double_val(*sp));
       accu = Val_unit;
@@ -750,10 +751,10 @@ value caml_interprete(code_t prog, asize_t prog_size)
       sp += 1;
       Next;
     Instruct(SETVECTITEM):
-      modify_dest = &Field(accu, Long_val(sp[0]));
-      modify_newval = sp[1];
+      caml_modify(&Field(accu, Long_val(sp[0])), sp[1]);
+      accu = Val_unit;
       sp += 2;
-      goto modify;
+      Next;
 
 /* String operations */
 
@@ -819,10 +820,20 @@ value caml_interprete(code_t prog, asize_t prog_size)
       sp += 4;
       Next;
 
+    Instruct(RAISE_NOTRACE):
+      if (caml_trapsp >= caml_trap_barrier) caml_debugger(TRAP_BARRIER);
+      goto raise_notrace;
+
+    Instruct(RERAISE):
+      if (caml_trapsp >= caml_trap_barrier) caml_debugger(TRAP_BARRIER);
+      if (caml_backtrace_active) caml_stash_backtrace(accu, pc, sp, 1);
+      goto raise_notrace;
+
     Instruct(RAISE):
     raise_exception:
       if (caml_trapsp >= caml_trap_barrier) caml_debugger(TRAP_BARRIER);
-      if (caml_backtrace_active) caml_stash_backtrace(accu, pc, sp);
+      if (caml_backtrace_active) caml_stash_backtrace(accu, pc, sp, 0);
+    raise_notrace:
       if ((char *) caml_trapsp
           >= (char *) caml_stack_high - initial_sp_offset) {
         caml_external_raise = initial_external_raise;
@@ -1123,7 +1134,7 @@ value caml_interprete(code_t prog, asize_t prog_size)
 #else
       caml_fatal_error_arg("Fatal error: bad opcode (%"
                            ARCH_INTNAT_PRINTF_FORMAT "x)\n",
-                           (char *)(*(pc-1)));
+                           (char *) (intnat) *(pc-1));
 #endif
     }
   }

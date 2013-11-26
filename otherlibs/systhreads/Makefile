@@ -11,14 +11,13 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 include ../../config/Makefile
 
-CAMLC=../../ocamlcomp.sh -I ../unix
-CAMLOPT=../../ocamlcompopt.sh -I ../unix
+CAMLC=$(CAMLC_BIN) -nostdlib -I ../../stdlib -I ../unix
+CAMLOPT=$(CAMLOPT_BIN) -nostdlib -I ../../stdlib -I ../unix
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
-COMPFLAGS=-warn-error A -g
+COMPFLAGS=-w +33..39 -warn-error A -g
+CAMLC_BIN_CMD=$(CAMLC_BIN_CMD_TO_EVAL) -nostdlib -I ../../stdlib
 
 BYTECODE_C_OBJS=st_stubs_b.o
 NATIVECODE_C_OBJS=st_stubs_n.o
@@ -30,7 +29,7 @@ all: libthreads.a threads.cma
 allopt: libthreadsnat.a threads.cmxa
 
 libthreads.a: $(BYTECODE_C_OBJS)
-	$(MKLIB) -o threads $(BYTECODE_C_OBJS)
+	$(MKLIB) -o threads $(BYTECODE_C_OBJS) -lpthread
 
 st_stubs_b.o: st_stubs.c st_posix.h
 	$(BYTECC) -O -I../../byterun $(BYTECCCOMPOPTS) $(SHAREDCCCOMPOPTS) \
@@ -43,11 +42,13 @@ libthreadsnat.a: $(NATIVECODE_C_OBJS)
 	$(AR) rc libthreadsnat.a $(NATIVECODE_C_OBJS)
 
 st_stubs_n.o: st_stubs.c st_posix.h
-	$(NATIVECC) -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) $(SHAREDCCCOMPOPTS) -DNATIVE_CODE -DTARGET_$(ARCH) -DSYS_$(SYSTEM) -c st_stubs.c
+	$(NATIVECC) -O -I../../asmrun -I../../byterun $(NATIVECCCOMPOPTS) \
+	            $(SHAREDCCCOMPOPTS) -DNATIVE_CODE -DTARGET_$(ARCH) \
+	            -DSYS_$(SYSTEM) -c st_stubs.c
 	mv st_stubs.o st_stubs_n.o
 
 threads.cma: $(THREAD_OBJS)
-	$(MKLIB) -ocamlc '$(CAMLC)' -o threads $(THREAD_OBJS) \
+	$(MKLIB) -ocamlc "$$($(CAMLC_BIN_CMD))" -o threads $(THREAD_OBJS) \
 	  -cclib -lunix $(PTHREAD_LINK)
 
 # See remark above: force static linking of libthreadsnat.a

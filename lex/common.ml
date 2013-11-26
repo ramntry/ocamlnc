@@ -58,7 +58,7 @@ let copy_chars_unix ic oc start stop =
   done
 
 let copy_chars_win32 ic oc start stop =
-  for i = start to stop - 1 do
+  for _i = start to stop - 1 do
     let c = input_char ic in
     if c <> '\r' then output_char oc c
   done
@@ -68,14 +68,14 @@ let copy_chars =
     "Win32" | "Cygwin" -> copy_chars_win32
   | _       -> copy_chars_unix
 
-let copy_chunk sourcefile ic oc trl loc add_parens =
+let copy_chunk ic oc trl loc add_parens =
   if loc.start_pos < loc.end_pos || add_parens then begin
-    fprintf oc "# %d \"%s\"\n" loc.start_line sourcefile;
+    fprintf oc "# %d \"%s\"\n" loc.start_line loc.loc_file;
     if add_parens then begin
-      for i = 1 to loc.start_col - 1 do output_char oc ' ' done;
+      for _i = 1 to loc.start_col - 1 do output_char oc ' ' done;
       output_char oc '(';
     end else begin
-      for i = 1 to loc.start_col do output_char oc ' ' done;
+      for _i = 1 to loc.start_col do output_char oc ' ' done;
     end;
     seek_in ic loc.start_pos;
     copy_chars ic oc loc.start_pos loc.end_pos;
@@ -122,7 +122,7 @@ let output_tag_access oc = function
   | Sum (a,i) ->
       fprintf oc "(%a + %d)" output_base_mem a i
 
-let output_env sourcefile ic oc tr env =
+let output_env ic oc tr env =
   let pref = ref "let" in
   match env with
   | [] -> ()
@@ -138,7 +138,7 @@ let output_env sourcefile ic oc tr env =
       List.iter
         (fun ((x,pos),v) ->
           fprintf oc "%s\n" !pref ;
-          copy_chunk sourcefile ic oc tr pos false ;
+          copy_chunk ic oc tr pos false ;
           begin match v with
           | Ident_string (o,nstart,nend) ->
               fprintf oc

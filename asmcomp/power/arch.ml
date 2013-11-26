@@ -10,11 +10,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Specific operations for the PowerPC processor *)
 
-open Misc
 open Format
 
 (* Machine-specific command-line options *)
@@ -45,6 +42,12 @@ let ppc64 =
 let size_addr = if ppc64 then 8 else 4
 let size_int = size_addr
 let size_float = 8
+
+let allow_unaligned_access = false
+
+(* Behavior of division *)
+
+let division_crashes_on_overflow = true
 
 (* Operations on addressing modes *)
 

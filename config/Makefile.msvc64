@@ -11,8 +11,6 @@
 #                                                                       #
 #########################################################################
 
-# $Id$
-
 # Configuration for Windows, Visual C++ compiler
 
 ######### General configuration
@@ -37,13 +35,19 @@ MANDIR=$(PREFIX)/man
 ########## Toolchain and OS dependencies
 
 TOOLCHAIN=msvc
+
+# It doesn't make much sense to set "TARGET" and "HOST" for msvc but it's needed
+# for the myocamlbuild config.
+# The only case these will be used currently is to check whether we're
+# cross-compiling or not so setting them to the same value is what matters.
+HOST=msvc64
+TARGET=$(HOST)
+
 CCOMPTYPE=msvc
 O=obj
 A=lib
 S=asm
 SO=s.obj
-DO=d.obj
-DBGO=dbg.obj
 EXE=.exe
 EXT_DLL=.dll
 EXT_OBJ=.$(O)
@@ -54,8 +58,6 @@ SHARPBANGSCRIPTS=false
 PTHREAD_LINK=
 X11_INCLUDES=
 X11_LINK=
-DBM_INCLUDES=
-DBM_LINK=
 BYTECCRPATH=
 SUPPORTS_SHARED_LIBRARIES=true
 SHAREDCCCOMPOPTS=
@@ -66,12 +68,12 @@ ASPP=
 ASPPPROFFLAGS=
 PROFILING=noprof
 DYNLINKOPTS=
-DEBUGGER=ocamldebugger
 CC_PROFILE=
 SYSTHREAD_SUPPORT=true
 CMXS=cmxs
 NATDYNLINK=true
 RUNTIMED=noruntimed
+ASM_CFI_SUPPORTED=false
 
 ########## Configuration for the bytecode compiler
 
@@ -100,11 +102,11 @@ NATIVECCLIBS=advapi32.lib ws2_32.lib $(EXTRALIBS)
 CPP=cl /nologo /EP
 
 ### Flexlink
-FLEXLINK=flexlink -x64 -merge-manifest
+FLEXLINK=flexlink -x64 -merge-manifest -stack 33554432
 FLEXDIR=$(shell $(FLEXLINK) -where)
 IFLEXDIR=-I"$(FLEXDIR)"
 MKDLL=$(FLEXLINK)
-MKEXE=$(FLEXLINK) -exe -link /STACK:33554432
+MKEXE=$(FLEXLINK) -exe
 MKMAINDLL=$(FLEXLINK) -maindll
 
 ### How to build a static library
@@ -144,7 +146,16 @@ NATIVECCCOMPOPTS=/Ox /MD
 NATIVECCLINKOPTS=
 
 ### Build partially-linked object file
-PACKLD=link /lib /nologo /machine:AMD64 /out:# there must be no space after this '/out:'
+PACKLD=link /lib /nologo /machine:AMD64 /out:# must have no space after '/out:'
+
+### Clear this to disable compiling ocamldebug
+WITH_DEBUGGER=ocamldebugger
+
+### Clear this to disable compiling ocamlbuild
+WITH_OCAMLBUILD=ocamlbuild
+
+### Clear this to disable compiling ocamldoc
+WITH_OCAMLDOC=ocamldoc
 
 ############# Configuration for the contributed libraries
 
@@ -154,11 +165,38 @@ OTHERLIBRARIES=win32unix systhreads str num win32graph dynlink bigarray
 BNG_ARCH=generic
 BNG_ASM_LEVEL=0
 
-### Configuration for LablTk (not supported)
-TK_DEFS=
-TK_LINK=
-
 ############# Aliases for common commands
 
 MAKEREC=$(MAKE) -f Makefile.nt
 MAKECMD=$(MAKE)
+
+############# for the testsuite makefiles
+#ml let topdir = "" and wintopdir = "";;
+OTOPDIR=$(WINTOPDIR)
+CTOPDIR=$(WINTOPDIR)
+CYGPATH=cygpath -m
+DIFF=diff -q --strip-trailing-cr
+CANKILL=false
+FIND=/usr/bin/find
+SORT=/usr/bin/sort
+SET_LD_PATH=PATH="$(PATH):$(LD_PATH)"
+
+THIS_MAKEFILE=$(filter %config/Makefile,$(MAKEFILE_LIST))
+ifeq ($(filter /%,$(THIS_MAKEFILE)),)
+ROOTDIR:=$(abspath $(dir $(CURDIR)/$(THIS_MAKEFILE))/..)
+else
+ROOTDIR:=$(abspath $(dir $(THIS_MAKEFILE))/..)
+endif
+CAMLRUN:=$(ROOTDIR)/boot/ocamlrun$(EXE)
+OCAMLRUN:=$(CAMLRUN)
+ROOTDIR_COMPAT:=$(shell $(CYGPATH) $(ROOTDIR))
+CAMLC_BIN_BOOT   = $(CAMLRUN) $(ROOTDIR_COMPAT)/boot/ocamlc
+CAMLC_BIN_BYTE   = $(CAMLRUN) $(ROOTDIR_COMPAT)/ocamlc
+CAMLC_BIN_OPT    = $(ROOTDIR_COMPAT)/ocamlc.opt
+CAMLOPT_BIN_BYTE = $(CAMLRUN) $(ROOTDIR_COMPAT)/ocamlopt
+CAMLOPT_BIN_OPT  = $(ROOTDIR_COMPAT)/ocamlopt.opt
+
+CAMLC_BIN   = @ . $(ROOTDIR)/config/ocamlcomp; PS4=""; set -x; $${CAMLC_BIN}
+CAMLOPT_BIN = @ . $(ROOTDIR)/config/ocamlcomp; PS4=""; set -x; $${CAMLOPT_BIN}
+CAMLC_BIN_CMD_TO_EVAL   = . $(ROOTDIR)/config/ocamlcomp; echo $${CAMLC_BIN}
+CAMLOPT_BIN_CMD_TO_EVAL = . $(ROOTDIR)/config/ocamlcomp; echo $${CAMLOPT_BIN}

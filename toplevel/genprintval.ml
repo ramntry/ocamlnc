@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* To print values *)
 
 open Misc
@@ -33,10 +31,10 @@ module type OBJ =
 
 module type EVALPATH =
   sig
-    type value
-    val eval_path: Path.t -> value
+    type valu
+    val eval_path: Path.t -> valu
     exception Error
-    val same_value: value -> value -> bool
+    val same_value: valu -> valu -> bool
   end
 
 module type S =
@@ -52,7 +50,7 @@ module type S =
           Env.t -> t -> type_expr -> Outcometree.out_value
   end
 
-module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
+module Make(O : OBJ)(EVP : EVALPATH with type valu = O.t) = struct
 
     type t = O.t
 
@@ -81,6 +79,9 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
       else []
 
     let outval_of_untyped_exception bucket =
+      if O.tag bucket <> 0 then
+        Oval_constr (Oide_ident (O.obj (O.field bucket 0) : string), [])
+      else
       let name = (O.obj(O.field(O.field bucket 0) 0) : string) in
       let args =
         if (name = "Match_failure"
@@ -247,40 +248,45 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
                       if O.is_block obj
                       then Cstr_block(O.tag obj)
                       else Cstr_constant(O.obj obj) in
-                    let (constr_name, constr_args,ret_type) =
+                    let {cd_id;cd_args;cd_res} =
                       Datarepr.find_constr_by_tag tag constr_list in
-		    let type_params = 
-		      match ret_type with
-			Some t -> 
-			  begin match (Ctype.repr t).desc with 
-			    Tconstr (_,params,_) ->
-			      params
-			  | _ -> assert false end
-		      | None -> decl.type_params
-		    in
+                    let type_params =
+                      match cd_res with
+                        Some t ->
+                          begin match (Ctype.repr t).desc with
+                            Tconstr (_,params,_) ->
+                              params
+                          | _ -> assert false end
+                      | None -> decl.type_params
+                    in
                     let ty_args =
                       List.map
                         (function ty ->
                            try Ctype.apply env type_params ty ty_list with
                              Ctype.Cannot_apply -> abstract_type)
-                        constr_args in
+                        cd_args in
                     tree_of_constr_with_args (tree_of_constr env path)
-                                           constr_name 0 depth obj ty_args		    
+                                 (Ident.name cd_id) 0 depth obj ty_args
                 | {type_kind = Type_record(lbl_list, rep)} ->
                     begin match check_depth depth obj ty with
                       Some x -> x
                     | None ->
                         let rec tree_of_fields pos = function
                           | [] -> []
-                          | (lbl_name, _, lbl_arg) :: remainder ->
+                          | {ld_id; ld_type} :: remainder ->
                               let ty_arg =
                                 try
-                                  Ctype.apply env decl.type_params lbl_arg
+                                  Ctype.apply env decl.type_params ld_type
                                     ty_list
                                 with
                                   Ctype.Cannot_apply -> abstract_type in
-                              let lid = tree_of_label env path lbl_name in
-                              let v =
+                              let name = Ident.name ld_id in
+                              (* PR#5722: print full module path only
+                                 for first record field *)
+                              let lid =
+                                if pos = 0 then tree_of_label env path name
+                                else Oide_ident name
+                              and v =
                                 tree_of_val (depth - 1) (O.field obj pos)
                                   ty_arg
                               in
@@ -346,7 +352,11 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
         Oval_constr (lid, args)
 
     and tree_of_exception depth bucket =
-      let name = (O.obj(O.field(O.field bucket 0) 0) : string) in
+      let slot =
+        if O.tag bucket <> 0 then bucket
+        else O.field bucket 0
+      in
+      let name = (O.obj(O.field slot 0) : string) in
       let lid = Longident.parse name in
       try
         (* Attempt to recover the constructor description for the exn
@@ -354,11 +364,11 @@ module Make(O : OBJ)(EVP : EVALPATH with type value = O.t) = struct
         let cstr = Env.lookup_constructor lid env in
         let path =
           match cstr.cstr_tag with
-            Cstr_exception p -> p | _ -> raise Not_found in
+            Cstr_exception (p, _) -> p | _ -> raise Not_found in
         (* Make sure this is the right exception and not an homonym,
            by evaluating the exception found and comparing with the
            identifier contained in the exception bucket *)
-        if not (EVP.same_value (O.field bucket 0) (EVP.eval_path path))
+        if not (EVP.same_value slot (EVP.eval_path path))
         then raise Not_found;
         tree_of_constr_with_args
            (fun x -> Oide_ident x) name 1 depth bucket cstr.cstr_args

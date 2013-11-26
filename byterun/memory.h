@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 /* Allocation macros and functions */
 
 #ifndef CAML_MEMORY_H
@@ -119,32 +117,9 @@ int caml_page_table_initialize(mlsize_t bytesize);
   DEBUG_clear ((result), (wosize));                                         \
 }while(0)
 
-/* You must use [Modify] to change a field of an existing shared block,
-   unless you are sure the value being overwritten is not a shared block and
-   the value being written is not a young block. */
-/* [Modify] never calls the GC. */
-/* [Modify] can also be used to do assignment on data structures that are
-   not in the (major) heap.  In this case, it is a bit slower than
-   simple assignment.
-   In particular, you can use [Modify] when you don't know whether the
-   block being changed is in the minor heap or the major heap.
-*/
+/* Deprecated alias for [caml_modify] */
 
-#define Modify(fp, val) do{                                                 \
-  value _old_ = *(fp);                                                      \
-  *(fp) = (val);                                                            \
-  if (Is_in_heap (fp)){                                                     \
-    if (caml_gc_phase == Phase_mark) caml_darken (_old_, NULL);             \
-    if (Is_block (val) && Is_young (val)                                    \
-        && ! (Is_block (_old_) && Is_young (_old_))){                       \
-      if (caml_ref_table.ptr >= caml_ref_table.limit){                      \
-        CAMLassert (caml_ref_table.ptr == caml_ref_table.limit);            \
-        caml_realloc_ref_table (&caml_ref_table);                           \
-      }                                                                     \
-      *caml_ref_table.ptr++ = (fp);                                         \
-    }                                                                       \
-  }                                                                         \
-}while(0)
+#define Modify(fp,val) caml_modify((fp), (val))
 
 /* </private> */
 
@@ -173,15 +148,15 @@ CAMLextern struct caml__roots_block *caml_local_roots;  /* defined in roots.c */
 
    If you need local variables of type [value], declare them with one
    or more calls to the [CAMLlocal] macros at the beginning of the
-   function. Use [CAMLlocalN] (at the beginning of the function) to
-   declare an array of [value]s.
+   function, after the call to CAMLparam.  Use [CAMLlocalN] (at the
+   beginning of the function) to declare an array of [value]s.
 
    Your function may raise an exception or return a [value] with the
    [CAMLreturn] macro.  Its argument is simply the [value] returned by
    your function.  Do NOT directly return a [value] with the [return]
    keyword.  If your function returns void, use [CAMLreturn0].
 
-   All the identifiers beginning with "caml__" are reserved by Caml.
+   All the identifiers beginning with "caml__" are reserved by OCaml.
    Do not use them for anything (local or global variables, struct or
    union tags, macros, etc.)
 */
@@ -214,7 +189,7 @@ CAMLextern struct caml__roots_block *caml_local_roots;  /* defined in roots.c */
   CAMLxparamN (x, (size))
 
 
-#if defined (__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 7))
+#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 7))
   #define CAMLunused __attribute__ ((unused))
 #else
   #define CAMLunused
@@ -346,7 +321,7 @@ CAMLextern struct caml__roots_block *caml_local_roots;  /* defined in roots.c */
    It must contain all values in C local variables and function parameters
    at the time the minor GC is called.
    Usage:
-   After initialising your local variables to legal Caml values, but before
+   After initialising your local variables to legal OCaml values, but before
    calling allocation functions, insert [Begin_roots_n(v1, ... vn)], where
    v1 ... vn are your variables of type [value] that you want to be updated
    across allocations.
@@ -440,7 +415,7 @@ CAMLextern void caml_remove_global_root (value *);
    the value of this variable, it must do so by calling
    [caml_modify_generational_global_root].  The [value *] pointer
    passed to [caml_register_generational_global_root] must contain
-   a valid Caml value before the call.
+   a valid OCaml value before the call.
    In return for these constraints, scanning of memory roots during
    minor collection is made more efficient. */
 

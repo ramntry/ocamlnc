@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -32,6 +33,7 @@ exception Failed
 val name_of_rule : 'a gen_rule -> string
 val deps_of_rule : 'a gen_rule -> Pathname.t list
 val prods_of_rule : 'a gen_rule -> 'a list
+val doc_of_rule : 'a gen_rule -> string option
 
 val rule : string ->
   ?tags:string list ->
@@ -41,6 +43,7 @@ val rule : string ->
   ?dep:string ->
   ?stamp:string ->
   ?insert:[`top | `before of string | `after of string | `bottom] ->
+  ?doc:string ->
   action -> unit
 
 (** [copy_rule name ?insert source destination] *)
@@ -78,3 +81,5 @@ val clear_rules : unit -> unit
 val call : builder -> rule -> unit
 
 val build_deps_of_tags : builder -> Tags.t -> Pathname.t list
+
+val show_documentation : unit -> unit

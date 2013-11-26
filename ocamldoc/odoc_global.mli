@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Global variables. *)
 
@@ -23,7 +22,8 @@ type source_file =
 val include_dirs : string list ref
 
 (** Optional preprocessor command to pass to ocaml compiler. *)
-val preprocessor : string option ref
+val preprocessor : string option ref (* -pp *)
+val ppx : string list ref (* -ppx *)
 
 (** Recursive types flag to passe to ocaml compiler. *)
 val recursive_types : bool ref

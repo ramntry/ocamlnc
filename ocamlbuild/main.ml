@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             ocamlbuild                              *)
 (*                                                                     *)
 (*  Nicolas Pouillard, Berke Durak, projet Gallium, INRIA Rocquencourt *)
@@ -37,23 +38,27 @@ let clean () =
 ;;
 
 let show_tags () =
+  if List.length !Options.show_tags > 0 then
+    Log.eprintf "Warning: the following tags do not include \
+    dynamically-generated tags, such as link, compile, pack, byte, native, c, \
+    pdf... (this list is by no means exhaustive).\n";
   List.iter begin fun path ->
     Log.eprintf "@[<2>Tags for %S:@ {. %a .}@]" path Tags.print (tags_of_pathname path)
   end !Options.show_tags
 ;;
 
 let show_documentation () =
-  let rules = Rule.get_rules () in
-  let flags = Flags.get_flags () in
-  let pp fmt = Log.raw_dprintf (-1) fmt in
-  List.iter begin fun rule ->
-    pp "%a@\n@\n" (Rule.pretty_print Resource.print_pattern) rule
-  end rules;
-  List.iter begin fun (tags, flag) ->
-    let sflag = Command.string_of_command_spec flag in
-    pp "@[<2>flag@ {. %a .}@ %S@]@\n@\n" Tags.print tags sflag
-  end flags;
-  pp "@."
+  Rule.show_documentation ();
+  Flags.show_documentation ();
+;;
+
+(* these tags are used in an ad-hoc way by the ocamlbuild implementation;
+   this means that even if they were not part of any flag declaration,
+   they should be marked as useful, to avoid the "unused tag" warning. *)
+let builtin_useful_tags =
+  Tags.of_list
+    ["include"; "traverse"; "not_hygienic";
+     "pack"; "ocamlmklib"; "native"; "thread"; "nopervasives"]
 ;;
 
 let proceed () =
@@ -61,12 +66,15 @@ let proceed () =
   Options.init ();
   if !Options.must_clean then clean ();
   Hooks.call_hook Hooks.After_options;
-  Plugin.execute_plugin_if_needed ();
-
-  if !Options.targets = []
-    && !Options.show_tags = []
-    && not !Options.show_documentation
-    then raise Exit_silently;
+  let options_wd = Sys.getcwd () in
+  let first_run_for_plugin =
+    (* If we are in the first run before launching the plugin, we
+       should skip the user-visible operations (hygiene) that may need
+       information from the plugin to run as the user expects it.
+       
+       Note that we don't need to disable the [Hooks] call as they are
+       no-ops anyway, before any plugin has registered hooks. *)
+    Plugin.we_need_a_plugin () && not !Options.just_plugin in
 
   let target_dirs = List.union [] (List.map Pathname.dirname !Options.targets) in
 
@@ -93,6 +101,10 @@ let proceed () =
     (fun pkg -> Configuration.tag_any [Param_tags.make "package" pkg])
     !Options.ocaml_pkgs;
 
+  begin match !Options.ocaml_syntax with
+  | Some syntax -> Configuration.tag_any [Param_tags.make "syntax" syntax]
+  | None -> () end;
+
   let newpwd = Sys.getcwd () in
   Sys.chdir Pathname.pwd;
   let entry_include_dirs = ref [] in
@@ -112,16 +124,20 @@ let proceed () =
         (List.mem name ["_oasis"] || (String.length name > 0 && name.[0] <> '_'))
         && (name <> !Options.build_dir && not (List.mem name !Options.exclude_dirs))
         && begin
-          if path_name <> Filename.current_dir_name && Pathname.is_directory path_name then
+          not (path_name <> Filename.current_dir_name && Pathname.is_directory path_name)
+          || begin
             let tags = tags_of_pathname path_name in
-            if Tags.mem "include" tags
-            || List.mem path_name !Options.include_dirs then
+            (if Tags.mem "include" tags
+              || List.mem path_name !Options.include_dirs then
               (entry_include_dirs := path_name :: !entry_include_dirs; true)
             else
               Tags.mem "traverse" tags
               || List.exists (Pathname.is_prefix path_name) !Options.include_dirs
-              || List.exists (Pathname.is_prefix path_name) target_dirs
-          else true
+              || List.exists (Pathname.is_prefix path_name) target_dirs)
+            && ((* beware: !Options.build_dir is an absolute directory *)
+                Pathname.normalize !Options.build_dir
+                <> Pathname.normalize (Pathname.pwd/path_name))
+          end
         end
       end
       (Slurp.slurp Filename.current_dir_name)
@@ -132,7 +148,7 @@ let proceed () =
       let tags = tags_of_pathname (path/name) in
       not (Tags.mem "not_hygienic" tags) && not (Tags.mem "precious" tags)
     end entry in
-  if !Options.hygiene then
+  if !Options.hygiene && not first_run_for_plugin then
     Fda.inspect hygiene_entry
   else
     Slurp.force hygiene_entry;
@@ -148,6 +164,15 @@ let proceed () =
   Ocaml_specific.init ();
   Hooks.call_hook Hooks.After_rules;
 
+  Sys.chdir options_wd;
+  Plugin.execute_plugin_if_needed ();
+
+  (* [Param_tags.init ()] is called *after* the plugin is executed, as
+     some of the parametrized tags present in the _tags files parsed
+     will be declared by the plugin, and would therefore result in
+     "tag X does not expect a parameter" warnings if initialized
+     before. Note that [Plugin.rebuild_plugin_if_needed] is careful to
+     partially initialize the tags that it uses for plugin compilation. *)
   Param_tags.init ();
 
   Sys.chdir newpwd;
@@ -157,6 +182,10 @@ let proceed () =
     show_documentation ();
     raise Exit_silently
   end;
+
+  let all_tags = Tags.union builtin_useful_tags (Flags.get_used_tags ()) in
+  Configuration.check_tags_usage all_tags;
+
   Digest_cache.init ();
 
   Sys.catch_break true;
@@ -272,8 +301,8 @@ let main () =
       | Ocaml_utils.Ocamldep_error msg ->
           Log.eprintf "Ocamldep error: %s" msg;
           exit rc_ocamldep_error
-      | Lexers.Error msg ->
-          Log.eprintf "Lexical analysis error: %s" msg;
+      | Lexers.Error (msg,loc) ->
+          Log.eprintf "%aLexing error: %s." Loc.print_loc loc msg;
           exit rc_lexing_error
       | Arg.Bad msg ->
           Log.eprintf "%s" msg;

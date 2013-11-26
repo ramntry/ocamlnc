@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #include "libgraph.h"
 #include "image.h"
 #include <memory.h>
@@ -38,12 +36,13 @@ value caml_gr_make_image(value m)
 
   /* Build an XImage for the data part of the image */
   idata =
-    XCreateImage(caml_gr_display, DefaultVisual(caml_gr_display, caml_gr_screen),
+    XCreateImage(caml_gr_display,
+                 DefaultVisual(caml_gr_display, caml_gr_screen),
                  XDefaultDepth(caml_gr_display, caml_gr_screen),
                  ZPixmap, 0, NULL, width, height,
                  BitmapPad(caml_gr_display), 0);
 
-  bdata = (char *) stat_alloc(height * idata->bytes_per_line);
+  bdata = (char *) caml_stat_alloc(height * idata->bytes_per_line);
   idata->data = bdata;
   has_transp = False;
 
@@ -60,10 +59,11 @@ value caml_gr_make_image(value m)
      build an XImage for the mask part of the image */
   if (has_transp) {
     imask =
-      XCreateImage(caml_gr_display, DefaultVisual(caml_gr_display, caml_gr_screen),
+      XCreateImage(caml_gr_display,
+                   DefaultVisual(caml_gr_display, caml_gr_screen),
                    1, ZPixmap, 0, NULL, width, height,
                    BitmapPad(caml_gr_display), 0);
-    bmask = (char *) stat_alloc(height * imask->bytes_per_line);
+    bmask = (char *) caml_stat_alloc(height * imask->bytes_per_line);
     imask->data = bmask;
 
     for (i = 0; i < height; i++) {
@@ -84,9 +84,11 @@ value caml_gr_make_image(value m)
   XDestroyImage(idata);
   XFreeGC(caml_gr_display, gc);
   if (has_transp) {
-    Mask_im(im) = XCreatePixmap(caml_gr_display, caml_gr_window.win, width, height, 1);
+    Mask_im(im) = XCreatePixmap(caml_gr_display, caml_gr_window.win, width,
+                                height, 1);
     gc = XCreateGC(caml_gr_display, Mask_im(im), 0, NULL);
-    XPutImage(caml_gr_display, Mask_im(im), gc, imask, 0, 0, 0, 0, width, height);
+    XPutImage(caml_gr_display, Mask_im(im), gc, imask, 0, 0, 0, 0, width,
+              height);
     XDestroyImage(imask);
     XFreeGC(caml_gr_display, gc);
   }

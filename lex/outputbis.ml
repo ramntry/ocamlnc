@@ -10,12 +10,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Output the DFA tables and its entry points *)
 
 open Printf
-open Syntax
 open Lexgen
 open Common
 
@@ -160,7 +157,7 @@ let output_entry sourcefile ic oc tr e =
 \n  let __ocaml_lex_result = __ocaml_lex_state%d lexbuf in\
 \n  lexbuf.Lexing.lex_start_p <- lexbuf.Lexing.lex_curr_p;\
 \n  lexbuf.Lexing.lex_curr_p <- {lexbuf.Lexing.lex_curr_p with\
-\n    Lexing.pos_cnum = lexbuf.Lexing.lex_abs_pos + lexbuf.Lexing.lex_curr_pos};\
+\n    Lexing.pos_cnum = lexbuf.Lexing.lex_abs_pos+lexbuf.Lexing.lex_curr_pos};\
 \n  match __ocaml_lex_result with\n"
       e.auto_name output_args e.auto_args
       e.auto_mem_size (output_memory_actions "  ") init_moves init_num ;
@@ -168,8 +165,8 @@ let output_entry sourcefile ic oc tr e =
     (fun (num, env, loc) ->
       fprintf oc "  | ";
       fprintf oc "%d ->\n" num;
-      output_env sourcefile ic oc tr env ;
-      copy_chunk sourcefile ic oc tr loc true;
+      output_env ic oc tr env ;
+      copy_chunk ic oc tr loc true;
       fprintf oc "\n")
     e.auto_actions;
   fprintf oc "  | _ -> raise (Failure \"lexing: empty token\")\n\n\n"
@@ -179,7 +176,7 @@ let output_entry sourcefile ic oc tr e =
 
 let output_lexdef sourcefile ic oc tr header entry_points transitions trailer =
 
-  copy_chunk sourcefile ic oc tr header false;
+  copy_chunk ic oc tr header false;
   output_automata oc transitions ;
   begin match entry_points with
     [] -> ()
@@ -190,4 +187,4 @@ let output_lexdef sourcefile ic oc tr header entry_points transitions trailer =
         entries;
       output_string oc ";;\n\n";
   end;
-  copy_chunk sourcefile ic oc tr trailer false
+  copy_chunk ic oc tr trailer false

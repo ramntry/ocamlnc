@@ -10,11 +10,16 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Misc
 open Path
 open Asttypes
+
+type compile_time_constant =
+  | Big_endian
+  | Word_size
+  | Ostype_unix
+  | Ostype_win32
+  | Ostype_cygwin
 
 type primitive =
     Pidentity
@@ -36,7 +41,7 @@ type primitive =
   (* External call *)
   | Pccall of Primitive.description
   (* Exceptions *)
-  | Praise
+  | Praise of raise_kind
   (* Boolean operations *)
   | Psequand | Psequor | Pnot
   (* Integer operations *)
@@ -86,6 +91,28 @@ type primitive =
   (* Operations on big arrays: (unsafe, #dimensions, kind, layout) *)
   | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout
   | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout
+  (* size of the nth dimension of a big array *)
+  | Pbigarraydim of int
+  (* load/set 16,32,64 bits from a string: (unsafe)*)
+  | Pstring_load_16 of bool
+  | Pstring_load_32 of bool
+  | Pstring_load_64 of bool
+  | Pstring_set_16 of bool
+  | Pstring_set_32 of bool
+  | Pstring_set_64 of bool
+  (* load/set 16,32,64 bits from a
+     (char, int8_unsigned_elt, c_layout) Bigarray.Array1.t : (unsafe) *)
+  | Pbigstring_load_16 of bool
+  | Pbigstring_load_32 of bool
+  | Pbigstring_load_64 of bool
+  | Pbigstring_set_16 of bool
+  | Pbigstring_set_32 of bool
+  | Pbigstring_set_64 of bool
+  (* Compile time constants *)
+  | Pctconst of compile_time_constant
+  (* byte swap *)
+  | Pbswap16
+  | Pbbswap of boxed_integer
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
@@ -109,6 +136,11 @@ and bigarray_layout =
     Pbigarray_unknown_layout
   | Pbigarray_c_layout
   | Pbigarray_fortran_layout
+
+and raise_kind =
+  | Raise_regular
+  | Raise_reraise
+  | Raise_notrace
 
 type structured_constant =
     Const_base of constant
@@ -241,7 +273,7 @@ let name_lambda_list args fn =
       Llet(Strict, id, arg, name_list (Lvar id :: names) rem) in
   name_list [] args
 
-let rec iter f = function
+let iter f = function
     Lvar _
   | Lconst _ -> ()
   | Lapply(fn, args, _) ->
@@ -425,3 +457,8 @@ and negate_comparison = function
 | Ceq -> Cneq| Cneq -> Ceq
 | Clt -> Cge | Cle -> Cgt
 | Cgt -> Cle | Cge -> Clt
+
+let raise_kind = function
+  | Raise_regular -> "raise"
+  | Raise_reraise -> "reraise"
+  | Raise_notrace -> "raise_notrace"

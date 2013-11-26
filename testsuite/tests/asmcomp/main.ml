@@ -10,18 +10,18 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 open Clflags
 
 let compile_file filename =
+  Clflags.dlcode := false;
   Compilenv.reset "test";
   Emit.begin_assembly();
   let ic = open_in filename in
   let lb = Lexing.from_channel ic in
   try
     while true do
-      Asmgen.compile_phrase Format.std_formatter (Parsecmm.phrase Lexcmm.token lb)
+      Asmgen.compile_phrase Format.std_formatter
+                            (Parsecmm.phrase Lexcmm.token lb)
     done
   with
       End_of_file ->
@@ -57,4 +57,3 @@ let main() =
     ] compile_file usage
 
 let _ = (*Printexc.catch*) main (); exit 0
-

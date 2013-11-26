@@ -355,8 +355,10 @@ let int_to_string int s pos_ref base times =
 (* XL: suppression de adjust_string *)
 
 let power_base_int base i =
-  if i = 0 then
+  if i = 0 || base = 1 then
     nat_of_int 1
+  else if base = 0 then
+    nat_of_int 0
   else if i < 0 then
     invalid_arg "power_base_int"
   else begin
@@ -370,22 +372,20 @@ let power_base_int base i =
                let res = make_nat newn
                and res2 = make_nat newn
                and l = num_bits_int n - 2 in
-               let p = ref (1 lsl l) in
                  blit_nat res 0 power_base pmax 1;
                  for i = l downto 0 do
                    let len = num_digits_nat res 0 newn in
                    let len2 = min n (2 * len) in
                    let succ_len2 = succ len2 in
                      ignore (square_nat res2 0 len2 res 0 len);
-                     if n land !p > 0 then begin
+                     if n land (1 lsl i) > 0 then begin
                        set_to_zero_nat res 0 len;
                        ignore
                          (mult_digit_nat res 0 succ_len2
                             res2 0 len2  power_base pmax)
                      end else
                        blit_nat res 0 res2 0 len2;
-                     set_to_zero_nat res2 0 len2;
-                     p := !p lsr 1
+                     set_to_zero_nat res2 0 len2
                  done;
                if rem > 0 then begin
                  ignore
@@ -511,6 +511,7 @@ let base_digit_of_char c base =
   let n = Char.code c in
     if n >= 48 && n <= 47 + min base 10 then n - 48
     else if n >= 65 && n <= 65 + base - 11 then n - 55
+    else if n >= 97 && n <= 97 + base - 11 then n - 87
     else failwith "invalid digit"
 
 (*
@@ -539,6 +540,7 @@ let sys_nat_of_string base s off len =
       let c = String.get s i  in
         begin match c with
           ' ' | '\t' | '\n' | '\r' | '\\' -> ()
+        | '_' when i > off -> ()
         | _ -> int := !int * base + base_digit_of_char c base;
                incr digits_read
         end;

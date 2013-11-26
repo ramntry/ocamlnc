@@ -1,4 +1,5 @@
 (***********************************************************************)
+(*                                                                     *)
 (*                             OCamldoc                                *)
 (*                                                                     *)
 (*            Maxence Guesdon, projet Cristal, INRIA Rocquencourt      *)
@@ -8,8 +9,6 @@
 (*  under the terms of the Q Public License version 1.0.               *)
 (*                                                                     *)
 (***********************************************************************)
-
-(* $Id$ *)
 
 (** Representation of element names. *)
 
@@ -67,3 +66,6 @@ val to_path : t -> Path.t
 
 (** Get a name from a [Longident.t].*)
 val from_longident : Longident.t -> t
+
+(** Set of Name.t *)
+module Set : Set.S with type elt = t

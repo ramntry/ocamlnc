@@ -11,9 +11,7 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
-/* Callbacks from C to Caml */
+/* Callbacks from C to OCaml */
 
 #ifndef CAML_CALLBACK_H
 #define CAML_CALLBACK_H

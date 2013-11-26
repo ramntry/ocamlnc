@@ -11,8 +11,6 @@
 /*                                                                     */
 /***********************************************************************/
 
-/* $Id$ */
-
 #define WIN32_LEAN_AND_MEAN
 #include <wtypes.h>
 #include <winbase.h>
@@ -20,7 +18,11 @@
 #include <direct.h>
 #include <process.h>
 #include <sys/types.h>
-#include <winsock.h>
+#include <winsock2.h>
+#ifdef HAS_IPV6
+#include <ws2tcpip.h>
+#include <wspiapi.h>
+#endif
 
 struct filedescr {
   union {
@@ -59,4 +61,4 @@ extern value unix_freeze_buffer (value);
 /* Blocking or nonblocking.  By default a filedescr is in blocking state */
 #define FLAGS_FD_IS_BLOCKING (1<<0)
 
-#define UNIX_BUFFER_SIZE 16384
+#define UNIX_BUFFER_SIZE 65536

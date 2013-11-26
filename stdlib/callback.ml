@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Registering OCaml values with the C runtime for later callbacks *)
 
 external register_named_value : string -> Obj.t -> unit
@@ -22,4 +20,6 @@ let register name v =
   register_named_value name (Obj.repr v)
 
 let register_exception name (exn : exn) =
-  register_named_value name (Obj.field (Obj.repr exn) 0)
+  let exn = Obj.repr exn in
+  let slot = if Obj.tag exn = Obj.object_tag then exn else Obj.field exn 0 in
+  register_named_value name slot

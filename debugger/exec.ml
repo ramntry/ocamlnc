@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Handling of keyboard interrupts *)
 
 let interrupted = ref false
@@ -29,7 +27,7 @@ let _ =
     "Win32" -> ()
   | _ ->
       Sys.set_signal Sys.sigint (Sys.Signal_handle break);
-      Sys.set_signal Sys.sigpipe (Sys.Signal_handle (fun _ -> raise End_of_file))
+      Sys.set_signal Sys.sigpipe (Sys.Signal_handle(fun _ -> raise End_of_file))
 
 let protect f =
   if !is_protected then

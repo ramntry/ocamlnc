@@ -1,3 +1,15 @@
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Gallium, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 2011 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
+
 (* Hashtable operations, using maps as a reference *)
 
 open Printf
@@ -78,6 +90,7 @@ module HofM (M: Map.S) : Hashtbl.S with type key = M.key =
     type 'a t = (key, 'a) Hashtbl.t
     let create s = Hashtbl.create s
     let clear = Hashtbl.clear
+    let reset = Hashtbl.reset
     let copy = Hashtbl.copy
     let add = Hashtbl.add
     let remove = Hashtbl.remove
@@ -189,4 +202,3 @@ let _ =
   TSP.test (pair_data d);
   printf "-- Lists of strings\n%!";
   TSL.test (list_data d)
- 

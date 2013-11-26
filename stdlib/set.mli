@@ -11,8 +11,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (** Sets over ordered types.
 
    This module implements the set data structure, given a total ordering
@@ -72,8 +70,8 @@ module type S =
     val inter: t -> t -> t
     (** Set intersection. *)
 
-    (** Set difference. *)
     val diff: t -> t -> t
+    (** Set difference. *)
 
     val compare: t -> t -> int
     (** Total ordering between sets. Can be used as the ordering function
@@ -145,6 +143,18 @@ module type S =
           strictly greater than [x];
           [present] is [false] if [s] contains no element equal to [x],
           or [true] if [s] contains an element equal to [x]. *)
+
+    val find: elt -> t -> elt
+    (** [find x s] returns the element of [s] equal to [x] (according
+        to [Ord.compare]), or raise [Not_found] if no such element
+        exists.
+        @since 4.01.0 *)
+
+    val of_list: elt list -> t
+    (** [of_list l] creates a set from a list of elements.
+        This is usually more efficient than folding [add] over the list,
+        except perhaps for lists with many duplicated elements.
+        @since 4.02.0 *)
   end
 (** Output signature of the functor {!Set.Make}. *)
 

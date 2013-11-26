@@ -10,8 +10,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* $Id$ *)
-
 (* Introduction of closures, uncurrying, recognition of direct calls *)
 
 open Misc
@@ -98,7 +96,7 @@ let prim_size prim args =
   | Psetfloatfield f -> 1
   | Pduprecord _ -> 10 + List.length args
   | Pccall p -> (if p.prim_alloc then 10 else 4) + List.length args
-  | Praise -> 4
+  | Praise _ -> 4
   | Pstringlength -> 5
   | Pstringrefs | Pstringsets -> 6
   | Pmakearray kind -> 5 + List.length args
@@ -121,7 +119,7 @@ let lambda_smaller lam threshold =
     match lam with
       Uvar v -> ()
     | Uconst(
-	(Const_base(Const_int _ | Const_char _ | Const_float _ |
+        (Const_base(Const_int _ | Const_char _ | Const_float _ |
                         Const_int32 _ | Const_int64 _ | Const_nativeint _) |
              Const_pointer _), _) -> incr size
 (* Structured Constants are now emitted during closure conversion. *)
@@ -182,7 +180,7 @@ let rec is_pure_clambda = function
     Uvar v -> true
   | Uconst _ -> true
   | Uprim((Psetglobal _ | Psetfield _ | Psetfloatfield _ | Pduprecord _ |
-           Pccall _ | Praise | Poffsetref _ | Pstringsetu | Pstringsets |
+           Pccall _ | Praise _ | Poffsetref _ | Pstringsetu | Pstringsets |
            Parraysetu _ | Parraysets _ | Pbigarrayset _), _, _) -> false
   | Uprim(p, args, _) -> List.for_all is_pure_clambda args
   | _ -> false
@@ -192,6 +190,15 @@ let rec is_pure_clambda = function
 let make_const_int n = (Uconst(Const_base(Const_int n), None), Value_integer n)
 let make_const_ptr n = (Uconst(Const_pointer n, None), Value_constptr n)
 let make_const_bool b = make_const_ptr(if b then 1 else 0)
+let make_comparison cmp (x: int) (y: int) =
+  make_const_bool
+    (match cmp with
+       Ceq -> x = y
+     | Cneq -> x <> y
+     | Clt -> x < y
+     | Cgt -> x > y
+     | Cle -> x <= y
+     | Cge -> x >= y)
 
 let simplif_prim_pure p (args, approxs) dbg =
   match approxs with
@@ -199,6 +206,9 @@ let simplif_prim_pure p (args, approxs) dbg =
       begin match p with
         Pidentity -> make_const_int x
       | Pnegint -> make_const_int (-x)
+      | Pbswap16 ->
+         make_const_int (((x land 0xff) lsl 8) lor
+                         ((x land 0xff00) lsr 8))
       | Poffsetint y -> make_const_int (x + y)
       | _ -> (Uprim(p, args, dbg), Value_unknown)
       end
@@ -215,15 +225,7 @@ let simplif_prim_pure p (args, approxs) dbg =
       | Plslint -> make_const_int(x lsl y)
       | Plsrint -> make_const_int(x lsr y)
       | Pasrint -> make_const_int(x asr y)
-      | Pintcomp cmp ->
-          let result = match cmp with
-              Ceq -> x = y
-            | Cneq -> x <> y
-            | Clt -> x < y
-            | Cgt -> x > y
-            | Cle -> x <= y
-            | Cge -> x >= y in
-          make_const_bool result
+      | Pintcomp cmp -> make_comparison cmp x y
       | _ -> (Uprim(p, args, dbg), Value_unknown)
       end
   | [Value_constptr x] ->
@@ -231,12 +233,32 @@ let simplif_prim_pure p (args, approxs) dbg =
         Pidentity -> make_const_ptr x
       | Pnot -> make_const_bool(x = 0)
       | Pisint -> make_const_bool true
+      | Pctconst c ->
+          begin
+            match c with
+            | Big_endian -> make_const_bool Arch.big_endian
+            | Word_size -> make_const_int (8*Arch.size_int)
+            | Ostype_unix -> make_const_bool (Sys.os_type = "Unix")
+            | Ostype_win32 -> make_const_bool (Sys.os_type = "Win32")
+            | Ostype_cygwin -> make_const_bool (Sys.os_type = "Cygwin")
+          end
       | _ -> (Uprim(p, args, dbg), Value_unknown)
       end
   | [Value_constptr x; Value_constptr y] ->
       begin match p with
         Psequand -> make_const_bool(x <> 0 && y <> 0)
       | Psequor  -> make_const_bool(x <> 0 || y <> 0)
+      | Pintcomp cmp -> make_comparison cmp x y
+      | _ -> (Uprim(p, args, dbg), Value_unknown)
+      end
+  | [Value_constptr x; Value_integer y] ->
+      begin match p with
+      | Pintcomp cmp -> make_comparison cmp x y
+      | _ -> (Uprim(p, args, dbg), Value_unknown)
+      end
+  | [Value_integer x; Value_constptr y] ->
+      begin match p with
+      | Pintcomp cmp -> make_comparison cmp x y
       | _ -> (Uprim(p, args, dbg), Value_unknown)
       end
   | _ ->
@@ -335,7 +357,8 @@ let rec substitute sb ulam =
           id in
       Uassign(id', substitute sb u)
   | Usend(k, u1, u2, ul, dbg) ->
-      Usend(k, substitute sb u1, substitute sb u2, List.map (substitute sb) ul, dbg)
+      Usend(k, substitute sb u1, substitute sb u2, List.map (substitute sb) ul,
+            dbg)
 
 (* Perform an inline expansion *)
 
@@ -380,7 +403,7 @@ let rec is_pure = function
     Lvar v -> true
   | Lconst cst -> true
   | Lprim((Psetglobal _ | Psetfield _ | Psetfloatfield _ | Pduprecord _ |
-           Pccall _ | Praise | Poffsetref _ | Pstringsetu | Pstringsets |
+           Pccall _ | Praise _ | Poffsetref _ | Pstringsetu | Pstringsets |
            Parraysetu _ | Parraysets _ | Pbigarrayset _), _) -> false
   | Lprim(p, args) -> List.for_all is_pure args
   | Levent(lam, ev) -> is_pure lam
@@ -450,8 +473,8 @@ let rec add_debug_info ev u =
                          args2, Debuginfo.from_call ev)
       | Ugeneric_apply(fn, args, dinfo) ->
           Ugeneric_apply(fn, args, Debuginfo.from_call ev)
-      | Uprim(Praise, args, dinfo) ->
-          Uprim(Praise, args, Debuginfo.from_call ev)
+      | Uprim(Praise k, args, dinfo) ->
+          Uprim(Praise k, args, Debuginfo.from_call ev)
       | Uprim(p, args, dinfo) ->
           Uprim(p, args, Debuginfo.from_call ev)
       | Usend(kind, u1, u2, args, dinfo) ->
@@ -489,14 +512,16 @@ let rec close fenv cenv = function
   | Lconst cst ->
       begin match cst with
         Const_base(Const_int n) -> (Uconst (cst,None), Value_integer n)
-      | Const_base(Const_char c) -> (Uconst (cst,None), Value_integer(Char.code c))
+      | Const_base(Const_char c) -> (Uconst (cst,None),
+                                     Value_integer(Char.code c))
       | Const_pointer n -> (Uconst (cst, None), Value_constptr n)
-      | _ -> (Uconst (cst, Some (Compilenv.new_structured_constant cst true)), Value_unknown)
+      | _ -> (Uconst (cst, Some (Compilenv.new_structured_constant cst true)),
+              Value_unknown)
       end
   | Lfunction(kind, params, body) as funct ->
       close_one_function fenv cenv (Ident.create "fun") funct
 
-    (* We convert [f a] to [let a' = a in fun b c -> f a' b c] 
+    (* We convert [f a] to [let a' = a in fun b c -> f a' b c]
        when fun_arity > nargs *)
   | Lapply(funct, args, loc) ->
       let nargs = List.length args in
@@ -513,27 +538,28 @@ let rec close fenv cenv = function
 
       | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
           when nargs < fundesc.fun_arity ->
-	let first_args = List.map (fun arg ->
-	  (Ident.create "arg", arg) ) uargs in
-	let final_args = Array.to_list (Array.init (fundesc.fun_arity - nargs) (fun _ ->
-	  Ident.create "arg")) in
-	let rec iter args body =
-	  match args with
-	      [] -> body
-	    | (arg1, arg2) :: args ->
-	      iter args
-		(Ulet ( arg1, arg2, body))
-	in
-	let internal_args =
-	  (List.map (fun (arg1, arg2) -> Lvar arg1) first_args)
-	  @ (List.map (fun arg -> Lvar arg ) final_args)
-	in
-	let (new_fun, approx) = close fenv cenv
-	  (Lfunction(
-	    Curried, final_args, Lapply(funct, internal_args, loc)))
-	in
-	let new_fun = iter first_args new_fun in
-	(new_fun, approx)
+        let first_args = List.map (fun arg ->
+          (Ident.create "arg", arg) ) uargs in
+        let final_args =
+          Array.to_list (Array.init (fundesc.fun_arity - nargs)
+                                    (fun _ -> Ident.create "arg")) in
+        let rec iter args body =
+          match args with
+              [] -> body
+            | (arg1, arg2) :: args ->
+              iter args
+                (Ulet ( arg1, arg2, body))
+        in
+        let internal_args =
+          (List.map (fun (arg1, arg2) -> Lvar arg1) first_args)
+          @ (List.map (fun arg -> Lvar arg ) final_args)
+        in
+        let (new_fun, approx) = close fenv cenv
+          (Lfunction(
+            Curried, final_args, Lapply(funct, internal_args, loc)))
+        in
+        let new_fun = iter first_args new_fun in
+        (new_fun, approx)
 
       | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
         when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
@@ -614,15 +640,16 @@ let rec close fenv cenv = function
         match approx with
           Value_tuple a when n < Array.length a -> a.(n)
         | _ -> Value_unknown in
-      check_constant_result lam (Uprim(Pfield n, [ulam], Debuginfo.none)) fieldapprox
+      check_constant_result lam (Uprim(Pfield n, [ulam], Debuginfo.none))
+                            fieldapprox
   | Lprim(Psetfield(n, _), [Lprim(Pgetglobal id, []); lam]) ->
       let (ulam, approx) = close fenv cenv lam in
       (!global_approx).(n) <- approx;
       (Uprim(Psetfield(n, false), [getglobal id; ulam], Debuginfo.none),
        Value_unknown)
-  | Lprim(Praise, [Levent(arg, ev)]) ->
+  | Lprim(Praise k, [Levent(arg, ev)]) ->
       let (ulam, approx) = close fenv cenv arg in
-      (Uprim(Praise, [ulam], Debuginfo.from_raise ev),
+      (Uprim(Praise k, [ulam], Debuginfo.from_raise ev),
        Value_unknown)
   | Lprim(p, args) ->
       simplif_prim p (close_list_approx fenv cenv args) Debuginfo.none
@@ -748,6 +775,9 @@ and close_functions fenv cenv fun_defs =
   let useless_env = ref initially_closed in
   (* Translate each function definition *)
   let clos_fundef (id, params, body, fundesc) env_pos =
+    let dbg = match body with
+      | Levent (_,({lev_kind=Lev_function} as ev)) -> Debuginfo.from_call ev
+      | _ -> Debuginfo.none in
     let env_param = Ident.create "env" in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
@@ -759,7 +789,11 @@ and close_functions fenv cenv fun_defs =
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then useless_env := false;
     let fun_params = if !useless_env then params else params @ [env_param] in
-    ((fundesc.fun_label, fundesc.fun_arity, fun_params, ubody),
+    ({ label  = fundesc.fun_label;
+       arity  = fundesc.fun_arity;
+       params = fun_params;
+       body   = ubody;
+       dbg },
      (id, env_pos, Value_closure(fundesc, approx))) in
   (* Translate all function definitions. *)
   let clos_info_list =
@@ -789,11 +823,12 @@ and close_functions fenv cenv fun_defs =
 
 and close_one_function fenv cenv id funct =
   match close_functions fenv cenv [id, funct] with
-      ((Uclosure([_, _, params, body], _) as clos),
+      ((Uclosure([f], _) as clos),
        [_, _, (Value_closure(fundesc, _) as approx)]) ->
         (* See if the function can be inlined *)
-        if lambda_smaller body (!Clflags.inline_threshold + List.length params)
-        then fundesc.fun_inline <- Some(params, body);
+        if lambda_smaller f.body
+          (!Clflags.inline_threshold + List.length f.params)
+        then fundesc.fun_inline <- Some(f.params, f.body);
         (clos, approx)
     | _ -> fatal_error "Closure.close_one_function"
 
