@@ -733,8 +733,12 @@ asmcomp/liveness.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
 asmcomp/liveness.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
     asmcomp/printmach.cmx utils/misc.cmx asmcomp/mach.cmx \
     asmcomp/liveness.cmi
-asmcomp/llvmgen.cmo : asmcomp/llvmgen.cmi
-asmcomp/llvmgen.cmx : asmcomp/llvmgen.cmi
+asmcomp/llvmgen.cmo : \
+    /opt/llvm/3.3/with_ocaml_bindings_again_build/lib/ocaml/llvm.cmi \
+    asmcomp/llvmgen.cmi
+asmcomp/llvmgen.cmx : \
+    /opt/llvm/3.3/with_ocaml_bindings_again_build/lib/ocaml/llvm.cmi \
+    asmcomp/llvmgen.cmi
 asmcomp/mach.cmo : asmcomp/reg.cmi asmcomp/debuginfo.cmi asmcomp/cmm.cmi \
     asmcomp/arch.cmo asmcomp/mach.cmi
 asmcomp/mach.cmx : asmcomp/reg.cmx asmcomp/debuginfo.cmx asmcomp/cmm.cmx \

@@ -17,7 +17,7 @@ include stdlib/StdlibModules
 
 CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
 CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink
-COMPFLAGS=-strict-sequence -w +33..39 -warn-error A $(INCLUDES)
+COMPFLAGS=-strict-sequence -w +33..39 -warn-error +A-K-Y-Z $(INCLUDES)
 LINKFLAGS=
 
 CAMLYACC=boot/ocamlyacc
@@ -32,8 +32,10 @@ MKDIR=mkdir -p
 CAMLP4OUT=$(CAMLP4:=out)
 CAMLP4OPT=$(CAMLP4:=opt)
 
+LLVM_BINDINGS=$(LLVM_ROOT)/lib/ocaml
+
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel
+	 -I toplevel -I $(LLVM_BINDINGS)
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
