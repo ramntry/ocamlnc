@@ -17,11 +17,11 @@ fi
 
 cwd=`pwd`
 
-./run_configure.sh || exit 1
-touch .depend && make depend || exit 2
-make world.opt || exit 4
-make install || exit 8
-cp -r scripts $OCAML_ROOT/bin || exit 16
+./run_configure.sh && cp _depend .depend || exit 1
+make world && make bootstrap || exit 2
+make depend && make opt || exit 4
+make opt.opt || exit 8
+make install && cp -r scripts $OCAML_ROOT/bin || exit 16
 ./build_dummy_gc.sh || exit 32
 
 cd $cwd/gc/tests/trees
