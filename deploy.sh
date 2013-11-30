@@ -18,7 +18,7 @@ fi
 cwd=`pwd`
 
 ./run_configure.sh || exit 1
-make depend || exit 2
+touch .depend && make depend || exit 2
 make world.opt || exit 4
 make install || exit 8
 cp -r scripts $OCAML_ROOT/bin || exit 16
