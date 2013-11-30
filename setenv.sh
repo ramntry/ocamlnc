@@ -1,6 +1,6 @@
 export CC="gcc"
 export CXX="g++"
-export OCAML_ROOT="PLACE OCAML INSTALLATION DIRECTORY (FULL PATH) HERE (e.g. /home/user/ocamlnc/build)"
+export OCAML_ROOT="PLACE OCAML INSTALLATION DIRECTORY (FULL PATH) HERE (e.g. /home/user/ocamlnc/dist)"
 export LLVM_ROOT="PLACE LLVM INSTALLATION DIRECTORY (FULL PATH) HERE (e.g. /home/user/ocamlnc/llvm/dist)"
 export LLVM_SRC_ROOT="PLACE LLVM SOURCE DIRECTORY (FULL PATH) HERE (e.g. /home/user/ocamlnc/llvm/llvm)"
 export LLVM_OBJ_ROOT="PLACE LLVM BUILD DIRECTORY (FULL PATH) HERE (e.g. /home/user/ocamlnc/llvm/build)"
