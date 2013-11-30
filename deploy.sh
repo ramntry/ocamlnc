@@ -1,5 +1,20 @@
 #!/bin/bash
 
+if [ -z "$OCAML_ROOT" ] \
+  || [ -z "$LLVM_ROOT" ] \
+  || [ -z "$LLVM_SRC_ROOT" ] \
+  || [ -z "$LLVM_OBJ_ROOT" ]
+then
+  echo "Environment is not set! Do '. setenv.sh' first"
+  exit 1
+fi
+
+if [ ! -f "$LLVM_ROOT/bin/llc" ]
+then
+  echo "llc not found. Make sure you edited setenv.sh properly"
+  exit 2
+fi
+
 cwd=`pwd`
 
 ./run_configure.sh || exit 1
