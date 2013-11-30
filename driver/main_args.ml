@@ -365,6 +365,10 @@ let mk_dcmm f =
   "-dcmm", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_dllvm f =
+  "-dllvm", Arg.Unit f, " dump LLVM IR"
+;;
+
 let mk_dsel f =
   "-dsel", Arg.Unit f, " (undocumented)"
 ;;
@@ -574,6 +578,7 @@ module type Optcomp_options = sig
   val _dlambda : unit -> unit
   val _dclambda : unit -> unit
   val _dcmm : unit -> unit
+  val _dllvm : unit -> unit
   val _dsel : unit -> unit
   val _dcombine : unit -> unit
   val _dlive : unit -> unit
@@ -624,6 +629,7 @@ module type Opttop_options = sig
   val _dlambda : unit -> unit
   val _dclambda : unit -> unit
   val _dcmm : unit -> unit
+  val _dllvm : unit -> unit
   val _dsel : unit -> unit
   val _dcombine : unit -> unit
   val _dlive : unit -> unit
@@ -815,6 +821,7 @@ struct
     mk_dlambda F._dlambda;
     mk_dclambda F._dclambda;
     mk_dcmm F._dcmm;
+    mk_dllvm F._dllvm;
     mk_dsel F._dsel;
     mk_dcombine F._dcombine;
     mk_dlive F._dlive;
@@ -866,6 +873,7 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_drawlambda F._drawlambda;
     mk_dclambda F._dclambda;
     mk_dcmm F._dcmm;
+    mk_dllvm F._dllvm;
     mk_dsel F._dsel;
     mk_dcombine F._dcombine;
     mk_dlive F._dlive;
