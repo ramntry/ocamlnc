@@ -70,6 +70,7 @@ let optimize_for_speed = ref true       (* -compact *)
 
 and dump_cmm = ref false                (* -dcmm *)
 and dump_llvm = ref false               (* -dllvm *)
+and emit_llvm = ref false               (* -emit-llvm *)
 let dump_selection = ref false          (* -dsel *)
 let dump_live = ref false               (* -dlive *)
 let dump_spill = ref false              (* -dspill *)

@@ -169,6 +169,7 @@ module type Optcomp_options = sig
   val _dclambda : unit -> unit
   val _dcmm : unit -> unit
   val _dllvm : unit -> unit
+  val _emit_llvm : unit -> unit
   val _dsel : unit -> unit
   val _dcombine : unit -> unit
   val _dlive : unit -> unit
@@ -220,6 +221,7 @@ module type Opttop_options = sig
   val _dclambda : unit -> unit
   val _dcmm : unit -> unit
   val _dllvm : unit -> unit
+  val _emit_llvm : unit -> unit
   val _dsel : unit -> unit
   val _dcombine : unit -> unit
   val _dlive : unit -> unit

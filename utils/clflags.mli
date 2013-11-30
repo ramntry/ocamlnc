@@ -65,6 +65,7 @@ val keep_asm_file : bool ref
 val optimize_for_speed : bool ref
 val dump_cmm : bool ref
 val dump_llvm : bool ref
+val emit_llvm : bool ref
 val dump_selection : bool ref
 val dump_live : bool ref
 val dump_spill : bool ref
