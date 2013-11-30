@@ -122,7 +122,8 @@ LLVM нельзя, так как часть библиотек в каталог
   $ git fetch origin jblab-gc-master 
   $ git checkout -b jblab-gc-master origin/jblab-gc-master
 
-7. Затем отредактировать файл setenv.sh, установив все необходимые пути:
+7. Затем отредактировать файл <ocamlnc>/setenv.sh, установив все
+необходимые пути:
 
   OCAML_ROOT - полный путь к директории инсталляции компилятора (не ветки
       4.01.0-original_build, а ветки jblab-gc-master). Должна существовать
@@ -169,15 +170,25 @@ $LLVM_SRC_ROOT/projects, если такой есть.
 
 Скрипт deploy.sh выполняет следующие действия:
 
-  ./run_configure.sh # запускает configure-скрипт с необходимыми опциями
-  touch .depend && make depend # рассчитывает все зависимости между файлами
-  make world.opt # осуществляет полную сборку компилятора
-  make install   # устанавливает собранный компилятор в каталог $OCAML_ROOT
-  cp -r scripts $OCAML_ROOT/bin # устанавливает набор полезных скриптов
-  ./build_dummy_gc.sh           # осуществляет попытку сборки GC-заглушки
+  # запускает configure-скрипт с необходимыми опциями, подготавливает файл
+  # зависимостей между файлами проекта
+  ./run_configure.sh && cp _depend .depend
+  
+  # осуществляет полную сборку компилятора
+  make world && make bootstrap
+  make depend    # положение команды make depend (пересчёта
+  make opt       #   зависимостей) относительно других критично
+  make opt.opt
+  
+  # устанавливает собранный компилятор и набор скриптов в каталог $OCAML_ROOT
+  make install && cp -r scripts $OCAML_ROOT/bin
+  
+  # осуществляет попытку сборки GC-заглушки
+  ./build_dummy_gc.sh
 
-  cd $cwd/gc/tests/trees # собирает и запускает под контролем valgrind
-  ./check.sh             #   один из тестов (trees)
+  # собирает и запускает под контролем valgrind один из тестов (trees)
+  cd $cwd/gc/tests/trees
+  ./check.sh
   cd $cwd
 
 9. Вне зависимости от успешности или неуспешности сборки заглушки и
@@ -187,7 +198,7 @@ $LLVM_SRC_ROOT/projects, если такой есть.
   1. Указать путь к *.so-файлу в setenv.sh значением переменной $JBLABGC
   2. Выполнить команду . setenv.sh
   3. Пересобрать и перезапустить тест, выполнив скрипт check.sh в каталоге
-     теста (ocamlnc/gc/tests/trees)
+     теста (<ocamlnc>/gc/tests/trees)
 
 Если полный путь к файлу плагина при его пересборках не меняется, шаг (2)
 достаточно выполнить один раз за сессию командного интерпретатора.
