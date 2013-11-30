@@ -1,0 +1,70 @@
+#!/bin/bash
+
+if [ -z "$1" ]
+then
+  echo "Usage: `basename $0` test-name"
+  exit 1
+fi
+
+if [ "$1" == "-" ]
+then
+  test_name=`basename $PWD`
+else
+  test_name="$1"
+fi
+source_name="$test_name.ml"
+
+pull_runtime
+if [ ! -e "$source_name" ]
+then
+  extract_externals runtime.c > $source_name
+fi
+
+cat > main.c <<EOF
+#include <caml/mlvalues.h>
+
+value caml${test_name^}__entry(void);
+
+int main()
+{
+  caml${test_name^}__entry();
+}
+EOF
+
+cat > Makefile <<EOF
+PROGRAM = $test_name
+OBJECTS = main.o $test_name.o runtime.o
+
+CFLAGS = -std=c99 -g -Wall -pedantic
+
+.SUFFIXES: .ml
+
+.ml.o:
+	llb $< -load=\$(JBLABGC)
+
+\$(PROGRAM): \$(OBJECTS)
+
+clean:
+	rm -f *.o
+	rm -f *.cm[ix]
+	rm -f *.o.dump
+	rm -f *.o.symb
+	rm -f out
+	rm -f *.cmm
+
+distclean:
+	rm -f *.o
+	rm -f *.cm[ix]
+	rm -f *.ll
+	rm -f *.[sS]
+	rm -f \$(PROGRAM)
+	rm -f *.o.dump
+	rm -f *.o.symb
+	rm -f out
+	rm -f output.txt
+	rm -f right_output.txt
+	rm -f test_input.txt
+	rm -f stderr.txt
+	rm -f out
+	rm -f *.cmm
+EOF

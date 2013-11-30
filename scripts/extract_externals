@@ -1,0 +1,9 @@
+#!/usr/bin/perl -W
+
+use strict;
+
+while (<>) {
+  if ($_ =~ /value caml_(.*?)\(.*\/\*(.*)\*\//) {
+    print "external $1 :$2= \"caml_$1\"\n";
+  }
+}

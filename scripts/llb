@@ -1,0 +1,20 @@
+#!/bin/bash
+
+compiler=ocamlopt.opt
+llvm_obj=${1/%.ml/.o}
+orig_obj=${1/%.ml/_orig.o}
+
+$compiler -c -g -o $orig_obj -inline 0 -dcmm  $1 2> ${1/%.ml/.cmm}
+
+$compiler -c -g -o $orig_obj -inline 0 -emit-llvm $1 2>&1 \
+  | tee ${1/%.ml/.ll} \
+  | opt -O3 -S - -o - \
+  | tee ${1/%.ml/.opt.ll} \
+  | llc $2 \
+  | tee ${1/%.ml/_llvm.s} \
+  | $CC -c -x assembler - -o $llvm_obj
+
+objdump -d $llvm_obj > $llvm_obj.dump
+objdump -d $orig_obj > $orig_obj.dump
+objdump -t $llvm_obj > $llvm_obj.symb
+objdump -t $orig_obj > $orig_obj.symb

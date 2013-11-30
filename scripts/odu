@@ -1,0 +1,9 @@
+#!/bin/bash
+
+for ocaml_source in *.ml
+do
+  echo
+  echo "======***====== $ocaml_source ======***======"
+  echo
+  ocamlopt -c -g -o ${ocaml_source/%.ml/_odu.o} -inline 0 -dcmm -dllvm "$ocaml_source" 2>&1 | tee out
+done

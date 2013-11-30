@@ -1,0 +1,3 @@
+#!/bin/bash
+
+cp runtime.c $OCAML_ROOT/bin/scripts/runtime.c
