@@ -80,8 +80,10 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ Emit.fundecl
 
 let compile_phrase ppf p =
-  if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
-  if !dump_llvm then Llvmgen.phrase p;
+  if !dump_cmm then
+    fprintf ppf "%a@." Printcmm.phrase p;
+  if !dump_llvm || !emit_llvm then
+    Llvmgen.phrase p;
   match p with
   | Cfunction fd -> compile_fundecl ppf fd
   | Cdata dl -> Emit.data dl
@@ -131,9 +133,10 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
     if !keep_asm_file then () else remove_file asmfile;
     raise x
   end;
-  if !dump_llvm then begin
+  if !dump_llvm || !emit_llvm then begin
     Llvmgen.finalize_module ();
-    Llvmgen.dump_module ();
+    if !emit_llvm then
+      Llvmgen.dump_module ();
     Llvmgen.dispose_module ()
   end;
   if Proc.assemble_file asmfile (prefixname ^ ext_obj) <> 0

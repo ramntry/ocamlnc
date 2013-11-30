@@ -5,6 +5,10 @@ exception Compile_error of string
 let strict_symbols_mode = false
 let gc_name = "jblab-gc"
 
+let dump_value value =
+  if !Clflags.dump_llvm then
+    Llvm.dump_value value
+
 let context = Llvm.global_context ()
 let the_module = Llvm.create_module context "simple module"
 let builder = Llvm.builder context
@@ -588,10 +592,10 @@ let rec gen_expression expr =
       | Cmm.Word ->
           let expr_value = ptrcast (gen_expression expr) lltype_of_word in
           let addr_value = ptrcast (gen_expression addr) lltype_of_block in
-          Printf.fprintf stderr "Store %!";
-          Llvm.dump_value expr_value;
-          Printf.fprintf stderr "   in %!";
-          Llvm.dump_value addr_value;
+          if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
+          dump_value expr_value;
+          if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
+          dump_value addr_value;
           Llvm.build_store expr_value addr_value builder
       | _ -> raise (Not_implemented_yet ("I don't know what to do with"
                     ^ " store of chunk of such type (in gen_expression)"))
@@ -870,18 +874,13 @@ let gen_data items =
     ) ([], 0) items
   in
   let global_value = Llvm.const_struct context (Array.of_list (List.rev fields)) in
-  let global = Llvm.define_global llglobal_name global_value the_module in
-  Llvm.dump_value global
+  Llvm.define_global llglobal_name global_value the_module
 
 let phrase = function
   | Cmm.Cfunction fundecl ->
-      begin try
-        Llvm.dump_value (gen_fundecl fundecl)
-      with Not_implemented_yet _ as e ->
-        Llvm.dump_module the_module;
-        raise e
-      end;
-  | Cmm.Cdata items -> gen_data items
+      dump_value (gen_fundecl fundecl)
+  | Cmm.Cdata items ->
+      dump_value (gen_data items)
 
 let dump_module () =
   Llvm.dump_module the_module
