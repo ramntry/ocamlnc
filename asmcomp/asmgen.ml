@@ -58,7 +58,7 @@ let (++) x f = f x
 
 let compile_fundecl (ppf : formatter) fd_cmm =
   Proc.init ();
-  Reg.reset();
+  Reg.reset ();
   fd_cmm
   ++ Selection.fundecl
   ++ pass_dump_if ppf dump_selection "After instruction selection"
@@ -81,6 +81,7 @@ let compile_fundecl (ppf : formatter) fd_cmm =
 
 let compile_phrase ppf p =
   if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
+  if !dump_llvm then Llvmgen.phrase p;
   match p with
   | Cfunction fd -> compile_fundecl ppf fd
   | Cdata dl -> Emit.data dl
@@ -129,6 +130,11 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
     close_out oc;
     if !keep_asm_file then () else remove_file asmfile;
     raise x
+  end;
+  if !dump_llvm then begin
+    Llvmgen.finalize_module ();
+    Llvmgen.dump_module ();
+    Llvmgen.dispose_module ()
   end;
   if Proc.assemble_file asmfile (prefixname ^ ext_obj) <> 0
   then raise(Error(Assembler_error asmfile));
