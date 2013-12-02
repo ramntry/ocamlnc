@@ -151,3 +151,5 @@ tools/*.bak
 boot/Saved/
 gc/jblab-gc-dummy/build/
 gc/tests/trees/trees
+
+setenv.sh

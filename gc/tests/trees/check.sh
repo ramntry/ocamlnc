@@ -3,6 +3,13 @@
 testsize=30
 valgrind_options="--leak-check=full"
 
+checkenv || exit 1
+
+cwd=`pwd`
+test_directory=`dirname $(readlink -f $0)`
+
+cd $test_directory
+
 if [ ! -e Makefile ] && [ ! -e main.c ] && [ ! -e runtime.c ]
 then
   newt -
@@ -27,6 +34,7 @@ make -B && cat test_input.txt | valgrind $valgrind_options ./trees 2> $error_str
 if [ $? -ne 0 ]
 then
   echo "*** FAIL ***"
+  cd $cwd
   exit 1
 fi
 
@@ -34,7 +42,9 @@ diff output.txt right_output.txt -q
 if [ $? -ne 0 ]
 then
   echo "*** FAIL ***"
+  cd $cwd
   exit 2
 fi
 
+cd $cwd
 echo "***  OK  ***"
