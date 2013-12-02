@@ -701,73 +701,61 @@ let rec gen_expression expr =
                     ^ " gen_expression"))
       end
 
+  | Cmm.Cexit (exit_label, []) ->
+      let (_ : Llvm.llvalue) =
+        Llvm.build_br (get_exit_target exit_label) builder
+      in
+      make_int 0
+
+  | Cmm.Cexit (exit_label, _expr_list) ->
+      raise (Not_implemented_yet "Cexit with nonempty expression list")
+
+  | Cmm.Cswitch (control_expr, cases, exprs) ->
+      let numof_cases = Array.length cases in
+      if numof_cases < 2 then
+        raise (Not_implemented_yet "Too few cases in switch (< 2)");
+      let numof_exprs = Array.length exprs in
+      if numof_exprs < 2 then
+        raise (Not_implemented_yet "Too few exprs in switch (< 2)");
+      let control = gen_expression control_expr in
+      let curr_function = get_curr_function () in
+      let expr_blocks =
+        make_basicblocks curr_function numof_exprs (fun i ->
+          "caseexpr" ^ string_of_int cases.(i) ^ "_")
+      in
+      let switch =
+        Llvm.build_switch control expr_blocks.(cases.(numof_cases - 1)) (numof_cases - 1) builder
+      in
+      for i = 0 to numof_cases - 2 do
+        Llvm.add_case switch (make_int i) expr_blocks.(cases.(i))
+      done;
+      build_branches curr_function exprs expr_blocks "switch"
+
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = cbool_to_i1 (gen_expression predicate) in
-      let cond_block = Llvm.insertion_block builder in
-      let curr_function = Llvm.block_parent cond_block in
-      begin match (if_true, if_false) with
-      | (Cmm.Cexit (exit_label, []), _) ->
-          let false_block = Llvm.append_block context "iffalse" curr_function in
-          let (_ : Llvm.llvalue) = Llvm.build_cond_br cond
-              (get_exit_target exit_label) false_block builder in
-          Llvm.position_at_end false_block builder;
-          gen_expression if_false
-      | (_, Cmm.Cexit (exit_label, [])) ->
-          let true_block = Llvm.append_block context "iftrue" curr_function in
-          let (_ : Llvm.llvalue) = Llvm.build_cond_br cond
-              true_block (get_exit_target exit_label) builder in
-          Llvm.position_at_end true_block builder;
-          gen_expression if_true
-      | _ ->
-          let true_block = Llvm.append_block context "iftrue" curr_function in
-          let false_block = Llvm.append_block context "iffalse" curr_function in
-          let (_ : Llvm.llvalue) =
-            Llvm.build_cond_br cond true_block false_block builder
-          in
-          let result_block = Llvm.append_block context "ifresult" curr_function in
-          Llvm.position_at_end true_block builder;
-          let true_value = gen_expression if_true in
-          let (_ : Llvm.llvalue) = Llvm.build_br result_block builder in
-          let last_true_block = Llvm.insertion_block builder in
-          Llvm.position_at_end false_block builder;
-          let false_value = gen_expression if_false in
-          let (_ : Llvm.llvalue) = Llvm.build_br result_block builder in
-          let last_false_block = Llvm.insertion_block builder in
-          Llvm.position_at_end result_block builder;
-          Llvm.build_phi [true_value, last_true_block
-              ; false_value, last_false_block] "ifres" builder
-      end
+      let curr_function = get_curr_function () in
+      let branch_bbs =
+        make_basicblocks curr_function 2 (fun i -> [|"iftrue"; "iffalse"|].(i))
+      in
+      let (_ : Llvm.llvalue) =
+        Llvm.build_cond_br cond branch_bbs.(0) branch_bbs.(1) builder
+      in
+      build_branches curr_function [|if_true; if_false|] branch_bbs "if"
 
   | Cmm.Ccatch (exit_label, _ident_list, body, handler) ->
-      let curr_block = Llvm.insertion_block builder in
-      let curr_function = Llvm.block_parent curr_block in
-      let body_block = Llvm.append_block context "body" curr_function in
-      let handler_block = Llvm.append_block context "handler" curr_function in
-      add_exit_target exit_label handler_block;
-      let _ = Llvm.build_br body_block builder in
-      let result_block = Llvm.append_block context "catchres" curr_function in
+      let curr_function = get_curr_function () in
+      let branch_bbs =
+        make_basicblocks curr_function 2 (fun i -> [|"body"; "handler"|].(i))
+      in
+      let (_ : Llvm.llvalue) = Llvm.build_br branch_bbs.(0) builder in
+      add_exit_target exit_label branch_bbs.(1);
+      build_branches curr_function [|body; handler|] branch_bbs "catch"
 
-      Llvm.position_at_end handler_block builder;
-      let handler_value = gen_expression handler in
-      let _ = Llvm.build_br result_block builder in
-      let handler_last_block = Llvm.insertion_block builder in
-
-      Llvm.position_at_end body_block builder;
-      begin match body with
-      | Cmm.Cloop expr ->
-          let _ = gen_expression expr in
-          let _ = Llvm.build_br body_block builder in
-          Llvm.position_at_end result_block builder;
-          handler_value
-      | _ ->
-          let body_value = gen_expression body in
-          let _ = Llvm.build_br result_block builder in
-          let body_last_block = Llvm.insertion_block builder in
-
-          Llvm.position_at_end result_block builder;
-          Llvm.build_phi [body_value, body_last_block
-              ; handler_value, handler_last_block] "catchres" builder
-      end
+  | Cmm.Cloop expr ->
+      let loop_entry_block = Llvm.insertion_block builder in
+      let (_ : Llvm.llvalue) = gen_expression expr in
+      let (_ : Llvm.llvalue) = Llvm.build_br loop_entry_block builder in
+      make_int 0
 
   | Cmm.Clet (ident, value, expr) ->
       add_symbol ident (gen_expression value);
@@ -777,38 +765,40 @@ let rec gen_expression expr =
       let _ = gen_expression fst in
       gen_expression snd
 
-  | Cmm.Cswitch (control_expr, cases, exprs) ->
-      let numof_cases = Array.length cases in
-      if numof_cases < 3 then
-        raise (Not_implemented_yet "Too few cases in switch (< 3)");
-      let control = gen_expression control_expr in
-      let control_block = Llvm.insertion_block builder in
-      let curr_function = Llvm.block_parent control_block in
-      let result_block = Llvm.append_block context "swres" curr_function in
-      let case_blocks =
-        Array.init numof_cases (fun i ->
-          let case_name = "case" ^ string_of_int cases.(i) in
-          Llvm.append_block context case_name curr_function)
-      in
-      let switch =
-        Llvm.build_switch control case_blocks.(0) (numof_cases - 1) builder
-      in
-      for i = 1 to numof_cases - 1 do
-        Llvm.add_case switch (make_int cases.(i)) case_blocks.(i)
-      done;
-      let phi_cases = snd (
-        Array.fold_left (fun (i, phi_cs) bb ->
-          Llvm.position_at_end bb builder;
-          let result = gen_expression exprs.(i) in
-          let _ = Llvm.build_br result_block builder in
-          let last_block = Llvm.insertion_block builder in
-          (i + 1, (result, last_block) :: phi_cs)
-        ) (0, []) case_blocks)
-      in
-      Llvm.position_at_end result_block builder;
-      Llvm.build_phi phi_cases "swphi" builder
-
   | _ -> raise (Not_implemented_yet "Outer matching in gen_expression")
+
+
+and get_curr_function () =
+  Llvm.block_parent (Llvm.insertion_block builder)
+
+and make_basicblocks curr_function n bb_name_gen =
+  Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
+
+and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
+  let branch_phi_pairs = snd (Array.fold_left (fun (i, acc) expr ->
+    Llvm.position_at_end branch_bbs.(i) builder;
+    let value = gen_expression expr in
+    let last_bb = Llvm.insertion_block builder in
+    (i + 1, (value, last_bb) :: acc)) (0, []) branch_exprs)
+  in
+  let nonterminated_branches = List.filter (fun (_v, last_bb) ->
+    not (is_terminated last_bb)) branch_phi_pairs
+  in
+  match nonterminated_branches with
+  | [] -> make_int 0
+  | (value, last_bb) :: [] ->
+      Llvm.position_at_end last_bb builder;
+      value
+  | phi_pairs ->
+      let result_block =
+        Llvm.append_block context (result_bb_name_prefix ^ "result") curr_function
+      in
+      List.iter (fun (_v, last_bb) ->
+        Llvm.position_at_end last_bb builder;
+        ignore (Llvm.build_br result_block builder)
+      ) phi_pairs;
+      Llvm.position_at_end result_block builder;
+      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
 
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
