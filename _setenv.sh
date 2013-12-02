@@ -1,5 +1,6 @@
 export CC="gcc"
 export CXX="g++"
+export TEST_OCAMLOPT=ocamlopt.opt
 
 export OCAML_SRC_ROOT=`dirname $(readlink -f $BASH_ARGV)`
 

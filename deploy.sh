@@ -2,6 +2,11 @@
 
 ./scripts/checkenv --before-install || exit 1
 
+if [ "$1" = '-s' ]; then
+  cp -r scripts $OCAML_ROOT/bin
+  exit 0
+fi
+
 cwd=`pwd`
 
 ./run_configure.sh && cp _depend .depend || exit $1

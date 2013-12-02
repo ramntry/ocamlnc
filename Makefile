@@ -112,6 +112,13 @@ NATTOPOBJS=$(UTILS) $(PARSING) $(TYPING) $(COMP) $(ASMCOMP) \
 
 PERVASIVES=$(STDLIB_MODULES) outcometree topdirs toploop
 
+jblab-backend:
+	$(MAKE) ocamlopt
+	$(MAKE) installopt
+
+test:
+	./gc/tests/trees/check.sh
+
 # For users who don't read the INSTALL file
 defaultentry:
 	@echo "Please refer to the installation instructions in file INSTALL."
