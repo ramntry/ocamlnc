@@ -97,7 +97,7 @@ http://llvm.org/releases/3.3/docs/GettingStarted.html. Должно выйти
   $ cd build/
   $ export PATH=$PWD/../../4.01.0-original_build/bin:$PATH
   $ ../llvm/configure --enable-debug-runtime --enable-keep-symbols \
-    --enable-bindings=ocaml --prefix=$PWD/../dist
+    --enable-bindings=ocaml --enable-targets=x86_64 --prefix=$PWD/../dist
 
 Переменная окружения PATH устанавливается так, чтобы скрипт configure
 смог найти исполняемые файлы OCaml.
