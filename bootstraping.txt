@@ -124,8 +124,13 @@ LLVM нельзя, так как часть библиотек в каталог
   $ git fetch origin jblab-gc-master 
   $ git checkout -b jblab-gc-master origin/jblab-gc-master
 
-7. Затем отредактировать файл <ocamlnc>/setenv.sh, установив все
-необходимые пути:
+7. Затем скопировать шаблон <ocamlnc>/_setenv.sh в файл с именем setenv.sh
+и отредактировать копию, установив все необходимые пути:
+
+  $ cp _setenv.sh setenv.sh
+  $ vi setenv.sh
+
+Описание переменных:
 
   OCAML_ROOT - полный путь к директории инсталляции компилятора (не ветки
       4.01.0-original_build, а ветки jblab-gc-master). Должна существовать
@@ -189,9 +194,7 @@ $LLVM_SRC_ROOT/projects, если такой есть.
   ./build_dummy_gc.sh
 
   # собирает и запускает под контролем valgrind один из тестов (trees)
-  cd $cwd/gc/tests/trees
-  ./check.sh
-  cd $cwd
+  gc/tests/trees/check.sh
 
 9. Вне зависимости от успешности или неуспешности сборки заглушки и
 выполнения теста, иной плагин сборщика мусора подключается к тесту в 3
