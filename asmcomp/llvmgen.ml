@@ -476,6 +476,16 @@ let lltype_of_machtype : Cmm.machtype -> Llvm.lltype = function
       raise (Not_implemented_yet ("I don't know yet what to do with machtype array with "
         ^ string_of_int (Array.length too_long_array) ^ " machtype_component's"))
 
+let is_terminated bb =
+  match Llvm.instr_end bb with
+  | Llvm.After last_instruction ->
+      begin match Llvm.instr_opcode last_instruction with
+      | Llvm.Opcode.Br
+      | Llvm.Opcode.Switch -> true
+      | _ -> false
+      end
+  | Llvm.At_start _bb -> false
+
 let rec gen_expression expr =
   match expr with
   | Cmm.Cconst_int int_value -> Llvm.const_int lltype_of_int int_value
