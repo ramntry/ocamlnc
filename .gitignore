@@ -10,6 +10,7 @@ testsuite/*/*/*/*.ll
 testsuite/*/*/*/*_llvm.s
 testsuite/*/*/*/program
 testsuite/*/*/*/main.c
+testsuite/*/*/*/out
 testsuite/*/*/*/runtime.c
 
 _build/
