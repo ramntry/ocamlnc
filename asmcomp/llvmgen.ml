@@ -167,17 +167,15 @@ module Global_memory = struct
     handle_symbol_requests ()
 end
 
-let find_symbol_exn ident =
-  Hashtbl.find symbol_table ident
-
-let add_symbol ident v =
-  Hashtbl.add symbol_table ident v
-
 let add_param_idents fun_name args_list =
   Hashtbl.add param_idents_table fun_name (Array.of_list args_list)
 
 let get_param_ident fun_name idx =
-  (Hashtbl.find param_idents_table fun_name).(idx)
+  try
+    (Hashtbl.find param_idents_table fun_name).(idx)
+  with Not_found ->
+    raise (Compile_error ("Identifier for " ^ string_of_int idx
+           ^ "th parameter of function " ^ fun_name ^ " not found"))
 
 let add_exit_target exit_label basic_block =
   if Hashtbl.mem exit_targets exit_label
@@ -211,13 +209,19 @@ let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
       [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
 
+let insertion_block () =
+  try
+    Llvm.insertion_block builder
+  with Not_found ->
+    raise (Compile_error "Couldn't get the insertion block")
+
 let goto_entry_block curr_block =
   let curr_function = Llvm.block_parent curr_block in
   let entry_block = Llvm.entry_block curr_function in
   Llvm.position_at_end entry_block builder
 
 let handle_gcroot root_value =
-  let curr_block = Llvm.insertion_block builder in
+  let curr_block = insertion_block () in
   goto_entry_block curr_block;
   let root = Llvm.build_alloca lltype_of_root "root" builder in
   let (_ : Llvm.llvalue) = Llvm.build_call llvm_gcroot_f
@@ -253,6 +257,25 @@ let add_type ident t =
   if t <> lltype_of_word
   then Hashtbl.replace type_table ident (join t (find_type ident))
   else ()
+
+let add_symbol ident v =
+  let curr_block = insertion_block () in
+  goto_entry_block curr_block;
+  let name = "local_" ^ Ident.unique_name ident in
+  let local = Llvm.build_alloca (Llvm.type_of v) name builder in
+  Hashtbl.add symbol_table ident local;
+  Llvm.position_at_end curr_block builder;
+  ignore (Llvm.build_store v local builder)
+
+let get_symbol ident =
+  begin try
+    Hashtbl.find symbol_table ident
+  with Not_found ->
+     raise (Compile_error "Local identifier not found in symbol table")
+  end
+
+let get_symbol_value ident =
+  Llvm.build_load (get_symbol ident) (Ident.unique_name ident) builder
 
 let make_generic_fun_type numof_args =
   let fun_arg_types = Array.make numof_args lltype_of_word in
@@ -450,12 +473,17 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
       in
       rejoined_type
 
+  | Cmm.Cassign (ident, expr) ->
+      let expr_type = lltype_of_expr expr in
+      add_type ident expr_type;
+      let _ = lltype_of_expr ~demand:(find_type ident) expr in
+      demand
+
   | Cmm.Ctuple _ -> demand
   | Cmm.Cexit (_int, _expr_list) -> demand
 
   | Cmm.Ctrywith (_expr1, _ident, _expr2) ->
       raise (Not_implemented_yet "Ctrywith")
-  | Cmm.Cassign (_ident, _expr) -> raise (Not_implemented_yet "Cassign")
   | Cmm.Cop (_op, []) ->
       raise (Not_implemented_yet "Cmm.Cop with empty list of args - strange")
   | Cmm.Cop (_op, _ :: _ :: _ :: _) ->
@@ -486,12 +514,14 @@ let is_terminated bb =
       end
   | Llvm.At_start _bb -> false
 
+
 let rec gen_expression expr =
   match expr with
   | Cmm.Cconst_int int_value -> Llvm.const_int lltype_of_int int_value
   | Cmm.Cconst_float float_string ->
       Llvm.const_float lltype_of_unboxed_float (float_of_string float_string)
-  | Cmm.Cvar ident -> find_symbol_exn ident
+  | Cmm.Cvar ident -> get_symbol_value ident
+
   | Cmm.Cconst_symbol symbol -> Global_memory.find_symbol symbol
   | Cmm.Cconst_pointer value -> inttoptr (make_int value) lltype_of_block
   | Cmm.Ctuple [] -> make_int 1
@@ -752,7 +782,7 @@ let rec gen_expression expr =
       build_branches curr_function [|body; handler|] branch_bbs "catch"
 
   | Cmm.Cloop expr ->
-      let loop_entry_block = Llvm.insertion_block builder in
+      let loop_entry_block = insertion_block () in
       let (_ : Llvm.llvalue) = gen_expression expr in
       let (_ : Llvm.llvalue) = Llvm.build_br loop_entry_block builder in
       make_int 0
@@ -760,6 +790,12 @@ let rec gen_expression expr =
   | Cmm.Clet (ident, value, expr) ->
       add_symbol ident (gen_expression value);
       gen_expression expr
+
+  | Cmm.Cassign (ident, expr) ->
+      let value = gen_expression expr in
+      let local = get_symbol ident in
+      let (_ : Llvm.llvalue) = Llvm.build_store value local builder in
+      make_int 0
 
   | Cmm.Csequence (fst, snd) ->
       let _ = gen_expression fst in
@@ -769,7 +805,7 @@ let rec gen_expression expr =
 
 
 and get_curr_function () =
-  Llvm.block_parent (Llvm.insertion_block builder)
+  Llvm.block_parent (insertion_block ())
 
 and make_basicblocks curr_function n bb_name_gen =
   Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
@@ -778,7 +814,7 @@ and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
   let branch_phi_pairs = snd (Array.fold_left (fun (i, acc) expr ->
     Llvm.position_at_end branch_bbs.(i) builder;
     let value = gen_expression expr in
-    let last_bb = Llvm.insertion_block builder in
+    let last_bb = insertion_block () in
     (i + 1, (value, last_bb) :: acc)) (0, []) branch_exprs)
   in
   let nonterminated_branches = List.filter (fun (_v, last_bb) ->
@@ -816,19 +852,19 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   let arg_llvalues = Llvm.params fun_def in
   (* Iterating over function parameters and assigning them verbose names and
    * adding them in symbol table *)
-  List.iteri (fun arg_num (arg_ident, _machtype) ->
-    Llvm.set_value_name (Ident.unique_name arg_ident) arg_llvalues.(arg_num);
-    add_symbol arg_ident arg_llvalues.(arg_num)
-  ) fun_args;
   let entry_bb = Llvm.append_block context "entry" fun_def in
   let after_gcroots_and_vars =
     Llvm.append_block context "after_gcroots_and_vars" fun_def
   in
   Llvm.position_at_end after_gcroots_and_vars builder;
+  List.iteri (fun arg_num (arg_ident, _machtype) ->
+    Llvm.set_value_name (Ident.unique_name arg_ident) arg_llvalues.(arg_num);
+    add_symbol arg_ident arg_llvalues.(arg_num)
+  ) fun_args;
   let (_ : Llvm.llvalue) =
     Llvm.build_ret (gen_expression fun_body) builder
   in
-  let last_block = Llvm.insertion_block builder in
+  let last_block = insertion_block () in
   Llvm.position_at_end entry_bb builder;
   let (_ : Llvm.llvalue) = Llvm.build_br after_gcroots_and_vars builder in
   Llvm.position_at_end last_block builder;
