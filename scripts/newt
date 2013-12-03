@@ -32,11 +32,21 @@ int main()
 }
 EOF
 
-cat > Makefile <<EOF
-PROGRAM = $test_name
+if [ ! -e Makefile ]
+then
+  makefile_name=Makefile
+  program_name="$test_name"
+else
+  makefile_name=Makefile.second
+  program_name="program"
+  aux_opts="-DNDEBUG -Wno-unused-variable -Wno-unused-function"
+fi
+
+cat > "$makefile_name" <<EOF
+PROGRAM = $program_name
 OBJECTS = main.o $test_name.o runtime.o
 
-CFLAGS = -std=c99 -g -Wall -pedantic
+CFLAGS = -std=c99 -g -Wall -pedantic $aux_opts
 
 .SUFFIXES: .ml
 
@@ -44,10 +54,11 @@ CFLAGS = -std=c99 -g -Wall -pedantic
 	llb $< -load=\$(JBLABGC)
 
 \$(PROGRAM): \$(OBJECTS)
+	\$(CC) \$^ -o \$@
 
 clean:
 	rm -f *.o
-	rm -f *.cm[ix]
+	rm -f *.cm[ixo]
 	rm -f *.o.dump
 	rm -f *.o.symb
 	rm -f out
