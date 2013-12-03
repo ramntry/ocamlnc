@@ -152,4 +152,8 @@ boot/Saved/
 gc/jblab-gc-dummy/build/
 gc/tests/trees/trees
 
+*.native
+*.byte
+*.result
+
 setenv.sh
