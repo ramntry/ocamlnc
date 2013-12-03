@@ -8,10 +8,11 @@ fi
 
 if [ "$1" == "-" ]
 then
-  test_name=`basename $PWD`
+  test_name_arg=`basename $PWD`
 else
-  test_name="$1"
+  test_name_arg="$1"
 fi
+test_name=${test_name_arg%.ml}
 source_name="$test_name.ml"
 
 pull_runtime

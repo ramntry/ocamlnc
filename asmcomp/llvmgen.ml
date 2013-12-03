@@ -46,6 +46,7 @@ let make_int n = Llvm.const_int lltype_of_int n
 let make_byte b = Llvm.const_int lltype_of_byte b
 let make_sidx i = Llvm.const_int (Llvm.i32_type context) i
 let make_ufloat x = Llvm.const_float lltype_of_unboxed_float x
+let make_null t = Llvm.const_null t
 
 let i1_to_cbool i1 =
   Llvm.build_zext i1 lltype_of_int "i1int" builder
@@ -126,6 +127,19 @@ module Global_memory = struct
           else Llvm.const_null lltype_of_block
         end
 
+  let find_symbol_type symbol =
+    match Llvm.lookup_function symbol the_module with
+    | Some f -> lltype_of_block
+    | None ->
+        begin try
+          let {llglobal_name; index} = Hashtbl.find symbols symbol in
+          let value =
+            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          in
+          Llvm.type_of value
+        with Not_found -> lltype_of_block
+        end
+
   let find_label label =
       begin try
         let {llglobal_name; index} = Hashtbl.find labels label in
@@ -177,6 +191,21 @@ let get_param_ident fun_name idx =
     raise (Compile_error ("Identifier for " ^ string_of_int idx
            ^ "th parameter of function " ^ fun_name ^ " not found"))
 
+let insertion_block () =
+  try
+    Llvm.insertion_block builder
+  with Not_found ->
+    raise (Compile_error "Couldn't get the insertion block")
+
+let get_curr_function () =
+  Llvm.block_parent (insertion_block ())
+
+let make_basicblocks curr_function n bb_name_gen =
+  Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
+
+let make_basicblock name =
+  Llvm.append_block context name (get_curr_function ())
+
 let add_exit_target exit_label basic_block =
   if Hashtbl.mem exit_targets exit_label
   then raise (Compile_error "Unexpected duplicate of exit label!")
@@ -187,6 +216,9 @@ let get_exit_target exit_label =
     Hashtbl.find exit_targets exit_label
   with Not_found ->
     raise (Compile_error "Can not find exit target")
+
+let unreachable () =
+   Llvm.build_unreachable builder
 
 let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
@@ -203,17 +235,13 @@ let caml_alloc_tuple_f =
   make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
 
 let caml_exception_handler_f =
-  make_external_decl "caml_exception_handler" [||]
+  let handler = make_external_decl "caml_exception_handler" [||] in
+  Llvm.add_function_attr handler Llvm.Attribute.Noreturn;
+  handler
 
 let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
       [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
-
-let insertion_block () =
-  try
-    Llvm.insertion_block builder
-  with Not_found ->
-    raise (Compile_error "Couldn't get the insertion block")
 
 let goto_entry_block curr_block =
   let curr_function = Llvm.block_parent curr_block in
@@ -314,7 +342,7 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
   | Cmm.Cconst_int _ -> join_with_demand lltype_of_int
   | Cmm.Cconst_natint _ -> join_with_demand lltype_of_word
   | Cmm.Cconst_float _ -> join_with_demand lltype_of_unboxed_float
-  | Cmm.Cconst_symbol _ -> join_with_demand lltype_of_block
+  | Cmm.Cconst_symbol s -> join_with_demand (Global_memory.find_symbol_type s)
   | Cmm.Cconst_pointer _ -> join_with_demand lltype_of_block
   | Cmm.Cconst_natpointer _ -> raise (Not_implemented_yet "Cconst_natpointer")
   | Cmm.Cvar ident ->
@@ -509,7 +537,8 @@ let is_terminated bb =
   | Llvm.After last_instruction ->
       begin match Llvm.instr_opcode last_instruction with
       | Llvm.Opcode.Br
-      | Llvm.Opcode.Switch -> true
+      | Llvm.Opcode.Switch
+      | Llvm.Opcode.Unreachable -> true
       | _ -> false
       end
   | Llvm.At_start _bb -> false
@@ -583,7 +612,10 @@ let rec gen_expression expr =
       build_gccall fun_value args "capply"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
-      Llvm.build_call caml_exception_handler_f [||] "abort" builder
+      let (_ : Llvm.llvalue) =
+        Llvm.build_call caml_exception_handler_f [||] "noreturn" builder
+      in
+      unreachable ()
 
   | Cmm.Cop (Cmm.Cextcall (fun_name, _machtype, _some_flag, _debuginfo),
              args_list) ->
@@ -726,16 +758,13 @@ let rec gen_expression expr =
       | Cmm.Cfloatofint ->
           Llvm.build_sitofp arg_value lltype_of_unboxed_float "fofi" builder
       | Cmm.Cintoffloat ->
-          Llvm.build_fptosi arg_value lltype_of_int "ioff" builder
+          let casted = bitcast arg_value lltype_of_unboxed_float in
+          Llvm.build_fptosi casted lltype_of_int "ioff" builder
       | _ -> raise (Not_implemented_yet ("Unary operation matching in"
                     ^ " gen_expression"))
       end
 
-  | Cmm.Cexit (exit_label, []) ->
-      let (_ : Llvm.llvalue) =
-        Llvm.build_br (get_exit_target exit_label) builder
-      in
-      make_int 0
+  | Cmm.Cexit (exit_label, []) -> Llvm.build_br (get_exit_target exit_label) builder
 
   | Cmm.Cexit (exit_label, _expr_list) ->
       raise (Not_implemented_yet "Cexit with nonempty expression list")
@@ -784,8 +813,7 @@ let rec gen_expression expr =
   | Cmm.Cloop expr ->
       let loop_entry_block = insertion_block () in
       let (_ : Llvm.llvalue) = gen_expression expr in
-      let (_ : Llvm.llvalue) = Llvm.build_br loop_entry_block builder in
-      make_int 0
+      Llvm.build_br loop_entry_block builder
 
   | Cmm.Clet (ident, value, expr) ->
       add_symbol ident (gen_expression value);
@@ -794,8 +822,7 @@ let rec gen_expression expr =
   | Cmm.Cassign (ident, expr) ->
       let value = gen_expression expr in
       let local = get_symbol ident in
-      let (_ : Llvm.llvalue) = Llvm.build_store value local builder in
-      make_int 0
+      Llvm.build_store value local builder
 
   | Cmm.Csequence (fst, snd) ->
       let _ = gen_expression fst in
@@ -803,12 +830,6 @@ let rec gen_expression expr =
 
   | _ -> raise (Not_implemented_yet "Outer matching in gen_expression")
 
-
-and get_curr_function () =
-  Llvm.block_parent (insertion_block ())
-
-and make_basicblocks curr_function n bb_name_gen =
-  Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
 
 and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
   let branch_phi_pairs = snd (Array.fold_left (fun (i, acc) expr ->
@@ -847,6 +868,7 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   let fun_type = Llvm.function_type ret_type arg_types in
   put_fun_type fun_name fun_type;
   let accurate_fun_type = get_fun_type fun_name (Array.length arg_types) in
+  let accurate_ret_type = Llvm.return_type accurate_fun_type in
   let fun_def = Llvm.declare_function fun_name accurate_fun_type the_module in
   Llvm.set_gc (Some gc_name) fun_def;
   let arg_llvalues = Llvm.params fun_def in
@@ -861,13 +883,12 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
     Llvm.set_value_name (Ident.unique_name arg_ident) arg_llvalues.(arg_num);
     add_symbol arg_ident arg_llvalues.(arg_num)
   ) fun_args;
-  let (_ : Llvm.llvalue) =
-    Llvm.build_ret (gen_expression fun_body) builder
+  let ret_val = gen_expression fun_body in
+  let (_ : Llvm.llvalue) = Llvm.build_ret (bitcast (inttoptr ret_val accurate_ret_type)
+      accurate_ret_type) builder
   in
-  let last_block = insertion_block () in
   Llvm.position_at_end entry_bb builder;
   let (_ : Llvm.llvalue) = Llvm.build_br after_gcroots_and_vars builder in
-  Llvm.position_at_end last_block builder;
   fun_def
 
 let gen_data items =
