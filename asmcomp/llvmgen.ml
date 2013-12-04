@@ -245,6 +245,11 @@ let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
   Llvm.declare_function name fun_type the_module
 
+let make_external_noreturn_decl name fun_arg_types =
+  let fun_declaration = make_external_decl name fun_arg_types in
+  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
+  fun_declaration
+
 let make_external_void_decl name fun_arg_types =
   let fun_type = Llvm.function_type (Llvm.void_type context) fun_arg_types in
   Llvm.declare_function name fun_type the_module
@@ -255,10 +260,11 @@ let caml_alloc_small_f =
 let caml_alloc_tuple_f =
   make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
 
+let caml_out_of_bounds_handler_f =
+  make_external_noreturn_decl "caml_out_of_bounds_handler" [||]
+
 let caml_exception_handler_f =
-  let handler = make_external_decl "caml_exception_handler" [||] in
-  Llvm.add_function_attr handler Llvm.Attribute.Noreturn;
-  handler
+  make_external_noreturn_decl "caml_exception_handler" [||]
 
 let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
@@ -286,6 +292,10 @@ let build_gccall fun_value arg_values call_name =
 
 let build_gcload addr_value load_name =
   handle_gcroot (Llvm.build_load addr_value load_name builder)
+
+let fun_checkpoint message =
+  dump_value (get_curr_function ());
+  raise (Debug_assumption message)
 
 let join type1 type2 =
   match (type1, type2) with
@@ -415,8 +425,13 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
       demand
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) -> demand
+  | Cmm.Cop (Cmm.Ccheckbound _debuginfo, [size; index]) ->
+      let _ = lltype_of_expr ~demand:lltype_of_word size in
+      let _ = lltype_of_expr ~demand:lltype_of_word index in
+      demand
+
   | Cmm.Cop (Cmm.Ccheckbound _debuginfo, _args) ->
-      raise (Not_implemented_yet "Ccheckbound")
+      raise (Not_implemented_yet "Ccheckbound with no two args")
 
   | Cmm.Cop (Cmm.Calloc, Cmm.Cconst_natint header :: fields) ->
       let tag = 0xFF land (Nativeint.to_int header) in
@@ -639,6 +654,28 @@ let rec gen_expression expr =
       in
       unreachable ()
 
+  | Cmm.Cop (Cmm.Ccheckbound _debuginfo, [size; index]) ->
+      let size_value = recast (gen_expression size) lltype_of_word in
+      let index_value = recast (gen_expression index) lltype_of_word in
+      let is_too_big = Llvm.build_icmp Llvm.Icmp.Sge index_value size_value
+           "is_out_of_bounds_too_big" builder
+      in
+      let is_negative = Llvm.build_icmp Llvm.Icmp.Slt index_value
+          (Llvm.const_null lltype_of_int) "is_out_of_bounds_negative" builder
+      in
+      let is_out_of_bounds =
+        Llvm.build_or is_too_big is_negative "is_out_of_bounds" builder
+      in
+      let handler_block = make_basicblock "out_of_bounds_handler" in
+      let in_bounds_block = make_basicblock "in_bounds" in
+      ignore (Llvm.build_cond_br is_out_of_bounds
+          handler_block in_bounds_block builder);
+      Llvm.position_at_end handler_block builder;
+      ignore (Llvm.build_call caml_out_of_bounds_handler_f [||] "noreturn" builder);
+      ignore (unreachable ());
+      Llvm.position_at_end in_bounds_block builder;
+      make_int 0
+
   | Cmm.Cop (Cmm.Cextcall (fun_name, _machtype, _some_flag, _debuginfo),
              args_list) ->
       let fun_value =
@@ -679,11 +716,11 @@ let rec gen_expression expr =
       Llvm.build_store expr_value addr_value builder
 
   | Cmm.Cop (Cmm.Cload Cmm.Byte_unsigned,
-            [Cmm.Cop (Cmm.Cadda, [base_addr; offset])]) ->
+            [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset])]) ->
       let addr = Llvm.build_gep (gen_expression base_addr)
           [|(gen_expression offset)|] "addr" builder in
       let byte_value = Llvm.build_load addr "byte" builder in
-      Llvm.build_zext byte_value lltype_of_int "extbyte" builder
+      Llvm.build_zext byte_value lltype_of_char "loaded_char" builder
 
   | Cmm.Cop (Cmm.Cstore chunk, [addr; expr]) ->
       begin match chunk with

@@ -47,8 +47,15 @@ value caml_alloc_tuple(mlsize_t wosize)
 
 value caml_exception_handler(void)
 {
-  log("Unknown exception");
-  exit(1);
+  printf("\nFatal error: Unknown exception\n");
+  exit(0);
+  return const_unit;
+}
+
+value caml_out_of_bounds_handler(void)
+{
+  printf("\nFatal error: Out of bounds exception\n");
+  exit(0);
   return const_unit;
 }
 
