@@ -1,0 +1,8 @@
+#!/usr/bin/perl -W
+
+use strict;
+
+my $log = join "", <>;
+my $start = rindex $log, "#### Testing";
+my $test_log = substr $log, $start;
+print $test_log;

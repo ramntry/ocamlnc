@@ -167,4 +167,10 @@ _log
 *.byte
 *.result
 
+bs.stderr.log
+bs.stderr.log.running
+bs.stdout.log
+bs.stdout.log.running
+bs/
+
 setenv.sh
