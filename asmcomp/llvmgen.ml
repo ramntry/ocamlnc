@@ -475,6 +475,10 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
               let _ = lltype_of_expr ~demand:lltype_of_block lhs in
               let _ = lltype_of_expr ~demand:lltype_of_word rhs in
               lltype_of_word
+          | Cmm.Byte_unsigned ->
+              let _ = lltype_of_expr ~demand:lltype_of_string lhs in
+              let _ = lltype_of_expr ~demand:lltype_of_word rhs in
+              lltype_of_word
           | _ -> raise (Not_implemented_yet ("I don't know what to do with"
                         ^ " store of chunk of such type (in lltype_of_expr)"))
           end
@@ -703,7 +707,7 @@ let rec gen_expression expr =
       build_gcload addr "indexedword"
 
   | Cmm.Cop (Cmm.Cstore Cmm.Word,
-            [Cmm.Cop (Cmm.Cadda, [base_addr; offset]); expr]) ->
+            [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset]); expr]) ->
       let typed_base_addr = bitcast (gen_expression base_addr) lltype_of_block in
       let word_offset = Llvm.build_ashr (gen_expression offset)
           (Llvm.const_int lltype_of_int 3) "woff" builder in
@@ -721,6 +725,21 @@ let rec gen_expression expr =
           [|(gen_expression offset)|] "addr" builder in
       let byte_value = Llvm.build_load addr "byte" builder in
       Llvm.build_zext byte_value lltype_of_char "loaded_char" builder
+
+  | Cmm.Cop (Cmm.Cstore Cmm.Byte_unsigned,
+            [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset]); expr]) ->
+      let base_addr_value =
+        recast (gen_expression base_addr) lltype_of_string
+      in
+      let byte_offset_value = recast (gen_expression offset) lltype_of_word in
+      let byte_addr_value = Llvm.build_gep base_addr_value [|byte_offset_value|]
+          "byte_addr" builder
+      in
+      let char_value = recast (gen_expression expr) lltype_of_char in
+      let byte_value =
+        Llvm.build_trunc char_value lltype_of_byte "char_to_store" builder
+      in
+      Llvm.build_store byte_value byte_addr_value builder
 
   | Cmm.Cop (Cmm.Cstore chunk, [addr; expr]) ->
       begin match chunk with
