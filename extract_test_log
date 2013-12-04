@@ -5,4 +5,6 @@ use strict;
 my $log = join "", <>;
 my $start = rindex $log, "#### Testing";
 my $test_log = substr $log, $start;
+print "[if empty, build was failed]\n\n";
 print $test_log;
+print "\n\nhaswellvps.rtereshin.com\n";
