@@ -364,7 +364,7 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
   | Cmm.Cconst_natint _ -> join_with_demand lltype_of_word
   | Cmm.Cconst_float _ -> join_with_demand lltype_of_unboxed_float
   | Cmm.Cconst_symbol s -> join_with_demand (Global_memory.find_symbol_type s)
-  | Cmm.Cconst_pointer _ -> join_with_demand lltype_of_block
+  | Cmm.Cconst_pointer _ -> join_with_demand lltype_of_word
   | Cmm.Cconst_natpointer _ -> raise (Not_implemented_yet "Cconst_natpointer")
   | Cmm.Cvar ident ->
       begin try
@@ -573,8 +573,7 @@ let rec gen_expression expr =
   | Cmm.Cvar ident -> get_symbol_value ident
 
   | Cmm.Cconst_symbol symbol -> Global_memory.find_symbol symbol
-  | Cmm.Cconst_pointer value -> Llvm.const_inttoptr (make_int value)
-  lltype_of_block
+  | Cmm.Cconst_pointer value -> make_int value
   | Cmm.Ctuple [] -> make_int 1
   | Cmm.Ctuple _ ->
       raise (Not_implemented_yet "Ctuple with non-empty list of fields")
@@ -818,8 +817,6 @@ let rec gen_expression expr =
       done;
       build_branches curr_function exprs expr_blocks "switch"
 
-  | Cmm.Cifthenelse (_, _, Cmm.Ctuple []) -> raise (Debug_assumption "OK")
-
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = cbool_to_i1 (gen_expression predicate) in
       let curr_function = get_curr_function () in
@@ -862,16 +859,25 @@ let rec gen_expression expr =
 
 
 and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
-  let branch_phi_pairs = snd (Array.fold_left (fun (i, acc) expr ->
-    Llvm.position_at_end branch_bbs.(i) builder;
-    let value = gen_expression expr in
-    let last_bb = insertion_block () in
-    (i + 1, (value, last_bb) :: acc)) (0, []) branch_exprs)
+  let (_, branch_phi_pairs) =
+    Array.fold_left (fun (i, acc) expr ->
+      Llvm.position_at_end branch_bbs.(i) builder;
+      let value = gen_expression expr in
+      let last_bb = insertion_block () in
+      (i + 1, (value, last_bb) :: acc))
+    (0, [])
+    branch_exprs
   in
   let nonterminated_branches = List.filter (fun (_v, last_bb) ->
     not (is_terminated last_bb)) branch_phi_pairs
   in
-  match nonterminated_branches with
+  let accurate_type = List.fold_left (fun acc_type (v, last_bb) ->
+    join (Llvm.type_of v) acc_type) lltype_of_word nonterminated_branches
+  in
+  let casted_branches = List.map (fun (v, last_bb) ->
+    (recast v accurate_type, last_bb)) nonterminated_branches
+  in
+  match casted_branches with
   | [] -> make_int 0
   | (value, last_bb) :: [] ->
       Llvm.position_at_end last_bb builder;
