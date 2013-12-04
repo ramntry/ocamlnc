@@ -16,6 +16,6 @@ make opt.opt || exit 8
 make install && cp -r scripts $OCAML_ROOT/bin || exit 16
 
 ./build_dummy_gc.sh || exit 32
-gc/tests/trees/check.sh || exit 64
+make test || exit 64
 
 exit 0
