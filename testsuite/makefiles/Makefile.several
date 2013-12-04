@@ -66,7 +66,7 @@ run-all:
 	              FILE=$$file; \
 	       fi; \
 	     fi \
-	  && echo " => passed" || echo " => *** FAILED ***"; \
+	  && echo " => passed" || echo ' => *_*_*_*_* - F A I L E D - *_*_*_*_*'; \
 	done
 
 .PHONY: run-file
