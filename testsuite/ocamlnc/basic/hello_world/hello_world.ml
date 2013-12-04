@@ -6,4 +6,4 @@ external read_int : unit -> int = "caml_read_int"
 external print_int : int -> unit = "caml_print_int"
 
 let () =
-  print_endline "Hello World!"
+  print_endline "Hello World!
