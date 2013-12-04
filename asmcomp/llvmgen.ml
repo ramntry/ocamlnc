@@ -1,6 +1,7 @@
 exception Cmm_type_inference_error of string
 exception Not_implemented_yet of string
 exception Compile_error of string
+exception Debug_assumption of string
 
 let strict_symbols_mode = false
 let gc_name = "jblab-gc"
@@ -66,14 +67,19 @@ let bitcast value new_type =
   else value
 
 let inttoptr value new_type =
-  if Llvm.type_of value = lltype_of_word
+  let curr_type = Llvm.type_of value in
+  if curr_type <> new_type && curr_type = lltype_of_word
   then Llvm.build_inttoptr value new_type "ipcast" builder
   else value
 
 let ptrcast value new_type =
-  if Llvm.type_of value <> new_type
+  let curr_type = Llvm.type_of value in
+  if curr_type <> new_type && curr_type <> lltype_of_word
   then Llvm.build_pointercast value new_type "pcast" builder
   else value
+
+let recast value new_type =
+  ptrcast (inttoptr value new_type) new_type
 
 module Global_memory = struct
   type position =
@@ -113,13 +119,28 @@ module Global_memory = struct
 
   let make_idxs index = [|make_int 0; make_sidx index|]
 
+  let normalize_symbol_type t =
+    if t <> lltype_of_block && t <> lltype_of_float
+    then lltype_of_string
+    else t
+
+  let normalized_symbol_cast v =
+    let actual_type = Llvm.type_of v in
+    let normalized_type = normalize_symbol_type actual_type in
+    if actual_type <> normalized_type
+    then Llvm.const_bitcast v normalized_type
+    else v
+
   let find_symbol symbol =
     match Llvm.lookup_function symbol the_module with
     | Some f -> f
     | None ->
         begin try
           let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          let ptr =
+            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          in
+          normalized_symbol_cast ptr
         with Not_found ->
           if strict_symbols_mode then
             raise (Compile_error ("Can not find symbol " ^ symbol
@@ -133,10 +154,10 @@ module Global_memory = struct
     | None ->
         begin try
           let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          let value =
+          let ptr =
             Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
           in
-          Llvm.type_of value
+          normalize_symbol_type (Llvm.type_of ptr)
         with Not_found -> lltype_of_block
         end
 
@@ -552,7 +573,8 @@ let rec gen_expression expr =
   | Cmm.Cvar ident -> get_symbol_value ident
 
   | Cmm.Cconst_symbol symbol -> Global_memory.find_symbol symbol
-  | Cmm.Cconst_pointer value -> inttoptr (make_int value) lltype_of_block
+  | Cmm.Cconst_pointer value -> Llvm.const_inttoptr (make_int value)
+  lltype_of_block
   | Cmm.Ctuple [] -> make_int 1
   | Cmm.Ctuple _ ->
       raise (Not_implemented_yet "Ctuple with non-empty list of fields")
@@ -602,13 +624,14 @@ let rec gen_expression expr =
 
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo),
             (Cmm.Cconst_symbol fun_name) :: args_list) ->
+      if !Clflags.dump_llvm then Printf.fprintf stderr "Capply of %s\n%!" fun_name;
       let fun_value = Global_memory.find_symbol fun_name in
       let arg_types =
         Llvm.param_types (Llvm.element_type (Llvm.type_of(fun_value)))
       in
       let args = Array.of_list (List.mapi (fun i arg ->
         let arg_value = gen_expression arg in
-        inttoptr arg_value arg_types.(i)) args_list) in
+        recast arg_value arg_types.(i)) args_list) in
       build_gccall fun_value args "capply"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
@@ -648,9 +671,13 @@ let rec gen_expression expr =
       let typed_base_addr = bitcast (gen_expression base_addr) lltype_of_block in
       let word_offset = Llvm.build_ashr (gen_expression offset)
           (Llvm.const_int lltype_of_int 3) "woff" builder in
-      let addr = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
       let expr_value = ptrcast (gen_expression expr) lltype_of_word in
-      Llvm.build_store expr_value addr builder
+      if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
+      dump_value expr_value;
+      let addr_value = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
+      if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
+      dump_value addr_value;
+      Llvm.build_store expr_value addr_value builder
 
   | Cmm.Cop (Cmm.Cload Cmm.Byte_unsigned,
             [Cmm.Cop (Cmm.Cadda, [base_addr; offset])]) ->
@@ -663,9 +690,9 @@ let rec gen_expression expr =
       begin match chunk with
       | Cmm.Word ->
           let expr_value = ptrcast (gen_expression expr) lltype_of_word in
-          let addr_value = ptrcast (gen_expression addr) lltype_of_block in
           if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
           dump_value expr_value;
+          let addr_value = ptrcast (gen_expression addr) lltype_of_block in
           if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
           dump_value addr_value;
           Llvm.build_store expr_value addr_value builder
@@ -743,13 +770,14 @@ let rec gen_expression expr =
 
   | Cmm.Cop (op, [arg]) ->
       let arg_value = gen_expression arg in
+      dump_value arg_value;
       begin match op with
       | Cmm.Cload chunk ->
           begin match chunk with
           | Cmm.Double_u ->
-              Llvm.build_load (inttoptr arg_value lltype_of_float) "doubleload" builder
+              Llvm.build_load (recast arg_value lltype_of_float) "doubleload" builder
           | Cmm.Word ->
-              build_gcload (inttoptr arg_value lltype_of_block) "singleload"
+              build_gcload (recast arg_value lltype_of_block) "singleload"
           | _ -> raise (Not_implemented_yet ("I don't know what to do with"
                         ^ " load of chunk of such type (in gen_expression)"))
           end
@@ -789,6 +817,8 @@ let rec gen_expression expr =
         Llvm.add_case switch (make_int i) expr_blocks.(cases.(i))
       done;
       build_branches curr_function exprs expr_blocks "switch"
+
+  | Cmm.Cifthenelse (_, _, Cmm.Ctuple []) -> raise (Debug_assumption "OK")
 
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = cbool_to_i1 (gen_expression predicate) in

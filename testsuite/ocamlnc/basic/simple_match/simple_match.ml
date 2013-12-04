@@ -18,8 +18,14 @@ let name_your_price = function
 
 let () =
   if name_your_price C1 <> 100 then
-    print_endline "FAIL";
+    print_endline "FAIL"
+  else
+    print_endline "OK";
   if name_your_price C3 <> 300 then
-    print_endline "FAIL";
+    print_endline "FAIL"
+  else
+    print_endline "OK";
   if name_your_price C7 <> 700 then
-    print_endline "FAIL";
+    print_endline "FAIL"
+  else
+    print_endline "OK";
