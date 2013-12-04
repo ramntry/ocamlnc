@@ -74,6 +74,8 @@ run-file:
 	@printf " $(DESC)"
 	@rm -f program program.exe
 	@if [ ${COMP} = 'OCAMLNC' ]; then \
+		newt -; \
+		${MAKE} -s -f Makefile.second distclean; \
 		${MAKE} -s -f Makefile.second; \
 	else \
 		echo "Testing with original ocamlc compiler is not implemented yet"; \
