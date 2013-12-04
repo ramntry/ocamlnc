@@ -118,6 +118,7 @@ jblab-backend:
 
 test:
 	./gc/tests/trees/check.sh
+	./testsuite/run
 
 # For users who don't read the INSTALL file
 defaultentry:

@@ -105,7 +105,7 @@ value caml_read_int(value unit_value) /* unit -> int */
 
 value caml_print_int(value word) /* int -> unit */
 {
-  long const n = (long)word / 2;
+  long const n = (long)word >> 1;
   printf("%ld", n);
   return const_unit;
 }

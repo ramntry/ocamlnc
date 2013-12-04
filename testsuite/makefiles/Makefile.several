@@ -44,22 +44,11 @@ run-all:
 	    CANKILL=$(CANKILL) sh `basename $$file ml`precheck || continue; \
 	  fi; \
 	  printf " ... testing '$$file':"; \
-	  $(MAKE) run-file DESC=ocamlc COMP='$(OCAMLC)' \
-	          RUNTIME='$(MYRUNTIME)' \
-	          COMPFLAGS='-w a $(ADD_COMPFLAGS) $(ADD_CFLAGS) $(O_FILES) \
-	                     $(CMA_FILES) -I $(OTOPDIR)/testsuite/lib \
-	                     $(CMO_FILES)' \
-	          FILE=$$file PROGRAM_ARGS=$(PROGRAM_ARGS) \
-	  && \
-	  if $(BYTECODE_ONLY); then : ; else \
-	    $(MAKE) run-file DESC=ocamlopt COMP='$(OCAMLOPT)' \
-	            RUNTIME= \
-	            COMPFLAGS='-w a $(ADD_COMPFLAGS) $(ADD_OPTFLAGS) \
-		               $(O_FILES) $(CMXA_FILES) \
-			       -I $(OTOPDIR)/testsuite/lib $(CMX_FILES)' \
-	            FILE=$$file PROGRAM_ARGS=$(PROGRAM_ARGS); \
-	  fi \
-	  && \
+		$(MAKE) run-file DESC=ocamlnc COMP='OCAMLNC' \
+						RUNTIME= \
+						COMPFLAGS= \
+						FILE=$$file PROGRAM_ARGS=$(PROGRAM_ARGS) \
+		&& \
 	  if [ -n "$(UNSAFE)" ]; then \
 	    $(MAKE) run-file DESC=ocamlc-unsafe COMP='$(OCAMLC)' \
 	            RUNTIME='$(MYRUNTIME)' \
@@ -84,7 +73,13 @@ run-all:
 run-file:
 	@printf " $(DESC)"
 	@rm -f program program.exe
-	@$(COMP) $(COMPFLAGS) $(FILE) -o program$(EXE)
+	@if [ ${COMP} = 'OCAMLNC' ]; then \
+		newt -; \
+		${MAKE} -s -f Makefile.second distclean; \
+		${MAKE} -s -f Makefile.second; \
+	else \
+		echo "Testing with original ocamlc compiler is not implemented yet"; \
+	fi
 	@F="`basename $(FILE) .ml`"; \
 	if [ -f $$F.runner ]; then \
 	  RUNTIME="$(RUNTIME)" sh $$F.runner; \

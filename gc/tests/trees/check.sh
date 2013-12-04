@@ -1,6 +1,6 @@
 #!/bin/bash
 
-testsize=30
+testsize=300
 valgrind_options="--leak-check=full"
 
 checkenv || exit 1

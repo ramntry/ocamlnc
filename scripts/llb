@@ -7,7 +7,7 @@ $TEST_OCAMLOPT -c -g -o $orig_obj -inline 0 -dcmm  $1 2> ${1/%.ml/.cmm}
 
 $TEST_OCAMLOPT -c -g -o $orig_obj -inline 0 -emit-llvm $1 2>&1 \
   | tee ${1/%.ml/.ll} \
-  | opt -O3 -S - -o - \
+  | opt -mem2reg -O3 -S - -o - \
   | tee ${1/%.ml/.opt.ll} \
   | llc $2 \
   | tee ${1/%.ml/_llvm.s} \

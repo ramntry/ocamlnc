@@ -1,0 +1,28 @@
+#!/bin/bash
+
+test_path="$1"
+test_name=`basename $test_path`
+level="../../.."
+
+mkdir -p $test_path
+cd $test_path
+
+
+cat > Makefile <<EOF
+BASEDIR=$level
+
+include \$(BASEDIR)/makefiles/Makefile.several
+include \$(BASEDIR)/makefiles/Makefile.common
+EOF
+
+newt -
+touch $test_name.reference
+
+vim $test_name.ml
+
+make -f Makefile.second && \
+echo "********** Result **********" && \
+./program | tee $test_name.reference > /dev/stdout && \
+echo && \
+echo "****************************" && \
+$level/run

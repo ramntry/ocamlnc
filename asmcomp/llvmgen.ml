@@ -1,6 +1,7 @@
 exception Cmm_type_inference_error of string
 exception Not_implemented_yet of string
 exception Compile_error of string
+exception Debug_assumption of string
 
 let strict_symbols_mode = false
 let gc_name = "jblab-gc"
@@ -46,6 +47,7 @@ let make_int n = Llvm.const_int lltype_of_int n
 let make_byte b = Llvm.const_int lltype_of_byte b
 let make_sidx i = Llvm.const_int (Llvm.i32_type context) i
 let make_ufloat x = Llvm.const_float lltype_of_unboxed_float x
+let make_null t = Llvm.const_null t
 
 let i1_to_cbool i1 =
   Llvm.build_zext i1 lltype_of_int "i1int" builder
@@ -65,14 +67,19 @@ let bitcast value new_type =
   else value
 
 let inttoptr value new_type =
-  if Llvm.type_of value = lltype_of_word
+  let curr_type = Llvm.type_of value in
+  if curr_type <> new_type && curr_type = lltype_of_word
   then Llvm.build_inttoptr value new_type "ipcast" builder
   else value
 
 let ptrcast value new_type =
-  if Llvm.type_of value <> new_type
+  let curr_type = Llvm.type_of value in
+  if curr_type <> new_type && curr_type <> lltype_of_word
   then Llvm.build_pointercast value new_type "pcast" builder
   else value
+
+let recast value new_type =
+  ptrcast (inttoptr value new_type) new_type
 
 module Global_memory = struct
   type position =
@@ -112,18 +119,46 @@ module Global_memory = struct
 
   let make_idxs index = [|make_int 0; make_sidx index|]
 
+  let normalize_symbol_type t =
+    if t <> lltype_of_block && t <> lltype_of_float
+    then lltype_of_string
+    else t
+
+  let normalized_symbol_cast v =
+    let actual_type = Llvm.type_of v in
+    let normalized_type = normalize_symbol_type actual_type in
+    if actual_type <> normalized_type
+    then Llvm.const_bitcast v normalized_type
+    else v
+
   let find_symbol symbol =
     match Llvm.lookup_function symbol the_module with
     | Some f -> f
     | None ->
         begin try
           let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          let ptr =
+            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          in
+          normalized_symbol_cast ptr
         with Not_found ->
           if strict_symbols_mode then
             raise (Compile_error ("Can not find symbol " ^ symbol
                    ^ " in Global_memory.symbols"))
           else Llvm.const_null lltype_of_block
+        end
+
+  let find_symbol_type symbol =
+    match Llvm.lookup_function symbol the_module with
+    | Some f -> lltype_of_block
+    | None ->
+        begin try
+          let {llglobal_name; index} = Hashtbl.find symbols symbol in
+          let ptr =
+            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          in
+          normalize_symbol_type (Llvm.type_of ptr)
+        with Not_found -> lltype_of_block
         end
 
   let find_label label =
@@ -167,17 +202,30 @@ module Global_memory = struct
     handle_symbol_requests ()
 end
 
-let find_symbol_exn ident =
-  Hashtbl.find symbol_table ident
-
-let add_symbol ident v =
-  Hashtbl.add symbol_table ident v
-
 let add_param_idents fun_name args_list =
   Hashtbl.add param_idents_table fun_name (Array.of_list args_list)
 
 let get_param_ident fun_name idx =
-  (Hashtbl.find param_idents_table fun_name).(idx)
+  try
+    (Hashtbl.find param_idents_table fun_name).(idx)
+  with Not_found ->
+    raise (Compile_error ("Identifier for " ^ string_of_int idx
+           ^ "th parameter of function " ^ fun_name ^ " not found"))
+
+let insertion_block () =
+  try
+    Llvm.insertion_block builder
+  with Not_found ->
+    raise (Compile_error "Couldn't get the insertion block")
+
+let get_curr_function () =
+  Llvm.block_parent (insertion_block ())
+
+let make_basicblocks curr_function n bb_name_gen =
+  Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
+
+let make_basicblock name =
+  Llvm.append_block context name (get_curr_function ())
 
 let add_exit_target exit_label basic_block =
   if Hashtbl.mem exit_targets exit_label
@@ -189,6 +237,9 @@ let get_exit_target exit_label =
     Hashtbl.find exit_targets exit_label
   with Not_found ->
     raise (Compile_error "Can not find exit target")
+
+let unreachable () =
+   Llvm.build_unreachable builder
 
 let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
@@ -205,7 +256,9 @@ let caml_alloc_tuple_f =
   make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
 
 let caml_exception_handler_f =
-  make_external_decl "caml_exception_handler" [||]
+  let handler = make_external_decl "caml_exception_handler" [||] in
+  Llvm.add_function_attr handler Llvm.Attribute.Noreturn;
+  handler
 
 let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
@@ -217,7 +270,7 @@ let goto_entry_block curr_block =
   Llvm.position_at_end entry_block builder
 
 let handle_gcroot root_value =
-  let curr_block = Llvm.insertion_block builder in
+  let curr_block = insertion_block () in
   goto_entry_block curr_block;
   let root = Llvm.build_alloca lltype_of_root "root" builder in
   let (_ : Llvm.llvalue) = Llvm.build_call llvm_gcroot_f
@@ -253,6 +306,25 @@ let add_type ident t =
   if t <> lltype_of_word
   then Hashtbl.replace type_table ident (join t (find_type ident))
   else ()
+
+let add_symbol ident v =
+  let curr_block = insertion_block () in
+  goto_entry_block curr_block;
+  let name = "local_" ^ Ident.unique_name ident in
+  let local = Llvm.build_alloca (Llvm.type_of v) name builder in
+  Hashtbl.add symbol_table ident local;
+  Llvm.position_at_end curr_block builder;
+  ignore (Llvm.build_store v local builder)
+
+let get_symbol ident =
+  begin try
+    Hashtbl.find symbol_table ident
+  with Not_found ->
+     raise (Compile_error "Local identifier not found in symbol table")
+  end
+
+let get_symbol_value ident =
+  Llvm.build_load (get_symbol ident) (Ident.unique_name ident) builder
 
 let make_generic_fun_type numof_args =
   let fun_arg_types = Array.make numof_args lltype_of_word in
@@ -291,8 +363,8 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
   | Cmm.Cconst_int _ -> join_with_demand lltype_of_int
   | Cmm.Cconst_natint _ -> join_with_demand lltype_of_word
   | Cmm.Cconst_float _ -> join_with_demand lltype_of_unboxed_float
-  | Cmm.Cconst_symbol _ -> join_with_demand lltype_of_block
-  | Cmm.Cconst_pointer _ -> join_with_demand lltype_of_block
+  | Cmm.Cconst_symbol s -> join_with_demand (Global_memory.find_symbol_type s)
+  | Cmm.Cconst_pointer _ -> join_with_demand lltype_of_word
   | Cmm.Cconst_natpointer _ -> raise (Not_implemented_yet "Cconst_natpointer")
   | Cmm.Cvar ident ->
       begin try
@@ -450,12 +522,17 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
       in
       rejoined_type
 
+  | Cmm.Cassign (ident, expr) ->
+      let expr_type = lltype_of_expr expr in
+      add_type ident expr_type;
+      let _ = lltype_of_expr ~demand:(find_type ident) expr in
+      demand
+
   | Cmm.Ctuple _ -> demand
   | Cmm.Cexit (_int, _expr_list) -> demand
 
   | Cmm.Ctrywith (_expr1, _ident, _expr2) ->
       raise (Not_implemented_yet "Ctrywith")
-  | Cmm.Cassign (_ident, _expr) -> raise (Not_implemented_yet "Cassign")
   | Cmm.Cop (_op, []) ->
       raise (Not_implemented_yet "Cmm.Cop with empty list of args - strange")
   | Cmm.Cop (_op, _ :: _ :: _ :: _) ->
@@ -476,14 +553,27 @@ let lltype_of_machtype : Cmm.machtype -> Llvm.lltype = function
       raise (Not_implemented_yet ("I don't know yet what to do with machtype array with "
         ^ string_of_int (Array.length too_long_array) ^ " machtype_component's"))
 
+let is_terminated bb =
+  match Llvm.instr_end bb with
+  | Llvm.After last_instruction ->
+      begin match Llvm.instr_opcode last_instruction with
+      | Llvm.Opcode.Br
+      | Llvm.Opcode.Switch
+      | Llvm.Opcode.Unreachable -> true
+      | _ -> false
+      end
+  | Llvm.At_start _bb -> false
+
+
 let rec gen_expression expr =
   match expr with
   | Cmm.Cconst_int int_value -> Llvm.const_int lltype_of_int int_value
   | Cmm.Cconst_float float_string ->
       Llvm.const_float lltype_of_unboxed_float (float_of_string float_string)
-  | Cmm.Cvar ident -> find_symbol_exn ident
+  | Cmm.Cvar ident -> get_symbol_value ident
+
   | Cmm.Cconst_symbol symbol -> Global_memory.find_symbol symbol
-  | Cmm.Cconst_pointer value -> inttoptr (make_int value) lltype_of_block
+  | Cmm.Cconst_pointer value -> make_int value
   | Cmm.Ctuple [] -> make_int 1
   | Cmm.Ctuple _ ->
       raise (Not_implemented_yet "Ctuple with non-empty list of fields")
@@ -533,17 +623,21 @@ let rec gen_expression expr =
 
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo),
             (Cmm.Cconst_symbol fun_name) :: args_list) ->
+      if !Clflags.dump_llvm then Printf.fprintf stderr "Capply of %s\n%!" fun_name;
       let fun_value = Global_memory.find_symbol fun_name in
       let arg_types =
         Llvm.param_types (Llvm.element_type (Llvm.type_of(fun_value)))
       in
       let args = Array.of_list (List.mapi (fun i arg ->
         let arg_value = gen_expression arg in
-        inttoptr arg_value arg_types.(i)) args_list) in
+        recast arg_value arg_types.(i)) args_list) in
       build_gccall fun_value args "capply"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
-      Llvm.build_call caml_exception_handler_f [||] "abort" builder
+      let (_ : Llvm.llvalue) =
+        Llvm.build_call caml_exception_handler_f [||] "noreturn" builder
+      in
+      unreachable ()
 
   | Cmm.Cop (Cmm.Cextcall (fun_name, _machtype, _some_flag, _debuginfo),
              args_list) ->
@@ -576,9 +670,13 @@ let rec gen_expression expr =
       let typed_base_addr = bitcast (gen_expression base_addr) lltype_of_block in
       let word_offset = Llvm.build_ashr (gen_expression offset)
           (Llvm.const_int lltype_of_int 3) "woff" builder in
-      let addr = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
       let expr_value = ptrcast (gen_expression expr) lltype_of_word in
-      Llvm.build_store expr_value addr builder
+      if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
+      dump_value expr_value;
+      let addr_value = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
+      if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
+      dump_value addr_value;
+      Llvm.build_store expr_value addr_value builder
 
   | Cmm.Cop (Cmm.Cload Cmm.Byte_unsigned,
             [Cmm.Cop (Cmm.Cadda, [base_addr; offset])]) ->
@@ -591,9 +689,9 @@ let rec gen_expression expr =
       begin match chunk with
       | Cmm.Word ->
           let expr_value = ptrcast (gen_expression expr) lltype_of_word in
-          let addr_value = ptrcast (gen_expression addr) lltype_of_block in
           if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
           dump_value expr_value;
+          let addr_value = ptrcast (gen_expression addr) lltype_of_block in
           if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
           dump_value addr_value;
           Llvm.build_store expr_value addr_value builder
@@ -671,13 +769,14 @@ let rec gen_expression expr =
 
   | Cmm.Cop (op, [arg]) ->
       let arg_value = gen_expression arg in
+      dump_value arg_value;
       begin match op with
       | Cmm.Cload chunk ->
           begin match chunk with
           | Cmm.Double_u ->
-              Llvm.build_load (inttoptr arg_value lltype_of_float) "doubleload" builder
+              Llvm.build_load (recast arg_value lltype_of_float) "doubleload" builder
           | Cmm.Word ->
-              build_gcload (inttoptr arg_value lltype_of_block) "singleload"
+              build_gcload (recast arg_value lltype_of_block) "singleload"
           | _ -> raise (Not_implemented_yet ("I don't know what to do with"
                         ^ " load of chunk of such type (in gen_expression)"))
           end
@@ -686,119 +785,113 @@ let rec gen_expression expr =
       | Cmm.Cfloatofint ->
           Llvm.build_sitofp arg_value lltype_of_unboxed_float "fofi" builder
       | Cmm.Cintoffloat ->
-          Llvm.build_fptosi arg_value lltype_of_int "ioff" builder
+          let casted = bitcast arg_value lltype_of_unboxed_float in
+          Llvm.build_fptosi casted lltype_of_int "ioff" builder
       | _ -> raise (Not_implemented_yet ("Unary operation matching in"
                     ^ " gen_expression"))
       end
 
+  | Cmm.Cexit (exit_label, []) -> Llvm.build_br (get_exit_target exit_label) builder
+
+  | Cmm.Cexit (exit_label, _expr_list) ->
+      raise (Not_implemented_yet "Cexit with nonempty expression list")
+
+  | Cmm.Cswitch (control_expr, cases, exprs) ->
+      let numof_cases = Array.length cases in
+      if numof_cases < 2 then
+        raise (Not_implemented_yet "Too few cases in switch (< 2)");
+      let numof_exprs = Array.length exprs in
+      if numof_exprs < 2 then
+        raise (Not_implemented_yet "Too few exprs in switch (< 2)");
+      let control = gen_expression control_expr in
+      let curr_function = get_curr_function () in
+      let expr_blocks =
+        make_basicblocks curr_function numof_exprs (fun i ->
+          "caseexpr" ^ string_of_int cases.(i) ^ "_")
+      in
+      let switch =
+        Llvm.build_switch control expr_blocks.(cases.(numof_cases - 1)) (numof_cases - 1) builder
+      in
+      for i = 0 to numof_cases - 2 do
+        Llvm.add_case switch (make_int i) expr_blocks.(cases.(i))
+      done;
+      build_branches curr_function exprs expr_blocks "switch"
+
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = cbool_to_i1 (gen_expression predicate) in
-      let cond_block = Llvm.insertion_block builder in
-      let curr_function = Llvm.block_parent cond_block in
-      begin match (if_true, if_false) with
-      | (Cmm.Cexit (exit_label, []), _) ->
-          let false_block = Llvm.append_block context "iffalse" curr_function in
-          let (_ : Llvm.llvalue) = Llvm.build_cond_br cond
-              (get_exit_target exit_label) false_block builder in
-          Llvm.position_at_end false_block builder;
-          gen_expression if_false
-      | (_, Cmm.Cexit (exit_label, [])) ->
-          let true_block = Llvm.append_block context "iftrue" curr_function in
-          let (_ : Llvm.llvalue) = Llvm.build_cond_br cond
-              true_block (get_exit_target exit_label) builder in
-          Llvm.position_at_end true_block builder;
-          gen_expression if_true
-      | _ ->
-          let true_block = Llvm.append_block context "iftrue" curr_function in
-          let false_block = Llvm.append_block context "iffalse" curr_function in
-          let (_ : Llvm.llvalue) =
-            Llvm.build_cond_br cond true_block false_block builder
-          in
-          let result_block = Llvm.append_block context "ifresult" curr_function in
-          Llvm.position_at_end true_block builder;
-          let true_value = gen_expression if_true in
-          let (_ : Llvm.llvalue) = Llvm.build_br result_block builder in
-          let last_true_block = Llvm.insertion_block builder in
-          Llvm.position_at_end false_block builder;
-          let false_value = gen_expression if_false in
-          let (_ : Llvm.llvalue) = Llvm.build_br result_block builder in
-          let last_false_block = Llvm.insertion_block builder in
-          Llvm.position_at_end result_block builder;
-          Llvm.build_phi [true_value, last_true_block
-              ; false_value, last_false_block] "ifres" builder
-      end
+      let curr_function = get_curr_function () in
+      let branch_bbs =
+        make_basicblocks curr_function 2 (fun i -> [|"iftrue"; "iffalse"|].(i))
+      in
+      let (_ : Llvm.llvalue) =
+        Llvm.build_cond_br cond branch_bbs.(0) branch_bbs.(1) builder
+      in
+      build_branches curr_function [|if_true; if_false|] branch_bbs "if"
 
   | Cmm.Ccatch (exit_label, _ident_list, body, handler) ->
-      let curr_block = Llvm.insertion_block builder in
-      let curr_function = Llvm.block_parent curr_block in
-      let body_block = Llvm.append_block context "body" curr_function in
-      let handler_block = Llvm.append_block context "handler" curr_function in
-      add_exit_target exit_label handler_block;
-      let _ = Llvm.build_br body_block builder in
-      let result_block = Llvm.append_block context "catchres" curr_function in
+      let curr_function = get_curr_function () in
+      let branch_bbs =
+        make_basicblocks curr_function 2 (fun i -> [|"body"; "handler"|].(i))
+      in
+      let (_ : Llvm.llvalue) = Llvm.build_br branch_bbs.(0) builder in
+      add_exit_target exit_label branch_bbs.(1);
+      build_branches curr_function [|body; handler|] branch_bbs "catch"
 
-      Llvm.position_at_end handler_block builder;
-      let handler_value = gen_expression handler in
-      let _ = Llvm.build_br result_block builder in
-      let handler_last_block = Llvm.insertion_block builder in
-
-      Llvm.position_at_end body_block builder;
-      begin match body with
-      | Cmm.Cloop expr ->
-          let _ = gen_expression expr in
-          let _ = Llvm.build_br body_block builder in
-          Llvm.position_at_end result_block builder;
-          handler_value
-      | _ ->
-          let body_value = gen_expression body in
-          let _ = Llvm.build_br result_block builder in
-          let body_last_block = Llvm.insertion_block builder in
-
-          Llvm.position_at_end result_block builder;
-          Llvm.build_phi [body_value, body_last_block
-              ; handler_value, handler_last_block] "catchres" builder
-      end
+  | Cmm.Cloop expr ->
+      let loop_entry_block = insertion_block () in
+      let (_ : Llvm.llvalue) = gen_expression expr in
+      Llvm.build_br loop_entry_block builder
 
   | Cmm.Clet (ident, value, expr) ->
       add_symbol ident (gen_expression value);
       gen_expression expr
 
+  | Cmm.Cassign (ident, expr) ->
+      let value = gen_expression expr in
+      let local = get_symbol ident in
+      Llvm.build_store value local builder
+
   | Cmm.Csequence (fst, snd) ->
       let _ = gen_expression fst in
       gen_expression snd
 
-  | Cmm.Cswitch (control_expr, cases, exprs) ->
-      let numof_cases = Array.length cases in
-      if numof_cases < 3 then
-        raise (Not_implemented_yet "Too few cases in switch (< 3)");
-      let control = gen_expression control_expr in
-      let control_block = Llvm.insertion_block builder in
-      let curr_function = Llvm.block_parent control_block in
-      let result_block = Llvm.append_block context "swres" curr_function in
-      let case_blocks =
-        Array.init numof_cases (fun i ->
-          let case_name = "case" ^ string_of_int cases.(i) in
-          Llvm.append_block context case_name curr_function)
-      in
-      let switch =
-        Llvm.build_switch control case_blocks.(0) (numof_cases - 1) builder
-      in
-      for i = 1 to numof_cases - 1 do
-        Llvm.add_case switch (make_int cases.(i)) case_blocks.(i)
-      done;
-      let phi_cases = snd (
-        Array.fold_left (fun (i, phi_cs) bb ->
-          Llvm.position_at_end bb builder;
-          let result = gen_expression exprs.(i) in
-          let _ = Llvm.build_br result_block builder in
-          let last_block = Llvm.insertion_block builder in
-          (i + 1, (result, last_block) :: phi_cs)
-        ) (0, []) case_blocks)
-      in
-      Llvm.position_at_end result_block builder;
-      Llvm.build_phi phi_cases "swphi" builder
-
   | _ -> raise (Not_implemented_yet "Outer matching in gen_expression")
+
+
+and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
+  let (_, branch_phi_pairs) =
+    Array.fold_left (fun (i, acc) expr ->
+      Llvm.position_at_end branch_bbs.(i) builder;
+      let value = gen_expression expr in
+      let last_bb = insertion_block () in
+      (i + 1, (value, last_bb) :: acc))
+    (0, [])
+    branch_exprs
+  in
+  let nonterminated_branches = List.filter (fun (_v, last_bb) ->
+    not (is_terminated last_bb)) branch_phi_pairs
+  in
+  let accurate_type = List.fold_left (fun acc_type (v, last_bb) ->
+    join (Llvm.type_of v) acc_type) lltype_of_word nonterminated_branches
+  in
+  let casted_branches = List.map (fun (v, last_bb) ->
+    (recast v accurate_type, last_bb)) nonterminated_branches
+  in
+  match casted_branches with
+  | [] -> make_int 0
+  | (value, last_bb) :: [] ->
+      Llvm.position_at_end last_bb builder;
+      value
+  | phi_pairs ->
+      let result_block =
+        Llvm.append_block context (result_bb_name_prefix ^ "result") curr_function
+      in
+      List.iter (fun (_v, last_bb) ->
+        Llvm.position_at_end last_bb builder;
+        ignore (Llvm.build_br result_block builder)
+      ) phi_pairs;
+      Llvm.position_at_end result_block builder;
+      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
 
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
@@ -811,27 +904,27 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   let fun_type = Llvm.function_type ret_type arg_types in
   put_fun_type fun_name fun_type;
   let accurate_fun_type = get_fun_type fun_name (Array.length arg_types) in
+  let accurate_ret_type = Llvm.return_type accurate_fun_type in
   let fun_def = Llvm.declare_function fun_name accurate_fun_type the_module in
   Llvm.set_gc (Some gc_name) fun_def;
   let arg_llvalues = Llvm.params fun_def in
   (* Iterating over function parameters and assigning them verbose names and
    * adding them in symbol table *)
-  List.iteri (fun arg_num (arg_ident, _machtype) ->
-    Llvm.set_value_name (Ident.unique_name arg_ident) arg_llvalues.(arg_num);
-    add_symbol arg_ident arg_llvalues.(arg_num)
-  ) fun_args;
   let entry_bb = Llvm.append_block context "entry" fun_def in
   let after_gcroots_and_vars =
     Llvm.append_block context "after_gcroots_and_vars" fun_def
   in
   Llvm.position_at_end after_gcroots_and_vars builder;
-  let (_ : Llvm.llvalue) =
-    Llvm.build_ret (gen_expression fun_body) builder
+  List.iteri (fun arg_num (arg_ident, _machtype) ->
+    Llvm.set_value_name (Ident.unique_name arg_ident) arg_llvalues.(arg_num);
+    add_symbol arg_ident arg_llvalues.(arg_num)
+  ) fun_args;
+  let ret_val = gen_expression fun_body in
+  let (_ : Llvm.llvalue) = Llvm.build_ret (bitcast (inttoptr ret_val accurate_ret_type)
+      accurate_ret_type) builder
   in
-  let last_block = Llvm.insertion_block builder in
   Llvm.position_at_end entry_bb builder;
   let (_ : Llvm.llvalue) = Llvm.build_br after_gcroots_and_vars builder in
-  Llvm.position_at_end last_block builder;
   fun_def
 
 let gen_data items =
