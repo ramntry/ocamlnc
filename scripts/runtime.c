@@ -1,11 +1,10 @@
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
 #include <caml/mlvalues.h>
 
 #define Make_header(wosize, tag, color) ((wosize) << 10 | (color) | (tag))
-
-value const const_unit = 1;
 
 static void print_log(char const *fun_name, int line_number, char const *message_format, ...)
 {
@@ -49,14 +48,14 @@ value caml_exception_handler(void)
 {
   printf("\nFatal error: Unknown exception\n");
   exit(0);
-  return const_unit;
+  return Val_unit;
 }
 
 value caml_out_of_bounds_handler(void)
 {
   printf("\nFatal error: Out of bounds exception\n");
   exit(0);
-  return const_unit;
+  return Val_unit;
 }
 
 static value alloc_float(double d)
@@ -81,13 +80,13 @@ value caml_lessthan(value lhs, value rhs)
 value caml_print_endline(value string) /* string -> unit */
 {
   printf("%s\n", (char const *)string);
-  return const_unit;
+  return Val_unit;
 }
 
 value caml_print_string(value string) /* string -> unit */
 {
   printf("%s", (char const *)string);
-  return const_unit;
+  return Val_unit;
 }
 
 value caml_read_float(value unit_value) /* unit -> float */
@@ -100,7 +99,7 @@ value caml_read_float(value unit_value) /* unit -> float */
 value caml_print_float(value block) /* float -> unit */
 {
   printf("%g", *(double *)block);
-  return const_unit;
+  return Val_unit;
 }
 
 value caml_read_int(value unit_value) /* unit -> int */
@@ -114,12 +113,28 @@ value caml_print_int(value word) /* int -> unit */
 {
   long const n = (long)word >> 1;
   printf("%ld", n);
-  return const_unit;
+  return Val_unit;
 }
 
 value caml_print_char(value word) /* char -> unit */
 {
   int const c = (long)word >> 1;
   putchar(c);
-  return const_unit;
+  return Val_unit;
+}
+
+value caml_create_string(mlsize_t len) /* int -> string */
+{
+  mlsize_t wosize = (len + sizeof(value)) / sizeof(value);
+  value result = alloc_via_malloc(wosize, String_tag);
+  Field(result, wosize - 1) = 0;
+  mlsize_t offset_index = Bsize_wsize(wosize) - 1;
+  Byte(result, offset_index) = offset_index - len;
+  return result;
+}
+
+value caml_blit_string(value s1, value ofs1, value s2, value ofs2, value n) /* string -> int -> string -> int -> int -> unit */
+{
+  memmove(&Byte(s2, Long_val(ofs2)), &Byte(s1, Long_val(ofs1)), Int_val(n));
+  return Val_unit;
 }
