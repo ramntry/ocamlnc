@@ -5,7 +5,7 @@ orig_obj=${1/%.ml/_orig.o}
 
 $TEST_OCAMLOPT -c -g -o $orig_obj -inline 0 -dcmm  $1 2> ${1/%.ml/.cmm}
 
-$TEST_OCAMLOPT -c -g -o $orig_obj -inline 0 -emit-llvm $1 2>&1 \
+$TEST_OCAMLOPT -c -g -o $orig_obj -inline 0 -emit-llvm $1 -w -A 2>&1 \
   | tee ${1/%.ml/.ll} \
   | opt -mem2reg -O3 -S - -o - \
   | tee ${1/%.ml/.opt.ll} \
