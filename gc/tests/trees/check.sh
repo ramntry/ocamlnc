@@ -1,7 +1,12 @@
 #!/bin/bash
 
-testsize=300
+testsize=30
 valgrind_options="--leak-check=full"
+
+if [ -n "$1" ]
+then
+  testsize="$1"
+fi
 
 checkenv || exit 1
 

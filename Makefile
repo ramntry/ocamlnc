@@ -117,7 +117,7 @@ jblab-backend:
 	$(MAKE) installopt
 
 test:
-	./gc/tests/trees/check.sh
+	./gc/tests/trees/check.sh 300
 	./testsuite/run
 
 # For users who don't read the INSTALL file
