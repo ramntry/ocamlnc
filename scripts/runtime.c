@@ -109,3 +109,10 @@ value caml_print_int(value word) /* int -> unit */
   printf("%ld", n);
   return const_unit;
 }
+
+value caml_print_char(value word) /* char -> unit */
+{
+  int const c = (long)word >> 1;
+  putchar(c);
+  return const_unit;
+}
