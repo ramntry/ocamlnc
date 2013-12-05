@@ -700,7 +700,7 @@ let rec gen_expression expr =
 
   | Cmm.Cop (Cmm.Cload Cmm.Word,
             [Cmm.Cop (Cmm.Cadda, [base_addr; offset])]) ->
-      let typed_base_addr = bitcast (gen_expression base_addr) lltype_of_block in
+      let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
       let word_offset = Llvm.build_ashr (gen_expression offset)
           (Llvm.const_int lltype_of_int 3) "woff" builder in
       let addr = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
@@ -721,8 +721,10 @@ let rec gen_expression expr =
 
   | Cmm.Cop (Cmm.Cload Cmm.Byte_unsigned,
             [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset])]) ->
-      let addr = Llvm.build_gep (gen_expression base_addr)
-          [|(gen_expression offset)|] "addr" builder in
+      let typed_base_addr = recast (gen_expression base_addr) lltype_of_string in
+      let addr =
+        Llvm.build_gep typed_base_addr [|(gen_expression offset)|] "addr" builder
+      in
       let byte_value = Llvm.build_load addr "byte" builder in
       Llvm.build_zext byte_value lltype_of_char "loaded_char" builder
 
@@ -975,9 +977,10 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
     Llvm.set_value_name (Ident.unique_name arg_ident) arg_llvalues.(arg_num);
     add_symbol arg_ident arg_llvalues.(arg_num)
   ) fun_args;
+  if !Clflags.dump_llvm then dump_value fun_def;
   let ret_val = gen_expression fun_body in
-  let (_ : Llvm.llvalue) = Llvm.build_ret (bitcast (inttoptr ret_val accurate_ret_type)
-      accurate_ret_type) builder
+  let (_ : Llvm.llvalue) =
+    Llvm.build_ret (recast ret_val accurate_ret_type) builder
   in
   Llvm.position_at_end entry_bb builder;
   let (_ : Llvm.llvalue) = Llvm.build_br after_gcroots_and_vars builder in
