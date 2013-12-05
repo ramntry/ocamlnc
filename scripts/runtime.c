@@ -65,6 +65,17 @@ static value alloc_float(double d)
   return block;
 }
 
+value caml_obj_dup(value arg)
+{
+  mlsize_t size = Wosize_val(arg);
+  if (size == 0)
+    return arg;
+  tag_t tag = Tag_val(arg);
+  value res = alloc_via_malloc(size, tag);
+  memcpy(Bp_val(res), Bp_val(arg), size * sizeof(value));
+  return res;
+}
+
 value caml_lessthan(value lhs, value rhs)
 {
   tag_t lhs_tag = Tag_hd(Hd_val(lhs));
@@ -125,6 +136,7 @@ value caml_print_char(value word) /* char -> unit */
 
 value caml_create_string(mlsize_t len) /* int -> string */
 {
+  len >>= 1;
   mlsize_t wosize = (len + sizeof(value)) / sizeof(value);
   value result = alloc_via_malloc(wosize, String_tag);
   Field(result, wosize - 1) = 0;
@@ -138,3 +150,4 @@ value caml_blit_string(value s1, value ofs1, value s2, value ofs2, value n) /* s
   memmove(&Byte(s2, Long_val(ofs2)), &Byte(s1, Long_val(ofs1)), Int_val(n));
   return Val_unit;
 }
+
