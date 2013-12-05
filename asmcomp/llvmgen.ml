@@ -706,6 +706,20 @@ let rec gen_expression expr =
       build_gccall fun_value args "capply"
 
   | Cmm.Cop (Cmm.Cload Cmm.Word,
+            [Cmm.Cop (Cmm.Cadda,
+                     [Cmm.Cop (Cmm.Cadda, [base_addr; offset1]); offset2])]) ->
+      let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
+      let off1 = recast (gen_expression offset1) lltype_of_word in
+      let off2 = recast (gen_expression offset2) lltype_of_word in
+      let total_byte_offset =
+        Llvm.build_add off1 off2 "total_byte_offset" builder
+      in
+      let word_offset = Llvm.build_ashr total_byte_offset
+          (Llvm.const_int lltype_of_int 3) "total_word_offset" builder in
+      let addr = Llvm.build_gep typed_base_addr [|word_offset|] "word_addr" builder in
+      build_gcload addr "indexedword"
+
+  | Cmm.Cop (Cmm.Cload Cmm.Word,
             [Cmm.Cop (Cmm.Cadda, [base_addr; offset])]) ->
       let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
       let word_offset = Llvm.build_ashr (gen_expression offset)
@@ -829,7 +843,8 @@ let rec gen_expression expr =
           let i1 = gen_op (Llvm.build_fcmp llvm_cmp_flavor) "ccmpf" in
           i1_to_cbool i1
 
-      | _ -> raise (Not_implemented_yet "Binary operation matching in gen_expression")
+      | _ -> raise (Not_implemented_yet ("Binary operation matching in gen_expression"
+                    ^ " (nontrivial address arithmetic?)"))
       end
 
   | Cmm.Cop (op, [arg]) ->
