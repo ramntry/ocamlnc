@@ -491,6 +491,10 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
               let _ = lltype_of_expr ~demand:lltype_of_string lhs in
               let _ = lltype_of_expr ~demand:lltype_of_word rhs in
               lltype_of_word
+          | Cmm.Double_u ->
+              let _ = lltype_of_expr ~demand:lltype_of_float lhs in
+              let _ = lltype_of_expr ~demand:lltype_of_unboxed_float rhs in
+              lltype_of_word
           | _ -> raise (Not_implemented_yet ("I don't know what to do with"
                         ^ " store of chunk of such type (in lltype_of_expr)"))
           end
@@ -616,7 +620,7 @@ let rec gen_expression expr =
       let tag = 0xFF land header_int in
       let tag_value = Llvm.const_int lltype_of_tag_t tag in
       begin match (tag, fields) with
-      | (253, value :: []) ->
+      | (253 (* Double_tag *), value :: []) ->
           let unboxed_float_value = gen_expression value in
           let alloc_args = [|wosize_value; tag_value|] in
           let float_block =
@@ -626,6 +630,22 @@ let rec gen_expression expr =
             Llvm.build_store unboxed_float_value float_block builder
           in
           float_block
+      | (254 (* Double_array_tag *), double_values) ->
+          let alloc_args = [|wosize_value|] in
+          let double_array =
+            build_gccall caml_alloc_tuple_f alloc_args ~ret_type:lltype_of_float "talloc"
+          in
+          List.iteri (fun i double_expr ->
+            let current_double =
+              recast (gen_expression double_expr) lltype_of_unboxed_float
+            in
+            let store_addr = Llvm.build_gep double_array [|make_int i|]
+              ("double_elem_addr" ^ string_of_int i ^ "_") builder
+            in
+            ignore (Llvm.build_store current_double store_addr builder)
+          ) fields;
+          double_array
+
       | (0, fields_of_tuple) | (247, fields_of_tuple) ->
           let alloc_args = [|wosize_value|] in
           let block =

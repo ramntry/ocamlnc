@@ -8,7 +8,7 @@ external print_char : char -> unit = "caml_print_char";;
 external create_string : int -> string = "caml_create_string";;
 external blit_string : string -> int -> string -> int -> int -> unit = "caml_blit_string";;
 
-let cube = [|
+let some_cube = [|
   [| [| 0.;  1.;  2.|];
      [| 3.;  4.;  5.|];
      [| 6.;  7.;  8.|] |];
@@ -22,7 +22,16 @@ let cube = [|
      [|24.; 25.; 26.|] |]
 |]
 
-let () =
+let triple_it cube =
+  for i = 0 to 2 do
+    for j = 0 to 2 do
+      for k = 0 to 2 do
+        cube.(i).(j).(k) <- cube.(i).(j).(k) *. 3.0
+      done;
+    done;
+  done
+
+let print3d cube =
   for i = 0 to 2 do
     for j = 0 to 2 do
       for k = 0 to 2 do
@@ -33,3 +42,7 @@ let () =
     done;
     print_endline ""
   done
+
+let () =
+  triple_it some_cube;
+  print3d some_cube
