@@ -705,7 +705,7 @@ let rec gen_expression expr =
       ignore (Llvm.build_call caml_out_of_bounds_handler_f [||] "noreturn" builder);
       ignore (unreachable ());
       Llvm.position_at_end in_bounds_block builder;
-      make_int 0
+      make_int 1
 
   | Cmm.Cop (Cmm.Cextcall (fun_name, _machtype, _some_flag, _debuginfo),
              args_list) ->
@@ -926,7 +926,8 @@ let rec gen_expression expr =
   | Cmm.Cassign (ident, expr) ->
       let value = gen_expression expr in
       let local = get_symbol ident in
-      Llvm.build_store value local builder
+      let _ = Llvm.build_store value local builder in
+      make_int 1
 
   | Cmm.Csequence (fst, snd) ->
       let _ = gen_expression fst in
@@ -949,7 +950,7 @@ and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
     not (is_terminated last_bb)) branch_phi_pairs
   in
   match nonterminated_branches with
-  | [] -> make_int 0
+  | [] -> make_int 1
   | (value, last_bb) :: [] ->
       Llvm.position_at_end last_bb builder;
       value
@@ -965,9 +966,11 @@ and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
           Llvm.position_at_end last_bb builder;
           recast v accurate_type
         in
+        dump_value casted_value;
         ignore (Llvm.build_br result_block builder);
         (casted_value, last_bb)) phi_pairs
       in
+      (*fun_checkpoint "cp";*)
       Llvm.position_at_end result_block builder;
       Llvm.build_phi casted_phi_pairs (result_bb_name_prefix ^ "resval") builder
 
@@ -1045,6 +1048,7 @@ let gen_data items =
 
     ) ([], 0) items
   in
+  let fields = Llvm.const_array lltype_of_word [||] :: fields in
   let global_value = Llvm.const_struct context (Array.of_list (List.rev fields)) in
   Llvm.define_global llglobal_name global_value the_module
 

@@ -19,4 +19,5 @@ make install && cp -r scripts $OCAML_ROOT/bin || exit 16
 echo "#### Testing"
 make test || exit 64
 
+cd $cwd
 exit 0
