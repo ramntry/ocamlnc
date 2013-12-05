@@ -19,6 +19,12 @@ let symbol_table : (Ident.t, Llvm.llvalue) Hashtbl.t = Hashtbl.create 16
 let param_idents_table : (string, Ident.t array) Hashtbl.t = Hashtbl.create 16
 let exit_targets : (int, Llvm.llbasicblock) Hashtbl.t = Hashtbl.create 16
 
+let ifthenelse_counter = ref 0
+let get_next_ifthenelse_name_suffix () =
+  let suffix = string_of_int !ifthenelse_counter in
+  ifthenelse_counter := !ifthenelse_counter + 1;
+  suffix
+
 let lltype_of_word = Llvm.i64_type context
 let lltype_of_block = Llvm.pointer_type lltype_of_word
 let lltype_of_block_header = lltype_of_word
@@ -879,13 +885,15 @@ let rec gen_expression expr =
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = cbool_to_i1 (gen_expression predicate) in
       let curr_function = get_curr_function () in
+      let name_prefix = "if" ^ get_next_ifthenelse_name_suffix () in
       let branch_bbs =
-        make_basicblocks curr_function 2 (fun i -> [|"iftrue"; "iffalse"|].(i))
+        make_basicblocks curr_function 2 (fun i ->
+          [|name_prefix ^ "true"; name_prefix ^ "false"|].(i))
       in
       let (_ : Llvm.llvalue) =
         Llvm.build_cond_br cond branch_bbs.(0) branch_bbs.(1) builder
       in
-      build_branches curr_function [|if_true; if_false|] branch_bbs "if"
+      build_branches curr_function [|if_true; if_false|] branch_bbs name_prefix
 
   | Cmm.Ccatch (exit_label, _ident_list, body, handler) ->
       let curr_function = get_curr_function () in
@@ -930,27 +938,28 @@ and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
   let nonterminated_branches = List.filter (fun (_v, last_bb) ->
     not (is_terminated last_bb)) branch_phi_pairs
   in
-  let accurate_type = List.fold_left (fun acc_type (v, last_bb) ->
-    join (Llvm.type_of v) acc_type) lltype_of_word nonterminated_branches
-  in
-  let casted_branches = List.map (fun (v, last_bb) ->
-    (recast v accurate_type, last_bb)) nonterminated_branches
-  in
-  match casted_branches with
+  match nonterminated_branches with
   | [] -> make_int 0
   | (value, last_bb) :: [] ->
       Llvm.position_at_end last_bb builder;
       value
   | phi_pairs ->
+      let accurate_type = List.fold_left (fun acc_type (v, last_bb) ->
+        join (Llvm.type_of v) acc_type) lltype_of_word phi_pairs
+      in
       let result_block =
         Llvm.append_block context (result_bb_name_prefix ^ "result") curr_function
       in
-      List.iter (fun (_v, last_bb) ->
-        Llvm.position_at_end last_bb builder;
-        ignore (Llvm.build_br result_block builder)
-      ) phi_pairs;
+      let casted_phi_pairs = List.map (fun (v, last_bb) ->
+        let casted_value =
+          Llvm.position_at_end last_bb builder;
+          recast v accurate_type
+        in
+        ignore (Llvm.build_br result_block builder);
+        (casted_value, last_bb)) phi_pairs
+      in
       Llvm.position_at_end result_block builder;
-      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
+      Llvm.build_phi casted_phi_pairs (result_bb_name_prefix ^ "resval") builder
 
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
