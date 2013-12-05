@@ -705,77 +705,62 @@ let rec gen_expression expr =
         recast (gen_expression arg) arg_types.(i)) args_list) in
       build_gccall fun_value args "capply"
 
-  | Cmm.Cop (Cmm.Cload Cmm.Word,
-            [Cmm.Cop (Cmm.Cadda,
-                     [Cmm.Cop (Cmm.Cadda, [base_addr; offset1]); offset2])]) ->
-      let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
-      let off1 = recast (gen_expression offset1) lltype_of_word in
-      let off2 = recast (gen_expression offset2) lltype_of_word in
-      let total_byte_offset =
-        Llvm.build_add off1 off2 "total_byte_offset" builder
+  | Cmm.Cop ((Cmm.Cload chunk_kind | Cmm.Cstore chunk_kind as op_kind)
+            , address_expr :: value_exprs) ->
+      let rec base_addr_and_offset = function
+        | Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [addr_expr; offset_expr]) ->
+            let (base_addr, offset_acc) = base_addr_and_offset addr_expr in
+            let offset = recast (gen_expression offset_expr) lltype_of_word in
+            let new_offset_acc =
+              Llvm.build_add offset_acc offset "offset_acc" builder
+            in
+            (base_addr, new_offset_acc)
+        | base_addr_expr ->
+            (gen_expression base_addr_expr, Llvm.const_null lltype_of_word)
       in
-      let word_offset = Llvm.build_ashr total_byte_offset
-          (Llvm.const_int lltype_of_int 3) "total_word_offset" builder in
-      let addr = Llvm.build_gep typed_base_addr [|word_offset|] "word_addr" builder in
-      build_gcload addr "indexedword"
-
-  | Cmm.Cop (Cmm.Cload Cmm.Word,
-            [Cmm.Cop (Cmm.Cadda, [base_addr; offset])]) ->
-      let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
-      let word_offset = Llvm.build_ashr (gen_expression offset)
-          (Llvm.const_int lltype_of_int 3) "woff" builder in
-      let addr = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
-      build_gcload addr "indexedword"
-
-  | Cmm.Cop (Cmm.Cstore Cmm.Word,
-            [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset]); expr]) ->
-      let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
-      let word_offset = Llvm.build_ashr (gen_expression offset)
-          (Llvm.const_int lltype_of_int 3) "woff" builder in
-      let expr_value = recast (gen_expression expr) lltype_of_word in
-      if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
-      dump_value expr_value;
-      let addr_value = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
-      if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
-      dump_value addr_value;
-      Llvm.build_store expr_value addr_value builder
-
-  | Cmm.Cop (Cmm.Cload Cmm.Byte_unsigned,
-            [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset])]) ->
-      let typed_base_addr = recast (gen_expression base_addr) lltype_of_string in
-      let addr =
-        Llvm.build_gep typed_base_addr [|(gen_expression offset)|] "addr" builder
+      let (base_addr, offset) = base_addr_and_offset address_expr in
+      let (value_type, size_shift) =
+        begin match chunk_kind with
+        | Cmm.Byte_unsigned -> (lltype_of_byte, 0)
+        | Cmm.Word -> (lltype_of_word, 3)
+        | Cmm.Double_u -> (lltype_of_unboxed_float, 3)
+        | _ -> raise (Not_implemented_yet ("Unsupported memory chunk kind in"
+                     ^ " load / store operation"))
+        end
       in
-      let byte_value = Llvm.build_load addr "byte" builder in
-      Llvm.build_zext byte_value lltype_of_char "loaded_char" builder
-
-  | Cmm.Cop (Cmm.Cstore Cmm.Byte_unsigned,
-            [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset]); expr]) ->
-      let base_addr_value =
-        recast (gen_expression base_addr) lltype_of_string
+      let typed_base_addr =  recast base_addr (Llvm.pointer_type value_type) in
+      let size_shift_value = Llvm.const_int lltype_of_word size_shift in
+      let typed_offset =
+        Llvm.build_ashr offset size_shift_value "typed_offset" builder
       in
-      let byte_offset_value = recast (gen_expression offset) lltype_of_word in
-      let byte_addr_value = Llvm.build_gep base_addr_value [|byte_offset_value|]
-          "byte_addr" builder
+      let effective_addr =
+        Llvm.build_gep typed_base_addr [|typed_offset|] "elem_addr" builder
       in
-      let char_value = recast (gen_expression expr) lltype_of_char in
-      let byte_value =
-        Llvm.build_trunc char_value lltype_of_byte "char_to_store" builder
-      in
-      Llvm.build_store byte_value byte_addr_value builder
-
-  | Cmm.Cop (Cmm.Cstore chunk, [addr; expr]) ->
-      begin match chunk with
-      | Cmm.Word ->
-          let expr_value = recast (gen_expression expr) lltype_of_word in
+      begin match (op_kind, value_exprs) with
+      | (Cmm.Cload Cmm.Word, []) -> build_gcload effective_addr "indexed_word"
+      | (Cmm.Cload Cmm.Byte_unsigned, []) ->
+          let byte = Llvm.build_load effective_addr "indexed_byte" builder in
+          Llvm.build_zext byte lltype_of_char "indexed_char" builder
+      | (Cmm.Cload Cmm.Double_u, []) ->
+          Llvm.build_load effective_addr "indexed_double" builder
+      | (Cmm.Cstore chunk_kind, [value_expr]) ->
+          let value = gen_expression value_expr in
           if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
-          dump_value expr_value;
-          let addr_value = recast (gen_expression addr) lltype_of_block in
+          dump_value value;
           if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
-          dump_value addr_value;
-          Llvm.build_store expr_value addr_value builder
-      | _ -> raise (Not_implemented_yet ("I don't know what to do with"
-                    ^ " store of chunk of such type (in gen_expression)"))
+          dump_value effective_addr;
+          let value_to_store =
+            begin match chunk_kind with
+            | Cmm.Byte_unsigned ->
+                Llvm.build_trunc value lltype_of_byte "char_to_store" builder
+            | _ -> recast value value_type
+            end
+          in
+          Llvm.build_store value_to_store effective_addr builder
+      | _ ->
+          raise (Not_implemented_yet ("Unsupported load / store operation"
+                 ^ " (non-empty argument list for load or non-equal to 1 "
+                 ^ " number of arguments for store operation?"))
       end
 
   | Cmm.Cop (op, [lhs; rhs]) ->
@@ -849,17 +834,7 @@ let rec gen_expression expr =
 
   | Cmm.Cop (op, [arg]) ->
       let arg_value = gen_expression arg in
-      dump_value arg_value;
       begin match op with
-      | Cmm.Cload chunk ->
-          begin match chunk with
-          | Cmm.Double_u ->
-              Llvm.build_load (recast arg_value lltype_of_float) "doubleload" builder
-          | Cmm.Word ->
-              build_gcload (recast arg_value lltype_of_block) "singleload"
-          | _ -> raise (Not_implemented_yet ("I don't know what to do with"
-                        ^ " load of chunk of such type (in gen_expression)"))
-          end
       | Cmm.Cnegf ->
           Llvm.build_fneg arg_value "cnegf" builder
       | Cmm.Cfloatofint ->
