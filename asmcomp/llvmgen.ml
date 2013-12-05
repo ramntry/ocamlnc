@@ -289,7 +289,7 @@ let handle_gcroot root_value =
       [|root; Llvm.const_null lltype_of_generic_ptr|] "" builder
   in
   Llvm.position_at_end curr_block builder;
-  let casted = bitcast (inttoptr root_value lltype_of_block) lltype_of_root in
+  let casted = recast root_value lltype_of_root in
   let (_ : Llvm.llvalue) = Llvm.build_store casted root builder in
   root_value
 
@@ -696,7 +696,7 @@ let rec gen_expression expr =
         Llvm.param_types (Llvm.element_type (Llvm.type_of(fun_value)))
       in
       let args = Array.of_list (List.mapi (fun i arg ->
-        ptrcast (gen_expression arg) arg_types.(i)) args_list) in
+        recast (gen_expression arg) arg_types.(i)) args_list) in
       build_gccall fun_value args "capply"
 
   | Cmm.Cop (Cmm.Cload Cmm.Word,
@@ -709,10 +709,10 @@ let rec gen_expression expr =
 
   | Cmm.Cop (Cmm.Cstore Cmm.Word,
             [Cmm.Cop ((Cmm.Cadda | Cmm.Caddi), [base_addr; offset]); expr]) ->
-      let typed_base_addr = bitcast (gen_expression base_addr) lltype_of_block in
+      let typed_base_addr = recast (gen_expression base_addr) lltype_of_block in
       let word_offset = Llvm.build_ashr (gen_expression offset)
           (Llvm.const_int lltype_of_int 3) "woff" builder in
-      let expr_value = ptrcast (gen_expression expr) lltype_of_word in
+      let expr_value = recast (gen_expression expr) lltype_of_word in
       if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
       dump_value expr_value;
       let addr_value = Llvm.build_gep typed_base_addr [|word_offset|] "addr" builder in
@@ -747,10 +747,10 @@ let rec gen_expression expr =
   | Cmm.Cop (Cmm.Cstore chunk, [addr; expr]) ->
       begin match chunk with
       | Cmm.Word ->
-          let expr_value = ptrcast (gen_expression expr) lltype_of_word in
+          let expr_value = recast (gen_expression expr) lltype_of_word in
           if !Clflags.dump_llvm then Printf.fprintf stderr "Store %!";
           dump_value expr_value;
-          let addr_value = ptrcast (gen_expression addr) lltype_of_block in
+          let addr_value = recast (gen_expression addr) lltype_of_block in
           if !Clflags.dump_llvm then Printf.fprintf stderr "   in %!";
           dump_value addr_value;
           Llvm.build_store expr_value addr_value builder
@@ -762,8 +762,8 @@ let rec gen_expression expr =
       let lhs_value = gen_expression lhs in
       let rhs_value = gen_expression rhs in
       let gen_op generator name = generator lhs_value rhs_value name builder in
-      let gen_op_int generator name = generator (ptrcast lhs_value lltype_of_int)
-          (ptrcast rhs_value lltype_of_int) name builder
+      let gen_op_int generator name = generator (recast lhs_value lltype_of_int)
+          (recast rhs_value lltype_of_int) name builder
       in
       begin match op with
       | Cmm.Caddi -> gen_op_int Llvm.build_add  "caddi"
