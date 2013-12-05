@@ -275,6 +275,12 @@ let goto_entry_block curr_block =
   let entry_block = Llvm.entry_block curr_function in
   Llvm.position_at_end entry_block builder
 
+let build_call fun_value arg_values ?ret_type call_name =
+  let ret_value = Llvm.build_call fun_value arg_values call_name builder in
+  match ret_type with
+  | Some t -> recast ret_value t
+  | None -> ret_value
+
 let handle_gcroot root_value =
   let curr_block = insertion_block () in
   goto_entry_block curr_block;
@@ -287,8 +293,8 @@ let handle_gcroot root_value =
   let (_ : Llvm.llvalue) = Llvm.build_store casted root builder in
   root_value
 
-let build_gccall fun_value arg_values call_name =
-  handle_gcroot (Llvm.build_call fun_value arg_values call_name builder)
+let build_gccall fun_value arg_values ?ret_type call_name =
+  handle_gcroot (build_call fun_value arg_values ?ret_type call_name)
 
 let build_gcload addr_value load_name =
   handle_gcroot (Llvm.build_load addr_value load_name builder)
@@ -607,12 +613,8 @@ let rec gen_expression expr =
       | (253, value :: []) ->
           let unboxed_float_value = gen_expression value in
           let alloc_args = [|wosize_value; tag_value|] in
-          let block_int = build_gccall caml_alloc_small_f alloc_args "salloc" in
-          let block =
-            Llvm.build_inttoptr block_int lltype_of_block "pcast" builder
-          in
           let float_block =
-            Llvm.build_pointercast block lltype_of_float "pcast" builder
+            build_gccall caml_alloc_small_f alloc_args ~ret_type:lltype_of_float "salloc"
           in
           let (_ : Llvm.llvalue) =
             Llvm.build_store unboxed_float_value float_block builder
@@ -620,12 +622,11 @@ let rec gen_expression expr =
           float_block
       | (0, fields_of_tuple) | (247, fields_of_tuple) ->
           let alloc_args = [|wosize_value|] in
-          let block_int = build_gccall caml_alloc_tuple_f alloc_args "talloc" in
           let block =
-            Llvm.build_inttoptr block_int lltype_of_block "pcast" builder
+            build_gccall caml_alloc_tuple_f alloc_args ~ret_type:lltype_of_block "talloc"
           in
           List.iteri (fun i field ->
-            let field_value = ptrcast (gen_expression field) lltype_of_word in
+            let field_value = recast (gen_expression field) lltype_of_word in
             let store_addr = Llvm.build_gep block [|make_int i|]
                   ("fieldi" ^ string_of_int i) builder
             in
