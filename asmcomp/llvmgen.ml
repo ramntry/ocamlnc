@@ -208,16 +208,63 @@ module Global_memory = struct
     handle_symbol_requests ()
 end
 
-module Closure = struct
-  let closure_field_at closure offset field_name = Llvm.build_load (Llvm.build_gep
-     closure [|make_int 2|] ("closure_offset_" ^ string_of_int offset) builder)
-     field_name builder
+let make_external_decl name fun_arg_types =
+  let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
+  Llvm.declare_function name fun_type the_module
 
-  let gen_apply numof_args =
-    (* i64* caml_applyM(i64 a1, i64 a2, ..., i64 aM, i64* fc) *)
+let make_external_noreturn_decl name fun_arg_types =
+  let fun_declaration = make_external_decl name fun_arg_types in
+  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
+  fun_declaration
+
+let make_external_void_decl name fun_arg_types =
+  let fun_type = Llvm.function_type (Llvm.void_type context) fun_arg_types in
+  Llvm.declare_function name fun_type the_module
+
+let caml_alloc_small_f =
+  make_external_decl "caml_alloc_small" [|lltype_of_mlsize_t; lltype_of_tag_t|]
+
+let caml_alloc_tuple_f =
+  make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
+
+let caml_alloc_closure_f =
+  make_external_decl "caml_alloc_closure" [|lltype_of_mlsize_t|]
+
+let caml_out_of_bounds_handler_f =
+  make_external_noreturn_decl "caml_out_of_bounds_handler" [||]
+
+let caml_exception_handler_f =
+  make_external_noreturn_decl "caml_exception_handler" [||]
+
+let llvm_gcroot_f =
+  make_external_void_decl "llvm.gcroot"
+      [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
+
+module Closure = struct
+  let closure_field_ptr closure offset = Llvm.build_gep
+      closure [|make_int offset|] ("closure_offset_" ^ string_of_int offset) builder
+
+  let closure_field_at closure offset field_name =
+    Llvm.build_load (closure_field_ptr closure offset) field_name builder
+
+  let store_at closure offset value =
+    ignore (Llvm.build_store value (closure_field_ptr closure offset) builder)
+
+  let store_as_word closure offset value name_prefix =
+    store_at closure offset (Llvm.build_ptrtoint value lltype_of_word
+       (name_prefix ^ Llvm.value_name value) builder)
+
+  let full_applicator_type numof_args =
     let apply_arg_types = Array.make (numof_args + 1) lltype_of_word in
     apply_arg_types.(numof_args) <- lltype_of_block;
-    let apply_type = Llvm.function_type lltype_of_word apply_arg_types in
+    Llvm.function_type lltype_of_word apply_arg_types
+
+  let part_applicator_type = Llvm.function_type
+      lltype_of_block [|lltype_of_word; lltype_of_block|]
+
+  let gen_apply numof_args =
+    (* i64 caml_applyM(i64 a1, i64 a2, ..., i64 aM, i64* fc) *)
+    let apply_type = full_applicator_type numof_args in
     let apply_name = "caml_apply" ^ string_of_int numof_args in
     let apply_def = Llvm.define_function apply_name apply_type the_module in
     let apply_args = Llvm.params apply_def in
@@ -252,16 +299,13 @@ module Closure = struct
     ignore (Llvm.build_ret result builder);
 
     Llvm.position_at_end part_app_block builder;
-    let part_applicator_type = Llvm.pointer_type (Llvm.function_type
-        lltype_of_block [|lltype_of_word; lltype_of_block|])
-    in
     let part_result = ref closure in
     for i = 0 to numof_args - 1 do
       begin
         let suffix = string_of_int (i + 1) in
         let part_applicator = Llvm.build_inttoptr (Llvm.build_load !part_result
-            ("part_applicator_untyped" ^ suffix) builder) part_applicator_type
-            ("part_applicator" ^ suffix) builder
+            ("part_applicator_untyped" ^ suffix) builder) (Llvm.pointer_type
+            part_applicator_type) ("part_applicator" ^ suffix) builder
         in
         part_result := Llvm.build_call part_applicator
             [|apply_args.(i); !part_result|] ("closure" ^ suffix) builder;
@@ -272,6 +316,41 @@ module Closure = struct
     in
     ignore (Llvm.build_ret casted_part_result builder);
     apply_def
+
+  let gen_curry total_numof_args already_curried =
+    let curry_name = "caml_curry" ^ string_of_int total_numof_args
+        ^ (if already_curried = 0 then ""
+                                  else "_" ^ string_of_int already_curried)
+    in
+    let curry_def =
+      Llvm.define_function curry_name part_applicator_type the_module
+    in
+    let arg = Llvm.param curry_def 0 in
+    let closure = Llvm.param curry_def 1 in
+    Llvm.set_value_name ("a" ^ string_of_int (already_curried + 1)) arg;
+    Llvm.set_value_name "closure" closure;
+    Llvm.position_at_end (Llvm.entry_block curry_def) builder;
+    if already_curried = total_numof_args - 1 then
+      begin
+        raise (Not_implemented_yet ("generating of " ^ curry_name))
+      end
+    else if already_curried = total_numof_args - 2 then
+      begin
+        raise (Not_implemented_yet ("generating of " ^ curry_name))
+      end
+    else
+      begin
+        let new_closure = Llvm.build_inttoptr (Llvm.build_call
+            caml_alloc_closure_f [|make_int 5|] "new_closure_untyped" builder)
+            lltype_of_block "new_closure" builder
+        in
+        let new_numof_free_vars = total_numof_args - already_curried - 1 in
+        store_at new_closure 1 (make_int (new_numof_free_vars * 2 + 1));
+        store_at new_closure 3 arg;
+        store_as_word new_closure 4 closure "casted_";
+        ignore (Llvm.build_ret new_closure builder);
+        curry_def
+      end
 end
 
 let add_param_idents fun_name args_list =
@@ -312,35 +391,6 @@ let get_exit_target exit_label =
 
 let unreachable () =
    Llvm.build_unreachable builder
-
-let make_external_decl name fun_arg_types =
-  let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
-  Llvm.declare_function name fun_type the_module
-
-let make_external_noreturn_decl name fun_arg_types =
-  let fun_declaration = make_external_decl name fun_arg_types in
-  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
-  fun_declaration
-
-let make_external_void_decl name fun_arg_types =
-  let fun_type = Llvm.function_type (Llvm.void_type context) fun_arg_types in
-  Llvm.declare_function name fun_type the_module
-
-let caml_alloc_small_f =
-  make_external_decl "caml_alloc_small" [|lltype_of_mlsize_t; lltype_of_tag_t|]
-
-let caml_alloc_tuple_f =
-  make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
-
-let caml_out_of_bounds_handler_f =
-  make_external_noreturn_decl "caml_out_of_bounds_handler" [||]
-
-let caml_exception_handler_f =
-  make_external_noreturn_decl "caml_exception_handler" [||]
-
-let llvm_gcroot_f =
-  make_external_void_decl "llvm.gcroot"
-      [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
 
 let goto_entry_block curr_block =
   let curr_function = Llvm.block_parent curr_block in
@@ -1077,8 +1127,10 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   fun_def
 
 let gen_data items =
-  dump_value (Closure.gen_apply 20);
-  raise (Debug_assumption "caml_applyM was generated");
+  let _ = Closure.gen_apply 2 in
+  let _ = Closure.gen_curry 5 2 in
+  Llvm.dump_module the_module;
+  raise (Debug_assumption "closures testing");
   let open Global_memory in
   let llglobal_name = new_global_name () in
   let make_pos index = {llglobal_name; index} in
