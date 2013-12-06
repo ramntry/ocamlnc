@@ -428,8 +428,10 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
           join_with_demand (Llvm.return_type fun_type)
       end
 
-  | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), _fun :: _args_list) ->
-      raise (Not_implemented_yet "Cmm.Capply for not Cconst_symbol")
+  | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
+      let _ = lltype_of_expr ~demand:lltype_of_block func in
+      List.iter (fun arg -> ignore (lltype_of_expr arg)) args_list;
+      lltype_of_word
 
   | Cmm.Cop (Cmm.Cextcall (fun_name, _machtype, _some_flag, _debuginfo),
              args_list) ->
