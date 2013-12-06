@@ -208,6 +208,72 @@ module Global_memory = struct
     handle_symbol_requests ()
 end
 
+module Closure = struct
+  let closure_field_at closure offset field_name = Llvm.build_load (Llvm.build_gep
+     closure [|make_int 2|] ("closure_offset_" ^ string_of_int offset) builder)
+     field_name builder
+
+  let gen_apply numof_args =
+    (* i64* caml_applyM(i64 a1, i64 a2, ..., i64 aM, i64* fc) *)
+    let apply_arg_types = Array.make (numof_args + 1) lltype_of_word in
+    apply_arg_types.(numof_args) <- lltype_of_block;
+    let apply_type = Llvm.function_type lltype_of_word apply_arg_types in
+    let apply_name = "caml_apply" ^ string_of_int numof_args in
+    let apply_def = Llvm.define_function apply_name apply_type the_module in
+    let apply_args = Llvm.params apply_def in
+    let closure = apply_args.(numof_args) in
+    Array.iteri (fun i arg ->
+      Llvm.set_value_name ("a" ^ string_of_int (i + 1)) arg) apply_args;
+    Llvm.set_value_name "closure" closure;
+    let entry_block = Llvm.entry_block apply_def in
+    Llvm.position_at_end entry_block builder;
+
+    let numof_free_vars = closure_field_at closure 1 "numof_free_vars" in
+    let is_full_application =
+      Llvm.build_icmp Llvm.Icmp.Eq numof_free_vars
+          (make_int (2 * numof_args + 1)) "is_full_application" builder
+    in
+    let full_app_block = Llvm.append_block context "full_application" apply_def
+    in
+    let part_app_block =
+      Llvm.append_block context "partial_application" apply_def
+    in
+    ignore (Llvm.build_cond_br
+        is_full_application full_app_block part_app_block builder);
+
+    Llvm.position_at_end full_app_block builder;
+    let full_applicator_untyped =
+      closure_field_at closure 2 "full_applicator_untyped"
+    in
+    let full_applicator = Llvm.build_inttoptr full_applicator_untyped
+        (Llvm.pointer_type apply_type) "full_applicator" builder
+    in
+    let result = Llvm.build_call full_applicator apply_args "result" builder in
+    ignore (Llvm.build_ret result builder);
+
+    Llvm.position_at_end part_app_block builder;
+    let part_applicator_type = Llvm.pointer_type (Llvm.function_type
+        lltype_of_block [|lltype_of_word; lltype_of_block|])
+    in
+    let part_result = ref closure in
+    for i = 0 to numof_args - 1 do
+      begin
+        let suffix = string_of_int (i + 1) in
+        let part_applicator = Llvm.build_inttoptr (Llvm.build_load !part_result
+            ("part_applicator_untyped" ^ suffix) builder) part_applicator_type
+            ("part_applicator" ^ suffix) builder
+        in
+        part_result := Llvm.build_call part_applicator
+            [|apply_args.(i); !part_result|] ("closure" ^ suffix) builder;
+      end
+    done;
+    let casted_part_result = Llvm.build_ptrtoint !part_result lltype_of_word
+        "casted_part_result" builder
+    in
+    ignore (Llvm.build_ret casted_part_result builder);
+    apply_def
+end
+
 let add_param_idents fun_name args_list =
   Hashtbl.add param_idents_table fun_name (Array.of_list args_list)
 
@@ -978,7 +1044,6 @@ and build_branches curr_function branch_exprs branch_bbs result_bb_name_prefix =
 
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
-  add_param_idents fun_name (List.map fst fun_args);
   let ret_type = lltype_of_expr fun_body in
   let arg_types =
     List.map (fun (ident, _machtype) -> find_type ident) fun_args
@@ -1012,6 +1077,8 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   fun_def
 
 let gen_data items =
+  dump_value (Closure.gen_apply 20);
+  raise (Debug_assumption "caml_applyM was generated");
   let open Global_memory in
   let llglobal_name = new_global_name () in
   let make_pos index = {llglobal_name; index} in
