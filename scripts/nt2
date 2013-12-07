@@ -22,7 +22,12 @@ vim $test_name.ml
 
 make -f Makefile.second && \
 echo "********** Result **********" && \
-./program | tee $test_name.reference > /dev/stdout && \
+if [ -f "$test_name.input" ]; then \
+  cat "$test_name.input" | ./program | tee $test_name.reference > /dev/stdout; \
+else \
+  ./program | tee $test_name.reference > /dev/stdout; \
+fi \
+&& \
 echo && \
 echo "****************************" && \
 $level/run
