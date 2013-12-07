@@ -260,7 +260,7 @@ module Closure = struct
     store_at closure offset (Llvm.build_ptrtoint value lltype_of_word
        ("casted_" ^ Llvm.value_name value) builder)
 
-  let full_applicator_type numof_args =
+  let applicator_type numof_args =
     let apply_arg_types = Array.make (numof_args + 1) lltype_of_word in
     apply_arg_types.(numof_args) <- lltype_of_block;
     Llvm.function_type lltype_of_word apply_arg_types
@@ -268,28 +268,65 @@ module Closure = struct
   let part_applicator_type = Llvm.function_type
       lltype_of_word [|lltype_of_word; lltype_of_block|]
 
-  let gen_apply_name numof_args = "caml_apply" ^ string_of_int numof_args
+  let gen_apply_name numof_args _ = "caml_apply" ^ string_of_int numof_args
 
-  let gen_curry_name total_numof_args already_curried =
+  let gen_curry_name total_numof_args numof_bind_args =
     "caml_curry" ^ string_of_int total_numof_args
-        ^ (if already_curried = 0 then ""
-                                  else "_" ^ string_of_int already_curried)
+        ^ (if numof_bind_args = 0 then ""
+                                  else "_" ^ string_of_int numof_bind_args)
+
+  let gen_curry_app_name total_numof_args numof_bind_args =
+    gen_curry_name total_numof_args numof_bind_args ^ "_app"
 
   let arg_name n = "a" ^ string_of_int n
 
+  let gen_applicator_head total_numof_args numof_bind_vars to_bind name_gen =
+    let app_name = name_gen total_numof_args numof_bind_vars in
+    let app_type = applicator_type to_bind in
+    let app_def = Llvm.define_function app_name app_type the_module in
+    let app_args = Llvm.params app_def in
+    Array.iteri (fun i arg -> Llvm.set_value_name
+      (arg_name (numof_bind_vars + i + 1)) arg) app_args;
+    Llvm.set_value_name "closure" app_args.(to_bind);
+    Llvm.position_at_end (Llvm.entry_block app_def) builder;
+    (app_def, app_args)
+
+  let gen_applicator_body total_numof_args free_vars_and_closure =
+    let fun_args = Array.make (total_numof_args + 1) (make_int 0) in
+    let numof_free_vars = (Array.length free_vars_and_closure) - 1 in
+    let numof_bind_vars = total_numof_args - numof_free_vars in
+    Array.blit free_vars_and_closure 0
+               fun_args numof_bind_vars (numof_free_vars + 1);
+    for i = numof_bind_vars - 1 downto 0 do
+      let offset_corr =
+        if (i = numof_bind_vars - 1) && (numof_free_vars = 1) then -1 else 0
+      in
+      fun_args.(i) <- closure_field_at fun_args.(total_numof_args)
+          (3 + offset_corr) (arg_name (i + 1));
+      fun_args.(total_numof_args) <- closure_field_as_block
+          fun_args.(total_numof_args) (4 + offset_corr)
+          (gen_curry_name total_numof_args i ^ "_block")
+    done;
+    let fun_untyped =
+      closure_field_at fun_args.(total_numof_args) 2 "function_untyped"
+    in
+    let fun_type = Llvm.pointer_type (applicator_type total_numof_args) in
+    let fun_typed =
+      Llvm.build_inttoptr fun_untyped fun_type "function" builder in
+    Llvm.build_call fun_typed fun_args "result" builder
+
+  let get name_gen app_gen total_numof_args numof_bind_args =
+    let app_name = name_gen total_numof_args numof_bind_args in
+    match Llvm.lookup_function app_name the_module with
+    | Some f -> f
+    | None -> app_gen total_numof_args numof_bind_args
+
   let gen_apply numof_args =
     (* i64 caml_applyM(i64 a1, i64 a2, ..., i64 aM, i64* fc) *)
-    let apply_type = full_applicator_type numof_args in
-    let apply_name = gen_apply_name numof_args in
-    let apply_def = Llvm.define_function apply_name apply_type the_module in
-    let apply_args = Llvm.params apply_def in
+    let (apply_def, apply_args) =
+      gen_applicator_head numof_args 0 numof_args gen_apply_name
+    in
     let closure = apply_args.(numof_args) in
-    Array.iteri (fun i arg ->
-      Llvm.set_value_name (arg_name (i + 1)) arg) apply_args;
-    Llvm.set_value_name "closure" closure;
-    let entry_block = Llvm.entry_block apply_def in
-    Llvm.position_at_end entry_block builder;
-
     let numof_free_vars = closure_field_at closure 1 "numof_free_vars" in
     let is_full_application =
       Llvm.build_icmp Llvm.Icmp.Eq numof_free_vars
@@ -304,13 +341,7 @@ module Closure = struct
         is_full_application full_app_block part_app_block builder);
 
     Llvm.position_at_end full_app_block builder;
-    let full_applicator_untyped =
-      closure_field_at closure 2 "full_applicator_untyped"
-    in
-    let full_applicator = Llvm.build_inttoptr full_applicator_untyped
-        (Llvm.pointer_type apply_type) "full_applicator" builder
-    in
-    let result = Llvm.build_call full_applicator apply_args "result" builder in
+    let result = gen_applicator_body numof_args apply_args in
     ignore (Llvm.build_ret result builder);
 
     Llvm.position_at_end part_app_block builder;
@@ -330,19 +361,27 @@ module Closure = struct
     ignore (Llvm.build_ret !part_result builder);
     apply_def
 
-  (* partial applicator *)
-  let rec gen_curry total_numof_args already_curried =
-    let curry_name = gen_curry_name total_numof_args already_curried in
-    let curry_def =
-      Llvm.define_function curry_name part_applicator_type the_module
+  (* full applicator *)
+  (* i64 caml_curryN_K_app(i64 a(K + 1), i64 a(K + 2), ..., i64 aN, i64* fc *)
+  let rec gen_curry_app total_numof_args numof_bind_args =
+    let (curry_app_def, curry_app_args) =
+      gen_applicator_head total_numof_args numof_bind_args
+      (total_numof_args - numof_bind_args) gen_curry_app_name
     in
-    let arg = Llvm.param curry_def 0 in
-    let closure = Llvm.param curry_def 1 in
-    Llvm.set_value_name (arg_name (already_curried + 1)) arg;
-    Llvm.set_value_name "closure" closure;
-    Llvm.position_at_end (Llvm.entry_block curry_def) builder;
+    let result = gen_applicator_body total_numof_args curry_app_args in
+    ignore (Llvm.build_ret result builder);
+    curry_app_def
 
-    let new_numof_free_vars = total_numof_args - already_curried - 1 in
+  and get_curry_app total_numof_args numof_bind_args =
+    get gen_curry_app_name gen_curry_app total_numof_args numof_bind_args
+
+  (* partial applicator *)
+  (* i64 caml_curryN[_K](i64 a(K + 1), i64* fc *)
+  let rec gen_curry total_numof_args numof_bind_args =
+    let (curry_def, curry_args) =
+      gen_applicator_head total_numof_args numof_bind_args 1 gen_curry_name
+    in
+    let new_numof_free_vars = total_numof_args - numof_bind_args - 1 in
     let new_llnumof_free_vars = make_int (new_numof_free_vars * 2 + 1) in
     let create_new_closure size =
       let new_closure = Llvm.build_inttoptr (Llvm.build_call
@@ -350,42 +389,29 @@ module Closure = struct
           lltype_of_block "new_closure" builder
       in
       let next_part_applicator =
-        get_curry total_numof_args (already_curried + 1)
+        get_curry total_numof_args (numof_bind_args + 1)
       in
       Llvm.position_at_end (Llvm.entry_block curry_def) builder;
       store_as_word new_closure 0 next_part_applicator;
       store_at new_closure 1 new_llnumof_free_vars;
-      store_at new_closure (size - 2) arg;
-      store_as_word new_closure (size - 1) closure;
+      store_at new_closure (size - 2) curry_args.(0);
+      store_as_word new_closure (size - 1) curry_args.(1);
       new_closure
     in
     let result =
-      if already_curried = total_numof_args - 1 then begin
-        let fun_args = Array.make (total_numof_args + 1) arg in
-        fun_args.(already_curried - 1) <-
-            closure_field_at closure 2 (arg_name already_curried);
-        let curr_block = ref (closure_field_as_block closure 3
-            (gen_curry_name total_numof_args (already_curried - 1) ^ "_block"))
-        in
-        for i = already_curried - 2 downto 0 do
-          fun_args.(i) <- closure_field_at !curr_block 3 (arg_name (i + 1));
-          curr_block := closure_field_as_block !curr_block 4
-            (gen_curry_name total_numof_args i ^ "_block")
-        done;
-        fun_args.(total_numof_args) <- !curr_block;
-        let fun_untyped = closure_field_at !curr_block 2 "function_untyped" in
-        let fun_type = Llvm.pointer_type (full_applicator_type total_numof_args) in
-        let fun_typed =
-          Llvm.build_inttoptr fun_untyped fun_type "function" builder in
-        Llvm.build_call fun_typed fun_args "result" builder
-      end
-      else if already_curried = total_numof_args - 2 then
+      if numof_bind_args = total_numof_args - 1 then
+        gen_applicator_body total_numof_args curry_args
+      else if numof_bind_args = total_numof_args - 2 then
         let new_closure = create_new_closure 4 in
         Llvm.build_ptrtoint new_closure lltype_of_word
             ("casted_" ^ Llvm.value_name new_closure) builder
       else begin
         let new_closure = create_new_closure 5 in
-        store_at new_closure 2 (make_int (-1) (* DUMMY *));
+        let next_full_applicator =
+          get_curry_app total_numof_args (numof_bind_args + 1)
+        in
+        Llvm.position_at_end (Llvm.entry_block curry_def) builder;
+        store_as_word new_closure 2 next_full_applicator;
         Llvm.build_ptrtoint new_closure lltype_of_word
             ("casted_" ^ Llvm.value_name new_closure) builder
       end
@@ -393,11 +419,8 @@ module Closure = struct
     ignore (Llvm.build_ret result builder);
     curry_def
 
-  and get_curry total_numof_args already_curried =
-    let curry_name = gen_curry_name total_numof_args already_curried in
-    match Llvm.lookup_function curry_name the_module with
-    | Some f -> f
-    | None -> gen_curry total_numof_args already_curried
+  and get_curry total_numof_args numof_bind_args =
+    get gen_curry_name gen_curry total_numof_args numof_bind_args
 end
 
 let add_param_idents fun_name args_list =
@@ -1175,10 +1198,6 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   fun_def
 
 let gen_data items =
-  ignore (Closure.gen_apply 2);
-  ignore (Closure.gen_curry 5 2);
-  Llvm.dump_module the_module;
-  raise (Debug_assumption "closures testing");
   let open Global_memory in
   let llglobal_name = new_global_name () in
   let make_pos index = {llglobal_name; index} in
