@@ -404,49 +404,60 @@ module Global_memory = struct
     then Llvm.const_bitcast v normalized_type
     else v
 
-  let try_to_generate_fun name =
+  let try_to_generate_builtin name =
     let curr_block = insertion_block () in
+    let apply_re = Str.regexp "caml_apply\\([1-9][0-9]*\\)" in
+    let curry_re = Str.regexp "caml_curry\\([1-9][0-9]*\\)" in
     let fun_value =
-      match name with
-      | "caml_curry2" ->
-          ignore (Closure.gen_apply 2);
-          Some (Closure.gen_curry 2 0)
-      | "caml_apply2" ->
-          fun_checkpoint "cp";
-          Some (Closure.gen_apply 2)
-      | _ -> None
+      if Str.string_match apply_re name 0 then begin
+        let num = int_of_string (Str.matched_group 1 name) in
+        Some (Closure.gen_apply num)
+      end
+      else if Str.string_match curry_re name 0 then
+        let num = int_of_string (Str.matched_group 1 name) in
+        Some (Closure.gen_curry num 0)
+      else
+        None
     in
     Llvm.position_at_end curr_block builder;
     fun_value
 
-  let find_fun_symbol_strict symbol =
-    match Llvm.lookup_function symbol the_module with
-    | Some _ as some_f -> some_f
-    | None -> try_to_generate_fun symbol
-
-  let find_fun_symbol name numof_args =
-    match find_fun_symbol_strict name with
-    | Some f -> f
-    | None ->
-        let fun_type = get_fun_type name numof_args in
-        Llvm.declare_function name fun_type the_module
-
-  let find_symbol symbol =
-    match find_fun_symbol_strict symbol with
-    | Some f -> f
-    | None ->
-        begin try
-          let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          let ptr =
-            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
-          in
-          normalized_symbol_cast ptr
-        with Not_found ->
-          if strict_symbols_mode then
-            raise (Compile_error ("Can not find symbol " ^ symbol
-                   ^ " in Global_memory.symbols"))
-          else Llvm.const_null lltype_of_block
-        end
+  let find_symbol ?numof_args symbol =
+    if !Clflags.dump_llvm
+      then Printf.fprintf stderr "Try to find symbol: %s =>%!" symbol;
+    let value =
+      try begin
+        let {llglobal_name; index} = Hashtbl.find symbols symbol in
+        let ptr =
+          Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+        in
+        normalized_symbol_cast ptr
+      end
+      with Not_found ->
+      (* Didn't find it among data symbols? Don't worry, maybe it is a function!
+       * We are in a functional language, man. Everything may be a function, it
+       * is cool! Look it up! *)
+        match Llvm.lookup_function symbol the_module with
+        | Some f -> f
+        | None ->
+      (* Sad story. It is not ordinary function, matter of fact. This tricky
+       * language try to hind something from us? So, what about that thing: maybe
+       * it is some deeply-meeply builtin-intrin function? *)
+            begin match try_to_generate_builtin symbol with
+            | Some f -> f
+            | None ->
+      (* Calm down. Calm down. Just let it go. No any warranty, no any promises,
+       * only the simple stupid declaration. That is ok. *)
+                begin match numof_args with
+                | Some num ->
+                    let fun_type = get_fun_type symbol num in
+                    Llvm.declare_function symbol fun_type the_module
+                | None -> Llvm.const_null lltype_of_block
+                end
+            end
+    in
+    dump_value value;
+    value
 
   let find_symbol_type symbol =
     match Llvm.lookup_function symbol the_module with
@@ -887,13 +898,13 @@ let rec gen_expression expr =
             (Cmm.Cconst_symbol fun_name) :: args_list) ->
       if !Clflags.dump_llvm then Printf.fprintf stderr "Capply of %s\n%!" fun_name;
       let numof_args = List.length args_list in
-      let fun_value = Global_memory.find_fun_symbol fun_name numof_args in
+      let fun_value = Global_memory.find_symbol ~numof_args fun_name in
       let fun_type = Llvm.element_type (Llvm.type_of fun_value) in
       let arg_types = Llvm.param_types fun_type in
       let args = Array.of_list (List.mapi (fun i arg ->
         let arg_value = gen_expression arg in
         recast arg_value arg_types.(i)) args_list) in
-      build_gccall fun_value args "capply"
+      build_gccall fun_value args "app"
 
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
       let numof_args = List.length args_list in
@@ -905,7 +916,7 @@ let rec gen_expression expr =
       let args = Array.of_list (List.mapi (fun i arg ->
         let arg_value = gen_expression arg in
         recast arg_value lltype_of_word) args_list) in
-      build_gccall fun_value args "capply"
+      build_gccall fun_value args "indirect_app"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
       let (_ : Llvm.llvalue) =
