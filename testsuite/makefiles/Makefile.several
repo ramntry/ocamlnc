@@ -83,6 +83,8 @@ run-file:
 	@F="`basename $(FILE) .ml`"; \
 	if [ -f $$F.runner ]; then \
 	  RUNTIME="$(RUNTIME)" sh $$F.runner; \
+	elif [ -f $$F.input ]; then \
+	  cat $$F.input | $(RUNTIME) ./program$(EXE) $(PROGRAM_ARGS) >$$F.result; \
 	else \
 	  $(RUNTIME) ./program$(EXE) $(PROGRAM_ARGS) >$$F.result; \
 	fi \

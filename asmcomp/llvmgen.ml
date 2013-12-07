@@ -87,127 +87,6 @@ let ptrcast value new_type =
 let recast value new_type =
   ptrcast (inttoptr value new_type) new_type
 
-module Global_memory = struct
-  type position =
-    { llglobal_name : string
-    ; index : int }
-
-  type label = int
-  type symbol = string
-
-  let global_name_counter = ref 0
-
-  let new_global_name () =
-    let new_name = "__data" ^ string_of_int !global_name_counter ^ "_" in
-    global_name_counter := !global_name_counter + 1;
-    new_name
-
-  let labels : (label, position) Hashtbl.t = Hashtbl.create 16
-  let symbols : (symbol, position) Hashtbl.t = Hashtbl.create 16
-  let label_requests : (position * label) list ref = ref []
-  let symbol_requests : (position * symbol) list ref = ref []
-
-  let add_label label position = Hashtbl.add labels label position
-  let add_symbol symbol position = Hashtbl.add symbols symbol position
-
-  let add_label_request position label =
-    label_requests := (position, label) :: !label_requests
-
-  let add_symbol_request position symbol =
-    symbol_requests := (position, symbol) :: !symbol_requests
-
-  let find_global llglobal_name for_link =
-    match Llvm.lookup_global llglobal_name the_module with
-    | Some global_struct -> global_struct
-    | None ->
-        raise (Compile_error ("Can not find global name " ^ llglobal_name
-               ^ " for symbol/label " ^ for_link ^ " in the module"))
-
-  let make_idxs index = [|make_int 0; make_sidx index|]
-
-  let normalize_symbol_type t =
-    if t <> lltype_of_block && t <> lltype_of_float
-    then lltype_of_string
-    else t
-
-  let normalized_symbol_cast v =
-    let actual_type = Llvm.type_of v in
-    let normalized_type = normalize_symbol_type actual_type in
-    if actual_type <> normalized_type
-    then Llvm.const_bitcast v normalized_type
-    else v
-
-  let find_symbol symbol =
-    match Llvm.lookup_function symbol the_module with
-    | Some f -> f
-    | None ->
-        begin try
-          let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          let ptr =
-            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
-          in
-          normalized_symbol_cast ptr
-        with Not_found ->
-          if strict_symbols_mode then
-            raise (Compile_error ("Can not find symbol " ^ symbol
-                   ^ " in Global_memory.symbols"))
-          else Llvm.const_null lltype_of_block
-        end
-
-  let find_symbol_type symbol =
-    match Llvm.lookup_function symbol the_module with
-    | Some f -> lltype_of_block
-    | None ->
-        begin try
-          let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          let ptr =
-            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
-          in
-          normalize_symbol_type (Llvm.type_of ptr)
-        with Not_found -> lltype_of_block
-        end
-
-  let find_label label =
-      begin try
-        let {llglobal_name; index} = Hashtbl.find labels label in
-        Llvm.const_gep
-            (find_global llglobal_name (string_of_int label)) (make_idxs index)
-      with Not_found ->
-        raise (Compile_error ("Can not find label " ^ string_of_int label
-               ^ " in Global_memory.labels"))
-      end
-
-  let handle_requests requests insert_f =
-    List.iter (fun ({llglobal_name; index}, value) ->
-      insert_f llglobal_name index value
-    ) !requests;
-    requests := []
-
-  let handle_label_requests () =
-    handle_requests label_requests (fun name idx label ->
-      let global_struct = find_global name (string_of_int label) in
-      let value = Llvm.const_ptrtoint (find_label label) lltype_of_word in
-      let curr_initializer = Llvm.global_initializer global_struct in
-      let new_initializer =
-        Llvm.const_insertvalue curr_initializer value [|idx|]
-      in
-      Llvm.set_initializer new_initializer global_struct)
-
-  let handle_symbol_requests () =
-    handle_requests symbol_requests (fun name idx symbol ->
-      let global_struct = find_global name symbol in
-      let value = Llvm.const_ptrtoint (find_symbol symbol) lltype_of_word in
-      let curr_initializer = Llvm.global_initializer global_struct in
-      let new_initializer =
-        Llvm.const_insertvalue curr_initializer value [|idx|]
-      in
-      Llvm.set_initializer new_initializer global_struct)
-
-  let handle_requests () =
-    handle_label_requests ();
-    handle_symbol_requests ()
-end
-
 let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
   Llvm.declare_function name fun_type the_module
@@ -239,6 +118,58 @@ let caml_exception_handler_f =
 let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
       [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
+
+let join type1 type2 =
+  match (type1, type2) with
+  | (default, _) when default = lltype_of_word -> type2
+  | (_, default) when default = lltype_of_word -> type1
+  | (block, _)
+    when type2 <> lltype_of_unboxed_float && block = lltype_of_block -> type2
+  | (_, block)
+    when type1 <> lltype_of_unboxed_float && block = lltype_of_block -> type1
+  | (t1, t2) when t1 = t2 -> type1
+  | _ -> raise (Cmm_type_inference_error "Can not join types")
+
+let make_generic_fun_type numof_args =
+  let fun_arg_types = Array.make numof_args lltype_of_word in
+  Llvm.function_type lltype_of_word fun_arg_types
+
+let get_fun_type fun_name numof_args =
+  try
+    let finded = Hashtbl.find fun_type_table fun_name in
+    if Array.length (Llvm.param_types finded) <> numof_args
+    then raise (Cmm_type_inference_error ("Number of params of function in call"
+                ^ " site is not equal to number of params of it in other calls"))
+    else finded
+  with Not_found ->
+    make_generic_fun_type numof_args
+
+let put_fun_type fun_name fun_type =
+  let arg_types = Llvm.param_types fun_type in
+  let numof_args = Array.length arg_types in
+  let known_type = get_fun_type fun_name numof_args in
+  let new_ret_type =
+    join (Llvm.return_type fun_type) (Llvm.return_type known_type)
+  in
+  let known_arg_types = Llvm.param_types known_type in
+  let new_arg_types =
+    Array.init numof_args (fun i -> join known_arg_types.(i) arg_types.(i))
+  in
+  let new_type = Llvm.function_type new_ret_type new_arg_types in
+  Hashtbl.replace fun_type_table fun_name new_type
+
+let insertion_block () =
+  try
+    Llvm.insertion_block builder
+  with Not_found ->
+    raise (Compile_error "Couldn't get the insertion block")
+
+let get_curr_function () =
+  Llvm.block_parent (insertion_block ())
+
+let fun_checkpoint message =
+  dump_value (get_curr_function ());
+  raise (Debug_assumption message)
 
 module Closure = struct
   let closure_field_ptr closure = function
@@ -423,6 +354,154 @@ module Closure = struct
     get gen_curry_name gen_curry total_numof_args numof_bind_args
 end
 
+module Global_memory = struct
+  type position =
+    { llglobal_name : string
+    ; index : int }
+
+  type label = int
+  type symbol = string
+
+  let global_name_counter = ref 0
+
+  let new_global_name () =
+    let new_name = "__data" ^ string_of_int !global_name_counter ^ "_" in
+    global_name_counter := !global_name_counter + 1;
+    new_name
+
+  let labels : (label, position) Hashtbl.t = Hashtbl.create 16
+  let symbols : (symbol, position) Hashtbl.t = Hashtbl.create 16
+  let label_requests : (position * label) list ref = ref []
+  let symbol_requests : (position * symbol) list ref = ref []
+
+  let add_label label position = Hashtbl.add labels label position
+  let add_symbol symbol position = Hashtbl.add symbols symbol position
+
+  let add_label_request position label =
+    label_requests := (position, label) :: !label_requests
+
+  let add_symbol_request position symbol =
+    symbol_requests := (position, symbol) :: !symbol_requests
+
+  let find_global llglobal_name for_link =
+    match Llvm.lookup_global llglobal_name the_module with
+    | Some global_struct -> global_struct
+    | None ->
+        raise (Compile_error ("Can not find global name " ^ llglobal_name
+               ^ " for symbol/label " ^ for_link ^ " in the module"))
+
+  let make_idxs index = [|make_int 0; make_sidx index|]
+
+  let normalize_symbol_type t =
+    if t <> lltype_of_block && t <> lltype_of_float
+    then lltype_of_string
+    else t
+
+  let normalized_symbol_cast v =
+    let actual_type = Llvm.type_of v in
+    let normalized_type = normalize_symbol_type actual_type in
+    if actual_type <> normalized_type
+    then Llvm.const_bitcast v normalized_type
+    else v
+
+  let try_to_generate_fun name =
+    let curr_block = insertion_block () in
+    let fun_value =
+      match name with
+      | "caml_curry2" ->
+          ignore (Closure.gen_apply 2);
+          Some (Closure.gen_curry 2 0)
+      | "caml_apply2" ->
+          fun_checkpoint "cp";
+          Some (Closure.gen_apply 2)
+      | _ -> None
+    in
+    Llvm.position_at_end curr_block builder;
+    fun_value
+
+  let find_fun_symbol_strict symbol =
+    match Llvm.lookup_function symbol the_module with
+    | Some _ as some_f -> some_f
+    | None -> try_to_generate_fun symbol
+
+  let find_fun_symbol name numof_args =
+    match find_fun_symbol_strict name with
+    | Some f -> f
+    | None ->
+        let fun_type = get_fun_type name numof_args in
+        Llvm.declare_function name fun_type the_module
+
+  let find_symbol symbol =
+    match find_fun_symbol_strict symbol with
+    | Some f -> f
+    | None ->
+        begin try
+          let {llglobal_name; index} = Hashtbl.find symbols symbol in
+          let ptr =
+            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          in
+          normalized_symbol_cast ptr
+        with Not_found ->
+          if strict_symbols_mode then
+            raise (Compile_error ("Can not find symbol " ^ symbol
+                   ^ " in Global_memory.symbols"))
+          else Llvm.const_null lltype_of_block
+        end
+
+  let find_symbol_type symbol =
+    match Llvm.lookup_function symbol the_module with
+    | Some f -> lltype_of_block
+    | None ->
+        begin try
+          let {llglobal_name; index} = Hashtbl.find symbols symbol in
+          let ptr =
+            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+          in
+          normalize_symbol_type (Llvm.type_of ptr)
+        with Not_found -> lltype_of_block
+        end
+
+  let find_label label =
+      begin try
+        let {llglobal_name; index} = Hashtbl.find labels label in
+        Llvm.const_gep
+            (find_global llglobal_name (string_of_int label)) (make_idxs index)
+      with Not_found ->
+        raise (Compile_error ("Can not find label " ^ string_of_int label
+               ^ " in Global_memory.labels"))
+      end
+
+  let handle_requests requests insert_f =
+    List.iter (fun ({llglobal_name; index}, value) ->
+      insert_f llglobal_name index value
+    ) !requests;
+    requests := []
+
+  let handle_label_requests () =
+    handle_requests label_requests (fun name idx label ->
+      let global_struct = find_global name (string_of_int label) in
+      let value = Llvm.const_ptrtoint (find_label label) lltype_of_word in
+      let curr_initializer = Llvm.global_initializer global_struct in
+      let new_initializer =
+        Llvm.const_insertvalue curr_initializer value [|idx|]
+      in
+      Llvm.set_initializer new_initializer global_struct)
+
+  let handle_symbol_requests () =
+    handle_requests symbol_requests (fun name idx symbol ->
+      let global_struct = find_global name symbol in
+      let value = Llvm.const_ptrtoint (find_symbol symbol) lltype_of_word in
+      let curr_initializer = Llvm.global_initializer global_struct in
+      let new_initializer =
+        Llvm.const_insertvalue curr_initializer value [|idx|]
+      in
+      Llvm.set_initializer new_initializer global_struct)
+
+  let handle_requests () =
+    handle_label_requests ();
+    handle_symbol_requests ()
+end
+
 let add_param_idents fun_name args_list =
   Hashtbl.add param_idents_table fun_name (Array.of_list args_list)
 
@@ -432,15 +511,6 @@ let get_param_ident fun_name idx =
   with Not_found ->
     raise (Compile_error ("Identifier for " ^ string_of_int idx
            ^ "th parameter of function " ^ fun_name ^ " not found"))
-
-let insertion_block () =
-  try
-    Llvm.insertion_block builder
-  with Not_found ->
-    raise (Compile_error "Couldn't get the insertion block")
-
-let get_curr_function () =
-  Llvm.block_parent (insertion_block ())
 
 let make_basicblocks curr_function n bb_name_gen =
   Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
@@ -491,21 +561,6 @@ let build_gccall fun_value arg_values ?ret_type call_name =
 let build_gcload addr_value load_name =
   handle_gcroot (Llvm.build_load addr_value load_name builder)
 
-let fun_checkpoint message =
-  dump_value (get_curr_function ());
-  raise (Debug_assumption message)
-
-let join type1 type2 =
-  match (type1, type2) with
-  | (default, _) when default = lltype_of_word -> type2
-  | (_, default) when default = lltype_of_word -> type1
-  | (block, _)
-    when type2 <> lltype_of_unboxed_float && block = lltype_of_block -> type2
-  | (_, block)
-    when type1 <> lltype_of_unboxed_float && block = lltype_of_block -> type1
-  | (t1, t2) when t1 = t2 -> type1
-  | _ -> raise (Cmm_type_inference_error "Can not join types")
-
 let find_type ident =
   try Hashtbl.find type_table ident
   with Not_found -> lltype_of_word
@@ -533,34 +588,6 @@ let get_symbol ident =
 
 let get_symbol_value ident =
   Llvm.build_load (get_symbol ident) (Ident.unique_name ident) builder
-
-let make_generic_fun_type numof_args =
-  let fun_arg_types = Array.make numof_args lltype_of_word in
-  Llvm.function_type lltype_of_word fun_arg_types
-
-let get_fun_type fun_name numof_args =
-  try
-    let finded = Hashtbl.find fun_type_table fun_name in
-    if Array.length (Llvm.param_types finded) <> numof_args
-    then raise (Cmm_type_inference_error ("Number of params of function in call"
-                ^ " site is not equal to number of params of it in other calls"))
-    else finded
-  with Not_found ->
-    make_generic_fun_type numof_args
-
-let put_fun_type fun_name fun_type =
-  let arg_types = Llvm.param_types fun_type in
-  let numof_args = Array.length arg_types in
-  let known_type = get_fun_type fun_name numof_args in
-  let new_ret_type =
-    join (Llvm.return_type fun_type) (Llvm.return_type known_type)
-  in
-  let known_arg_types = Llvm.param_types known_type in
-  let new_arg_types =
-    Array.init numof_args (fun i -> join known_arg_types.(i) arg_types.(i))
-  in
-  let new_type = Llvm.function_type new_ret_type new_arg_types in
-  Hashtbl.replace fun_type_table fun_name new_type
 
 let rec lltype_of_expr ?(demand=lltype_of_word) expr =
   let join_with_demand requested =
@@ -592,9 +619,10 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
           let inferred_arg_types = Array.of_list (List.mapi (fun i arg ->
             lltype_of_expr ~demand:known_arg_types.(i) arg) args_list)
           in
-          Array.iteri (fun i arg_type ->
-            add_type (get_param_ident fun_name i) inferred_arg_types.(i))
-            inferred_arg_types;
+          Array.iteri (fun i arg_type -> try
+              add_type (get_param_ident fun_name i) inferred_arg_types.(i)
+              with _ -> ())
+              inferred_arg_types;
           let inferred_ret_type =
             join_with_demand (Llvm.return_type known_fun_type)
           in
@@ -858,13 +886,25 @@ let rec gen_expression expr =
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo),
             (Cmm.Cconst_symbol fun_name) :: args_list) ->
       if !Clflags.dump_llvm then Printf.fprintf stderr "Capply of %s\n%!" fun_name;
-      let fun_value = Global_memory.find_symbol fun_name in
-      let arg_types =
-        Llvm.param_types (Llvm.element_type (Llvm.type_of(fun_value)))
-      in
+      let numof_args = List.length args_list in
+      let fun_value = Global_memory.find_fun_symbol fun_name numof_args in
+      let fun_type = Llvm.element_type (Llvm.type_of fun_value) in
+      let arg_types = Llvm.param_types fun_type in
       let args = Array.of_list (List.mapi (fun i arg ->
         let arg_value = gen_expression arg in
         recast arg_value arg_types.(i)) args_list) in
+      build_gccall fun_value args "capply"
+
+  | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
+      let numof_args = List.length args_list in
+      let fun_value_untyped = recast (gen_expression func) lltype_of_word in
+      let fun_type = make_generic_fun_type numof_args in
+      let fun_value = Llvm.build_inttoptr fun_value_untyped
+          (Llvm.pointer_type fun_type) "fun_ptr" builder
+      in
+      let args = Array.of_list (List.mapi (fun i arg ->
+        let arg_value = gen_expression arg in
+        recast arg_value lltype_of_word) args_list) in
       build_gccall fun_value args "capply"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
