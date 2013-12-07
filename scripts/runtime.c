@@ -61,6 +61,12 @@ value caml_alloc_tuple(mlsize_t wosize)
   return alloc_via_malloc(wosize, 0);
 }
 
+value caml_alloc_closure(mlsize_t wosize)
+{
+  log("allocation of %lu word(s) (+1 for header) with Closure_tag", wosize);
+  return alloc_via_malloc(wosize, Closure_tag);
+}
+
 value caml_exception_handler(void)
 {
   printf("\nFatal error: Unknown exception\n");
