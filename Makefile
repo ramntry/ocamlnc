@@ -35,10 +35,10 @@ CAMLP4OPT=$(CAMLP4:=opt)
 LLVM_BINDINGS_DIR=$(LLVM_ROOT)/lib/ocaml
 LLVM_BINDINGS_LIBS=$(LLVM_BINDINGS_DIR)/llvm.cma
 LLVM_BINDINGS_INCLUDES=-I $(LLVM_BINDINGS_DIR)
-LLVM_BINDINGS_LINKFLAGS=-cc $(CXX) -cclib -ldl -ccopt -L$(LLVM_BINDINGS_DIR) -ccopt -pthread $(LLVM_BINDINGS_INCLUDES)
+LLVM_BINDINGS_LINKFLAGS=-cc $(CXX) -cclib -ldl -ccopt -Lotherlibs/str -ccopt -L$(LLVM_BINDINGS_DIR) -ccopt -pthread $(LLVM_BINDINGS_INCLUDES)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel $(LLVM_BINDINGS_INCLUDES)
+	 -I toplevel -I otherlibs/str $(LLVM_BINDINGS_INCLUDES)
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
@@ -373,7 +373,7 @@ partialclean::
 
 ocamlopt: compilerlibs/ocamlcommon.cma compilerlibs/ocamloptcomp.cma $(OPTSTART)
 	$(CAMLC) $(LINKFLAGS) $(LLVM_BINDINGS_LINKFLAGS) -o ocamlopt \
-	  compilerlibs/ocamlcommon.cma $(LLVM_BINDINGS_LIBS) compilerlibs/ocamloptcomp.cma $(OPTSTART)
+	  compilerlibs/ocamlcommon.cma otherlibs/str/str.cma $(LLVM_BINDINGS_LIBS) compilerlibs/ocamloptcomp.cma $(OPTSTART)
 	@sed -e 's|@compiler@|$$topdir/ocamlopt|' \
 	  driver/ocamlcomp.sh.in > ocamlcompopt.sh
 	@chmod +x ocamlcompopt.sh
@@ -503,7 +503,7 @@ partialclean::
 ocamlopt.opt: compilerlibs/ocamlcommon.cmxa compilerlibs/ocamloptcomp.cmxa \
               $(OPTSTART:.cmo=.cmx)
 	$(CAMLOPT) $(LINKFLAGS) $(LLVM_BINDINGS_LINKFLAGS) -o ocamlopt.opt \
-		compilerlibs/ocamlcommon.cmxa $(LLVM_BINDINGS_LIBS:.cma=.cmxa) compilerlibs/ocamloptcomp.cmxa \
+		compilerlibs/ocamlcommon.cmxa otherlibs/str/str.cmxa $(LLVM_BINDINGS_LIBS:.cma=.cmxa) compilerlibs/ocamloptcomp.cmxa \
 	   $(OPTSTART:.cmo=.cmx)
 	@sed -e 's|@compiler@|$$topdir/ocamlopt.opt|' \
 	  driver/ocamlcomp.sh.in > ocamlcompopt.sh

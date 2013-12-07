@@ -87,6 +87,273 @@ let ptrcast value new_type =
 let recast value new_type =
   ptrcast (inttoptr value new_type) new_type
 
+let make_external_decl name fun_arg_types =
+  let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
+  Llvm.declare_function name fun_type the_module
+
+let make_external_noreturn_decl name fun_arg_types =
+  let fun_declaration = make_external_decl name fun_arg_types in
+  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
+  fun_declaration
+
+let make_external_void_decl name fun_arg_types =
+  let fun_type = Llvm.function_type (Llvm.void_type context) fun_arg_types in
+  Llvm.declare_function name fun_type the_module
+
+let caml_alloc_small_f =
+  make_external_decl "caml_alloc_small" [|lltype_of_mlsize_t; lltype_of_tag_t|]
+
+let caml_alloc_tuple_f =
+  make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
+
+let caml_alloc_closure_f =
+  make_external_decl "caml_alloc_closure" [|lltype_of_mlsize_t|]
+
+let caml_out_of_bounds_handler_f =
+  make_external_noreturn_decl "caml_out_of_bounds_handler" [||]
+
+let caml_exception_handler_f =
+  make_external_noreturn_decl "caml_exception_handler" [||]
+
+let llvm_gcroot_f =
+  make_external_void_decl "llvm.gcroot"
+      [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
+
+let join type1 type2 =
+  match (type1, type2) with
+  | (default, _) when default = lltype_of_word -> type2
+  | (_, default) when default = lltype_of_word -> type1
+  | (block, _)
+    when type2 <> lltype_of_unboxed_float && block = lltype_of_block -> type2
+  | (_, block)
+    when type1 <> lltype_of_unboxed_float && block = lltype_of_block -> type1
+  | (t1, t2) when t1 = t2 -> type1
+  | _ -> raise (Cmm_type_inference_error "Can not join types")
+
+let make_generic_fun_type numof_args =
+  let fun_arg_types = Array.make numof_args lltype_of_word in
+  Llvm.function_type lltype_of_word fun_arg_types
+
+let get_fun_type fun_name numof_args =
+  try
+    let finded = Hashtbl.find fun_type_table fun_name in
+    if Array.length (Llvm.param_types finded) <> numof_args
+    then raise (Cmm_type_inference_error ("Number of params of function in call"
+                ^ " site is not equal to number of params of it in other calls"))
+    else finded
+  with Not_found ->
+    make_generic_fun_type numof_args
+
+let put_fun_type fun_name fun_type =
+  let arg_types = Llvm.param_types fun_type in
+  let numof_args = Array.length arg_types in
+  let known_type = get_fun_type fun_name numof_args in
+  let new_ret_type =
+    join (Llvm.return_type fun_type) (Llvm.return_type known_type)
+  in
+  let known_arg_types = Llvm.param_types known_type in
+  let new_arg_types =
+    Array.init numof_args (fun i -> join known_arg_types.(i) arg_types.(i))
+  in
+  let new_type = Llvm.function_type new_ret_type new_arg_types in
+  Hashtbl.replace fun_type_table fun_name new_type
+
+let insertion_block () =
+  try
+    Llvm.insertion_block builder
+  with Not_found ->
+    raise (Compile_error "Couldn't get the insertion block")
+
+let get_curr_function () =
+  Llvm.block_parent (insertion_block ())
+
+let fun_checkpoint message =
+  dump_value (get_curr_function ());
+  raise (Debug_assumption message)
+
+module Closure = struct
+  let closure_field_ptr closure = function
+    | 0 -> closure
+    | offset -> Llvm.build_gep closure [|make_int offset|]
+        ("closure_offset_" ^ string_of_int offset ^ "_") builder
+
+  let closure_field_at closure offset field_name =
+    Llvm.build_load (closure_field_ptr closure offset) field_name builder
+
+  let closure_field_as_block closure offset field_name = Llvm.build_inttoptr
+      (closure_field_at closure offset (field_name ^ "_untyped"))
+      lltype_of_block field_name builder
+
+  let store_at closure offset value =
+    ignore (Llvm.build_store value (closure_field_ptr closure offset) builder)
+
+  let store_as_word closure offset value =
+    store_at closure offset (Llvm.build_ptrtoint value lltype_of_word
+       ("casted_" ^ Llvm.value_name value) builder)
+
+  let applicator_type numof_args =
+    let apply_arg_types = Array.make (numof_args + 1) lltype_of_word in
+    apply_arg_types.(numof_args) <- lltype_of_block;
+    Llvm.function_type lltype_of_word apply_arg_types
+
+  let part_applicator_type = Llvm.function_type
+      lltype_of_word [|lltype_of_word; lltype_of_block|]
+
+  let gen_apply_name numof_args _ = "caml_apply" ^ string_of_int numof_args
+
+  let gen_curry_name total_numof_args numof_bind_args =
+    "caml_curry" ^ string_of_int total_numof_args
+        ^ (if numof_bind_args = 0 then ""
+                                  else "_" ^ string_of_int numof_bind_args)
+
+  let gen_curry_app_name total_numof_args numof_bind_args =
+    gen_curry_name total_numof_args numof_bind_args ^ "_app"
+
+  let arg_name n = "a" ^ string_of_int n
+
+  let gen_applicator_head total_numof_args numof_bind_vars to_bind name_gen =
+    let app_name = name_gen total_numof_args numof_bind_vars in
+    let app_type = applicator_type to_bind in
+    let app_def = Llvm.define_function app_name app_type the_module in
+    let app_args = Llvm.params app_def in
+    Array.iteri (fun i arg -> Llvm.set_value_name
+      (arg_name (numof_bind_vars + i + 1)) arg) app_args;
+    Llvm.set_value_name "closure" app_args.(to_bind);
+    Llvm.position_at_end (Llvm.entry_block app_def) builder;
+    (app_def, app_args)
+
+  let gen_applicator_body total_numof_args free_vars_and_closure =
+    let fun_args = Array.make (total_numof_args + 1) (make_int 0) in
+    let numof_free_vars = (Array.length free_vars_and_closure) - 1 in
+    let numof_bind_vars = total_numof_args - numof_free_vars in
+    Array.blit free_vars_and_closure 0
+               fun_args numof_bind_vars (numof_free_vars + 1);
+    for i = numof_bind_vars - 1 downto 0 do
+      let offset_corr =
+        if (i = numof_bind_vars - 1) && (numof_free_vars = 1) then -1 else 0
+      in
+      fun_args.(i) <- closure_field_at fun_args.(total_numof_args)
+          (3 + offset_corr) (arg_name (i + 1));
+      fun_args.(total_numof_args) <- closure_field_as_block
+          fun_args.(total_numof_args) (4 + offset_corr)
+          (gen_curry_name total_numof_args i ^ "_block")
+    done;
+    let fun_untyped =
+      closure_field_at fun_args.(total_numof_args) 2 "function_untyped"
+    in
+    let fun_type = Llvm.pointer_type (applicator_type total_numof_args) in
+    let fun_typed =
+      Llvm.build_inttoptr fun_untyped fun_type "function" builder in
+    Llvm.build_call fun_typed fun_args "result" builder
+
+  let get name_gen app_gen total_numof_args numof_bind_args =
+    let app_name = name_gen total_numof_args numof_bind_args in
+    match Llvm.lookup_function app_name the_module with
+    | Some f -> f
+    | None -> app_gen total_numof_args numof_bind_args
+
+  let gen_apply numof_args =
+    (* i64 caml_applyM(i64 a1, i64 a2, ..., i64 aM, i64* fc) *)
+    let (apply_def, apply_args) =
+      gen_applicator_head numof_args 0 numof_args gen_apply_name
+    in
+    let closure = apply_args.(numof_args) in
+    let numof_free_vars = closure_field_at closure 1 "numof_free_vars" in
+    let is_full_application =
+      Llvm.build_icmp Llvm.Icmp.Eq numof_free_vars
+          (make_int (2 * numof_args + 1)) "is_full_application" builder
+    in
+    let full_app_block = Llvm.append_block context "full_application" apply_def
+    in
+    let part_app_block =
+      Llvm.append_block context "partial_application" apply_def
+    in
+    ignore (Llvm.build_cond_br
+        is_full_application full_app_block part_app_block builder);
+
+    Llvm.position_at_end full_app_block builder;
+    let result = gen_applicator_body numof_args apply_args in
+    ignore (Llvm.build_ret result builder);
+
+    Llvm.position_at_end part_app_block builder;
+    let part_result = ref closure in
+    for i = 0 to numof_args - 1 do
+      let suffix = string_of_int (i + 1) in
+      let part_applicator = Llvm.build_inttoptr (Llvm.build_load !part_result
+          ("part_applicator_untyped" ^ suffix) builder) (Llvm.pointer_type
+          part_applicator_type) ("part_applicator" ^ suffix) builder
+      in
+      part_result := Llvm.build_call part_applicator
+          [|apply_args.(i); !part_result|] ("part_result" ^ suffix) builder;
+      if i <> numof_args - 1 then
+        part_result := Llvm.build_inttoptr !part_result lltype_of_block
+          ("closure" ^ suffix) builder
+    done;
+    ignore (Llvm.build_ret !part_result builder);
+    apply_def
+
+  (* full applicator *)
+  (* i64 caml_curryN_K_app(i64 a(K + 1), i64 a(K + 2), ..., i64 aN, i64* fc *)
+  let rec gen_curry_app total_numof_args numof_bind_args =
+    let (curry_app_def, curry_app_args) =
+      gen_applicator_head total_numof_args numof_bind_args
+      (total_numof_args - numof_bind_args) gen_curry_app_name
+    in
+    let result = gen_applicator_body total_numof_args curry_app_args in
+    ignore (Llvm.build_ret result builder);
+    curry_app_def
+
+  and get_curry_app total_numof_args numof_bind_args =
+    get gen_curry_app_name gen_curry_app total_numof_args numof_bind_args
+
+  (* partial applicator *)
+  (* i64 caml_curryN[_K](i64 a(K + 1), i64* fc *)
+  let rec gen_curry total_numof_args numof_bind_args =
+    let (curry_def, curry_args) =
+      gen_applicator_head total_numof_args numof_bind_args 1 gen_curry_name
+    in
+    let new_numof_free_vars = total_numof_args - numof_bind_args - 1 in
+    let new_llnumof_free_vars = make_int (new_numof_free_vars * 2 + 1) in
+    let create_new_closure size =
+      let new_closure = Llvm.build_inttoptr (Llvm.build_call
+          caml_alloc_closure_f [|make_int size|] "new_closure_untyped" builder)
+          lltype_of_block "new_closure" builder
+      in
+      let next_part_applicator =
+        get_curry total_numof_args (numof_bind_args + 1)
+      in
+      Llvm.position_at_end (Llvm.entry_block curry_def) builder;
+      store_as_word new_closure 0 next_part_applicator;
+      store_at new_closure 1 new_llnumof_free_vars;
+      store_at new_closure (size - 2) curry_args.(0);
+      store_as_word new_closure (size - 1) curry_args.(1);
+      new_closure
+    in
+    let result =
+      if numof_bind_args = total_numof_args - 1 then
+        gen_applicator_body total_numof_args curry_args
+      else if numof_bind_args = total_numof_args - 2 then
+        let new_closure = create_new_closure 4 in
+        Llvm.build_ptrtoint new_closure lltype_of_word
+            ("casted_" ^ Llvm.value_name new_closure) builder
+      else begin
+        let new_closure = create_new_closure 5 in
+        let next_full_applicator =
+          get_curry_app total_numof_args (numof_bind_args + 1)
+        in
+        Llvm.position_at_end (Llvm.entry_block curry_def) builder;
+        store_as_word new_closure 2 next_full_applicator;
+        Llvm.build_ptrtoint new_closure lltype_of_word
+            ("casted_" ^ Llvm.value_name new_closure) builder
+      end
+    in
+    ignore (Llvm.build_ret result builder);
+    curry_def
+
+  and get_curry total_numof_args numof_bind_args =
+    get gen_curry_name gen_curry total_numof_args numof_bind_args
+end
+
 module Global_memory = struct
   type position =
     { llglobal_name : string
@@ -137,22 +404,60 @@ module Global_memory = struct
     then Llvm.const_bitcast v normalized_type
     else v
 
-  let find_symbol symbol =
-    match Llvm.lookup_function symbol the_module with
-    | Some f -> f
-    | None ->
-        begin try
-          let {llglobal_name; index} = Hashtbl.find symbols symbol in
-          let ptr =
-            Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
-          in
-          normalized_symbol_cast ptr
-        with Not_found ->
-          if strict_symbols_mode then
-            raise (Compile_error ("Can not find symbol " ^ symbol
-                   ^ " in Global_memory.symbols"))
-          else Llvm.const_null lltype_of_block
-        end
+  let try_to_generate_builtin name =
+    let curr_block = insertion_block () in
+    let apply_re = Str.regexp "caml_apply\\([1-9][0-9]*\\)" in
+    let curry_re = Str.regexp "caml_curry\\([1-9][0-9]*\\)" in
+    let fun_value =
+      if Str.string_match apply_re name 0 then begin
+        let num = int_of_string (Str.matched_group 1 name) in
+        Some (Closure.gen_apply num)
+      end
+      else if Str.string_match curry_re name 0 then
+        let num = int_of_string (Str.matched_group 1 name) in
+        Some (Closure.gen_curry num 0)
+      else
+        None
+    in
+    Llvm.position_at_end curr_block builder;
+    fun_value
+
+  let find_symbol ?numof_args symbol =
+    if !Clflags.dump_llvm
+      then Printf.fprintf stderr "Try to find symbol: %s =>%!" symbol;
+    let value =
+      try begin
+        let {llglobal_name; index} = Hashtbl.find symbols symbol in
+        let ptr =
+          Llvm.const_gep (find_global llglobal_name symbol) (make_idxs index)
+        in
+        normalized_symbol_cast ptr
+      end
+      with Not_found ->
+      (* Didn't find it among data symbols? Don't worry, maybe it is a function!
+       * We are in a functional language, man. Everything may be a function, it
+       * is cool! Look it up! *)
+        match Llvm.lookup_function symbol the_module with
+        | Some f -> f
+        | None ->
+      (* Sad story. It is not ordinary function, matter of fact. This tricky
+       * language try to hind something from us? So, what about that thing: maybe
+       * it is some deeply-meeply builtin-intrin function? *)
+            begin match try_to_generate_builtin symbol with
+            | Some f -> f
+            | None ->
+      (* Calm down. Calm down. Just let it go. No any warranty, no any promises,
+       * only the simple stupid declaration. That is ok. *)
+                begin match numof_args with
+                | Some num ->
+                    let fun_type = get_fun_type symbol num in
+                    Llvm.declare_function symbol fun_type the_module
+                | None -> Llvm.const_null lltype_of_block
+                end
+            end
+    in
+    dump_value value;
+    value
 
   let find_symbol_type symbol =
     match Llvm.lookup_function symbol the_module with
@@ -218,15 +523,6 @@ let get_param_ident fun_name idx =
     raise (Compile_error ("Identifier for " ^ string_of_int idx
            ^ "th parameter of function " ^ fun_name ^ " not found"))
 
-let insertion_block () =
-  try
-    Llvm.insertion_block builder
-  with Not_found ->
-    raise (Compile_error "Couldn't get the insertion block")
-
-let get_curr_function () =
-  Llvm.block_parent (insertion_block ())
-
 let make_basicblocks curr_function n bb_name_gen =
   Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function)
 
@@ -246,35 +542,6 @@ let get_exit_target exit_label =
 
 let unreachable () =
    Llvm.build_unreachable builder
-
-let make_external_decl name fun_arg_types =
-  let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
-  Llvm.declare_function name fun_type the_module
-
-let make_external_noreturn_decl name fun_arg_types =
-  let fun_declaration = make_external_decl name fun_arg_types in
-  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
-  fun_declaration
-
-let make_external_void_decl name fun_arg_types =
-  let fun_type = Llvm.function_type (Llvm.void_type context) fun_arg_types in
-  Llvm.declare_function name fun_type the_module
-
-let caml_alloc_small_f =
-  make_external_decl "caml_alloc_small" [|lltype_of_mlsize_t; lltype_of_tag_t|]
-
-let caml_alloc_tuple_f =
-  make_external_decl "caml_alloc_tuple" [|lltype_of_mlsize_t|]
-
-let caml_out_of_bounds_handler_f =
-  make_external_noreturn_decl "caml_out_of_bounds_handler" [||]
-
-let caml_exception_handler_f =
-  make_external_noreturn_decl "caml_exception_handler" [||]
-
-let llvm_gcroot_f =
-  make_external_void_decl "llvm.gcroot"
-      [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
 
 let goto_entry_block curr_block =
   let curr_function = Llvm.block_parent curr_block in
@@ -305,21 +572,6 @@ let build_gccall fun_value arg_values ?ret_type call_name =
 let build_gcload addr_value load_name =
   handle_gcroot (Llvm.build_load addr_value load_name builder)
 
-let fun_checkpoint message =
-  dump_value (get_curr_function ());
-  raise (Debug_assumption message)
-
-let join type1 type2 =
-  match (type1, type2) with
-  | (default, _) when default = lltype_of_word -> type2
-  | (_, default) when default = lltype_of_word -> type1
-  | (block, _)
-    when type2 <> lltype_of_unboxed_float && block = lltype_of_block -> type2
-  | (_, block)
-    when type1 <> lltype_of_unboxed_float && block = lltype_of_block -> type1
-  | (t1, t2) when t1 = t2 -> type1
-  | _ -> raise (Cmm_type_inference_error "Can not join types")
-
 let find_type ident =
   try Hashtbl.find type_table ident
   with Not_found -> lltype_of_word
@@ -347,34 +599,6 @@ let get_symbol ident =
 
 let get_symbol_value ident =
   Llvm.build_load (get_symbol ident) (Ident.unique_name ident) builder
-
-let make_generic_fun_type numof_args =
-  let fun_arg_types = Array.make numof_args lltype_of_word in
-  Llvm.function_type lltype_of_word fun_arg_types
-
-let get_fun_type fun_name numof_args =
-  try
-    let finded = Hashtbl.find fun_type_table fun_name in
-    if Array.length (Llvm.param_types finded) <> numof_args
-    then raise (Cmm_type_inference_error ("Number of params of function in call"
-                ^ " site is not equal to number of params of it in other calls"))
-    else finded
-  with Not_found ->
-    make_generic_fun_type numof_args
-
-let put_fun_type fun_name fun_type =
-  let arg_types = Llvm.param_types fun_type in
-  let numof_args = Array.length arg_types in
-  let known_type = get_fun_type fun_name numof_args in
-  let new_ret_type =
-    join (Llvm.return_type fun_type) (Llvm.return_type known_type)
-  in
-  let known_arg_types = Llvm.param_types known_type in
-  let new_arg_types =
-    Array.init numof_args (fun i -> join known_arg_types.(i) arg_types.(i))
-  in
-  let new_type = Llvm.function_type new_ret_type new_arg_types in
-  Hashtbl.replace fun_type_table fun_name new_type
 
 let rec lltype_of_expr ?(demand=lltype_of_word) expr =
   let join_with_demand requested =
@@ -406,9 +630,10 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
           let inferred_arg_types = Array.of_list (List.mapi (fun i arg ->
             lltype_of_expr ~demand:known_arg_types.(i) arg) args_list)
           in
-          Array.iteri (fun i arg_type ->
-            add_type (get_param_ident fun_name i) inferred_arg_types.(i))
-            inferred_arg_types;
+          Array.iteri (fun i arg_type -> try
+              add_type (get_param_ident fun_name i) inferred_arg_types.(i)
+              with _ -> ())
+              inferred_arg_types;
           let inferred_ret_type =
             join_with_demand (Llvm.return_type known_fun_type)
           in
@@ -428,8 +653,10 @@ let rec lltype_of_expr ?(demand=lltype_of_word) expr =
           join_with_demand (Llvm.return_type fun_type)
       end
 
-  | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), _fun :: _args_list) ->
-      raise (Not_implemented_yet "Cmm.Capply for not Cconst_symbol")
+  | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
+      let _ = lltype_of_expr ~demand:lltype_of_block func in
+      List.iter (fun arg -> ignore (lltype_of_expr arg)) args_list;
+      lltype_of_word
 
   | Cmm.Cop (Cmm.Cextcall (fun_name, _machtype, _some_flag, _debuginfo),
              args_list) ->
@@ -670,14 +897,26 @@ let rec gen_expression expr =
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo),
             (Cmm.Cconst_symbol fun_name) :: args_list) ->
       if !Clflags.dump_llvm then Printf.fprintf stderr "Capply of %s\n%!" fun_name;
-      let fun_value = Global_memory.find_symbol fun_name in
-      let arg_types =
-        Llvm.param_types (Llvm.element_type (Llvm.type_of(fun_value)))
-      in
+      let numof_args = List.length args_list in
+      let fun_value = Global_memory.find_symbol ~numof_args fun_name in
+      let fun_type = Llvm.element_type (Llvm.type_of fun_value) in
+      let arg_types = Llvm.param_types fun_type in
       let args = Array.of_list (List.mapi (fun i arg ->
         let arg_value = gen_expression arg in
         recast arg_value arg_types.(i)) args_list) in
-      build_gccall fun_value args "capply"
+      build_gccall fun_value args "app"
+
+  | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
+      let numof_args = List.length args_list in
+      let fun_value_untyped = recast (gen_expression func) lltype_of_word in
+      let fun_type = make_generic_fun_type numof_args in
+      let fun_value = Llvm.build_inttoptr fun_value_untyped
+          (Llvm.pointer_type fun_type) "fun_ptr" builder
+      in
+      let args = Array.of_list (List.mapi (fun i arg ->
+        let arg_value = gen_expression arg in
+        recast arg_value lltype_of_word) args_list) in
+      build_gccall fun_value args "indirect_app"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
       let (_ : Llvm.llvalue) =
@@ -791,21 +1030,22 @@ let rec gen_expression expr =
           (recast rhs_value lltype_of_int) name builder
       in
       begin match op with
-      | Cmm.Caddi -> gen_op_int Llvm.build_add  "caddi"
-      | Cmm.Csubi -> gen_op_int Llvm.build_sub  "csubi"
-      | Cmm.Cmuli -> gen_op_int Llvm.build_mul  "cmuli"
-      | Cmm.Cdivi -> gen_op_int Llvm.build_udiv "cdivi"
-      | Cmm.Cmodi -> gen_op_int Llvm.build_urem "cmodi"
-      | Cmm.Cand  -> gen_op_int Llvm.build_and  "cand"
-      | Cmm.Cor   -> gen_op_int Llvm.build_or   "cor"
-      | Cmm.Cxor  -> gen_op_int Llvm.build_xor  "cxor"
-      | Cmm.Clsl  -> gen_op_int Llvm.build_shl  "clsl"
-      | Cmm.Clsr  -> gen_op_int Llvm.build_lshr "clsr"
-      | Cmm.Casr  -> gen_op_int Llvm.build_ashr "casr"
-      | Cmm.Caddf -> gen_op Llvm.build_fadd "caddf"
-      | Cmm.Csubf -> gen_op Llvm.build_fsub "csubf"
-      | Cmm.Cmulf -> gen_op Llvm.build_fmul "cmulf"
-      | Cmm.Cdivf -> gen_op Llvm.build_fdiv "cdivf"
+      | Cmm.Cadda -> gen_op_int Llvm.build_add  "adda"
+      | Cmm.Caddi -> gen_op_int Llvm.build_add  "addi"
+      | Cmm.Csubi -> gen_op_int Llvm.build_sub  "subi"
+      | Cmm.Cmuli -> gen_op_int Llvm.build_mul  "muli"
+      | Cmm.Cdivi -> gen_op_int Llvm.build_udiv "divi"
+      | Cmm.Cmodi -> gen_op_int Llvm.build_urem "modi"
+      | Cmm.Cand  -> gen_op_int Llvm.build_and  "and"
+      | Cmm.Cor   -> gen_op_int Llvm.build_or   "or"
+      | Cmm.Cxor  -> gen_op_int Llvm.build_xor  "xor"
+      | Cmm.Clsl  -> gen_op_int Llvm.build_shl  "lsl"
+      | Cmm.Clsr  -> gen_op_int Llvm.build_lshr "lsr"
+      | Cmm.Casr  -> gen_op_int Llvm.build_ashr "asr"
+      | Cmm.Caddf -> gen_op Llvm.build_fadd "addf"
+      | Cmm.Csubf -> gen_op Llvm.build_fsub "subf"
+      | Cmm.Cmulf -> gen_op Llvm.build_fmul "mulf"
+      | Cmm.Cdivf -> gen_op Llvm.build_fdiv "divf"
       | Cmm.Ccmpi cmp_flavor ->
           let llvm_cmp_flavor =
             begin match cmp_flavor with
@@ -817,7 +1057,7 @@ let rec gen_expression expr =
             | Cmm.Cge -> Llvm.Icmp.Sge
             end
           in
-          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "ccmpi" in
+          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "cmpi" in
           i1_to_cbool i1
 
       | Cmm.Ccmpa cmp_flavor ->
@@ -831,7 +1071,7 @@ let rec gen_expression expr =
             | Cmm.Cge -> Llvm.Icmp.Uge
             end
           in
-          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "ccmpa" in
+          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "cmpa" in
           i1_to_cbool i1
 
       | Cmm.Ccmpf cmp_flavor ->
@@ -845,7 +1085,7 @@ let rec gen_expression expr =
             | Cmm.Cge -> Llvm.Fcmp.Oge
             end
           in
-          let i1 = gen_op (Llvm.build_fcmp llvm_cmp_flavor) "ccmpf" in
+          let i1 = gen_op (Llvm.build_fcmp llvm_cmp_flavor) "cmpf" in
           i1_to_cbool i1
 
       | _ -> raise (Not_implemented_yet ("Binary operation matching in gen_expression"
