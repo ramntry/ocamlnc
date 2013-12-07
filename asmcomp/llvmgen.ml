@@ -1019,21 +1019,22 @@ let rec gen_expression expr =
           (recast rhs_value lltype_of_int) name builder
       in
       begin match op with
-      | Cmm.Caddi -> gen_op_int Llvm.build_add  "caddi"
-      | Cmm.Csubi -> gen_op_int Llvm.build_sub  "csubi"
-      | Cmm.Cmuli -> gen_op_int Llvm.build_mul  "cmuli"
-      | Cmm.Cdivi -> gen_op_int Llvm.build_udiv "cdivi"
-      | Cmm.Cmodi -> gen_op_int Llvm.build_urem "cmodi"
-      | Cmm.Cand  -> gen_op_int Llvm.build_and  "cand"
-      | Cmm.Cor   -> gen_op_int Llvm.build_or   "cor"
-      | Cmm.Cxor  -> gen_op_int Llvm.build_xor  "cxor"
-      | Cmm.Clsl  -> gen_op_int Llvm.build_shl  "clsl"
-      | Cmm.Clsr  -> gen_op_int Llvm.build_lshr "clsr"
-      | Cmm.Casr  -> gen_op_int Llvm.build_ashr "casr"
-      | Cmm.Caddf -> gen_op Llvm.build_fadd "caddf"
-      | Cmm.Csubf -> gen_op Llvm.build_fsub "csubf"
-      | Cmm.Cmulf -> gen_op Llvm.build_fmul "cmulf"
-      | Cmm.Cdivf -> gen_op Llvm.build_fdiv "cdivf"
+      | Cmm.Cadda -> gen_op_int Llvm.build_add  "adda"
+      | Cmm.Caddi -> gen_op_int Llvm.build_add  "addi"
+      | Cmm.Csubi -> gen_op_int Llvm.build_sub  "subi"
+      | Cmm.Cmuli -> gen_op_int Llvm.build_mul  "muli"
+      | Cmm.Cdivi -> gen_op_int Llvm.build_udiv "divi"
+      | Cmm.Cmodi -> gen_op_int Llvm.build_urem "modi"
+      | Cmm.Cand  -> gen_op_int Llvm.build_and  "and"
+      | Cmm.Cor   -> gen_op_int Llvm.build_or   "or"
+      | Cmm.Cxor  -> gen_op_int Llvm.build_xor  "xor"
+      | Cmm.Clsl  -> gen_op_int Llvm.build_shl  "lsl"
+      | Cmm.Clsr  -> gen_op_int Llvm.build_lshr "lsr"
+      | Cmm.Casr  -> gen_op_int Llvm.build_ashr "asr"
+      | Cmm.Caddf -> gen_op Llvm.build_fadd "addf"
+      | Cmm.Csubf -> gen_op Llvm.build_fsub "subf"
+      | Cmm.Cmulf -> gen_op Llvm.build_fmul "mulf"
+      | Cmm.Cdivf -> gen_op Llvm.build_fdiv "divf"
       | Cmm.Ccmpi cmp_flavor ->
           let llvm_cmp_flavor =
             begin match cmp_flavor with
@@ -1045,7 +1046,7 @@ let rec gen_expression expr =
             | Cmm.Cge -> Llvm.Icmp.Sge
             end
           in
-          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "ccmpi" in
+          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "cmpi" in
           i1_to_cbool i1
 
       | Cmm.Ccmpa cmp_flavor ->
@@ -1059,7 +1060,7 @@ let rec gen_expression expr =
             | Cmm.Cge -> Llvm.Icmp.Uge
             end
           in
-          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "ccmpa" in
+          let i1 = gen_op_int (Llvm.build_icmp llvm_cmp_flavor) "cmpa" in
           i1_to_cbool i1
 
       | Cmm.Ccmpf cmp_flavor ->
@@ -1073,7 +1074,7 @@ let rec gen_expression expr =
             | Cmm.Cge -> Llvm.Fcmp.Oge
             end
           in
-          let i1 = gen_op (Llvm.build_fcmp llvm_cmp_flavor) "ccmpf" in
+          let i1 = gen_op (Llvm.build_fcmp llvm_cmp_flavor) "cmpf" in
           i1_to_cbool i1
 
       | _ -> raise (Not_implemented_yet ("Binary operation matching in gen_expression"
