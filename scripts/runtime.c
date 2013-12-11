@@ -112,6 +112,22 @@ value caml_make_vect(value len, value init) /* int -> 'a -> 'a array */
   return res;
 }
 
+value caml_array_sub(value array, value start_idx, value len) /* 'a array -> int -> int -> 'a array */
+{
+  tag_t tag = Tag_val(array);
+  mlsize_t size = Long_val(len);
+  mlsize_t idx = Long_val(start_idx);
+  if (size == 0)
+    return Atom(tag);
+  if (tag == Double_array_tag) {
+    size *= Double_wosize;
+    idx *= Double_wosize;
+  }
+  value new_array = alloc_via_malloc(size, tag);
+  memcpy((void *)new_array, (void *)((value *)array + idx), size * sizeof(value));
+  return new_array;
+}
+
 value caml_obj_dup(value arg)
 {
   mlsize_t size = Wosize_val(arg);
@@ -197,3 +213,4 @@ value caml_blit_string(value s1, value ofs1, value s2, value ofs2, value n) /* s
   memmove(&Byte(s2, Long_val(ofs2)), &Byte(s1, Long_val(ofs1)), Int_val(n));
   return Val_unit;
 }
+
