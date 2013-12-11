@@ -218,12 +218,9 @@ module Closure = struct
       (ptrtoword_unsafe value ("casted_" ^ Llvm.value_name value))
 
   let applicator_type numof_args =
-    let apply_arg_types = Array.make (numof_args + 1) lltype_of_word in
-    apply_arg_types.(numof_args) <- lltype_of_block;
-    Llvm.function_type lltype_of_word apply_arg_types
+    make_generic_fun_type (numof_args + 1)
 
-  let part_applicator_type = Llvm.function_type
-      lltype_of_word [|lltype_of_word; lltype_of_block|]
+  let part_applicator_type = make_generic_fun_type 2
 
   let gen_apply_name numof_args _ = "caml_apply" ^ string_of_int numof_args
 
@@ -245,6 +242,7 @@ module Closure = struct
     Array.iteri (fun i arg -> Llvm.set_value_name
       (arg_name (numof_bind_vars + i + 1)) arg) app_args;
     Llvm.set_value_name "closure" app_args.(to_bind);
+    app_args.(to_bind) <- recast app_args.(to_bind) lltype_of_block;
     jmp_basicblock (Llvm.entry_block app_def);
     (app_def, app_args)
 
@@ -270,6 +268,8 @@ module Closure = struct
     let fun_type = Llvm.pointer_type (applicator_type total_numof_args) in
     let fun_typed =
       inttoptr_unsafe fun_untyped fun_type "function" in
+    fun_args.(total_numof_args) <-
+        recast fun_args.(total_numof_args) lltype_of_word;
     build_call fun_typed fun_args "result"
 
   let get name_gen app_gen total_numof_args numof_bind_args =
@@ -307,7 +307,8 @@ module Closure = struct
           part_applicator_type) ("part_applicator" ^ suffix)
       in
       part_result := build_call part_applicator
-          [|apply_args.(i); !part_result|] ("part_result" ^ suffix);
+          [|apply_args.(i); recast !part_result lltype_of_word|]
+          ("part_result" ^ suffix);
       if i <> numof_args - 1 then
         part_result := inttoptr_unsafe !part_result lltype_of_block
           ("closure" ^ suffix)
