@@ -615,47 +615,35 @@ let rec gen_expression expr =
       let wosize_value = Llvm.const_int lltype_of_mlsize_t wosize in
       let tag = 0xFF land header_int in
       let tag_value = Llvm.const_int lltype_of_tag_t tag in
-      begin match (tag, fields) with
+      let field_values = List.fold_right (fun field_expr acc ->
+        gen_expression field_expr :: acc) fields []
+      in
+      let fill_array array_type elem_type_name =
+        let alloc_args = [|wosize_value|] in
+        let block = build_gccall caml_alloc_tuple_f
+           alloc_args ("allocated_" ^ elem_type_name)
+        in
+        let casted_block = recast block array_type in
+        List.iteri (fun i field_value ->
+          let store_addr = build_gep casted_block
+              [|make_word i|] (elem_type_name ^ "_at_" ^ string_of_int i ^ "_ptr")
+          in
+          build_store field_value store_addr
+        ) field_values;
+        block
+      in
+      begin match (tag, field_values) with
       | (253 (* Double_tag *), value :: []) ->
-          let unboxed_float_value = gen_expression value in
           let alloc_args = [|wosize_value; tag_value|] in
           let float_block =
             build_gccall caml_alloc_small_f alloc_args "allocated_float"
           in
-          build_store unboxed_float_value (recast float_block lltype_of_float);
+          build_store value (recast float_block lltype_of_float);
           float_block
       | (254 (* Double_array_tag *), double_values) ->
-          let alloc_args = [|wosize_value|] in
-          let double_array =
-            build_gccall caml_alloc_tuple_f alloc_args "allocated_double_array"
-          in
-          let casted_double_array = recast double_array lltype_of_float in
-          List.iteri (fun i double_expr ->
-            let current_double =
-              recast (gen_expression double_expr) lltype_of_unboxed_float
-            in
-            let store_addr = build_gep casted_double_array [|make_word i|]
-              ("double_elem_addr" ^ string_of_int i ^ "_")
-            in
-            build_store current_double store_addr
-          ) fields;
-          double_array
-
+          fill_array lltype_of_float "double"
       | (0, fields_of_tuple) | (247, fields_of_tuple) ->
-          let alloc_args = [|wosize_value|] in
-          let block =
-            build_gccall caml_alloc_tuple_f alloc_args "allocated_tuple"
-          in
-          let casted_block = recast block lltype_of_block in
-          List.iteri (fun i field ->
-            let field_value = recast (gen_expression field) lltype_of_word in
-            let store_addr =
-              build_gep casted_block [|make_word i|] ("fieldi" ^ string_of_int i)
-            in
-            build_store field_value store_addr
-          ) fields;
-          block
-
+          fill_array lltype_of_block "field"
       | _ -> raise (Not_implemented_yet ("I don't know what to do with"
                     ^ " allocation of a block with tag = "
                     ^ string_of_int tag ^ " and number of fields = "
@@ -674,8 +662,8 @@ let rec gen_expression expr =
       in
       let fun_value = recast fun_untyped fun_ptr_type in
       dump_value fun_value;
-      let args = Array.of_list (List.mapi (fun i arg ->
-        gen_expression arg) args_list)
+      let args = Array.of_list (List.fold_right (fun arg acc ->
+        gen_expression arg :: acc) args_list [])
       in
       build_gccall fun_value args "application"
 
@@ -711,8 +699,8 @@ let rec gen_expression expr =
              args_list) ->
       let numof_args = List.length args_list in
       let fun_value = Global_memory.find_symbol ~numof_args fun_name in
-      let args = Array.of_list (List.mapi (fun i arg ->
-        gen_expression arg) args_list)
+      let args = Array.of_list (List.fold_right (fun arg acc ->
+        gen_expression arg :: acc) args_list [])
       in
       build_gccall fun_value args "extcall"
 
