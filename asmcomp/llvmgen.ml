@@ -15,11 +15,11 @@ let basicblocks_history : Llvm.llbasicblock option Stack.t = Stack.create ()
 let symbol_table : (Ident.t, Llvm.llvalue) Hashtbl.t = Hashtbl.create 16
 let exit_targets : (int, Llvm.llbasicblock) Hashtbl.t = Hashtbl.create 16
 
-let ifthenelse_counter = ref 0
-let get_next_ifthenelse_name_suffix () =
-  let suffix = string_of_int !ifthenelse_counter in
-  ifthenelse_counter := !ifthenelse_counter + 1;
-  suffix
+let branches_counter = ref 0
+let get_next_branch_name_infix () =
+  let infix = string_of_int !branches_counter in
+  branches_counter := !branches_counter + 1;
+  infix
 
 let lltype_of_word = Llvm.i64_type context
 let lltype_of_block = Llvm.pointer_type lltype_of_word
@@ -528,8 +528,14 @@ module Global_memory = struct
 end
 
 
-let make_basicblocks curr_function_exn n bb_name_gen =
-  Array.init n (fun i -> Llvm.append_block context (bb_name_gen i) curr_function_exn)
+let make_basicblocks curr_fun n bb_name_prefix bb_name_gen =
+  let actual_bb_name_prefix = bb_name_prefix ^ get_next_branch_name_infix () in
+  (Array.init n (fun i ->
+    let bb_full_name =
+      actual_bb_name_prefix ^ "_" ^ bb_name_gen i ^ "_"
+    in
+    Llvm.append_block context bb_full_name curr_fun),
+  actual_bb_name_prefix)
 
 let make_basicblock name =
   Llvm.append_block context name (curr_function_exn ())
@@ -858,10 +864,10 @@ let rec gen_expression expr =
       if numof_exprs < 2 then
         raise (Not_implemented_yet "Too few exprs in switch (< 2)");
       let control = gen_expression control_expr in
-      let curr_function_exn = curr_function_exn () in
-      let expr_blocks =
-        make_basicblocks curr_function_exn numof_exprs (fun i ->
-          "caseexpr" ^ string_of_int cases.(i) ^ "_")
+      let curr_fun = curr_function_exn () in
+      let (expr_blocks, actual_name_prefix) =
+        make_basicblocks curr_fun numof_exprs "switch" (fun i ->
+          "caseexpr" ^ string_of_int cases.(i))
       in
       let switch = Llvm.build_switch
           control expr_blocks.(cases.(numof_cases - 1)) (numof_cases - 1) builder
@@ -869,27 +875,26 @@ let rec gen_expression expr =
       for i = 0 to numof_cases - 2 do
         Llvm.add_case switch (make_word i) expr_blocks.(cases.(i))
       done;
-      build_branches curr_function_exn exprs expr_blocks "switch"
+      build_branches curr_fun exprs expr_blocks actual_name_prefix
 
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = word_to_i1 (gen_expression predicate) in
-      let curr_function_exn = curr_function_exn () in
-      let name_prefix = "if" ^ get_next_ifthenelse_name_suffix () in
-      let branch_bbs =
-        make_basicblocks curr_function_exn 2 (fun i ->
-          [|name_prefix ^ "true"; name_prefix ^ "false"|].(i))
+      let curr_fun = curr_function_exn () in
+      let (branch_bbs, actual_name_prefix) =
+        make_basicblocks curr_fun 2 "if" (fun i ->
+          [|"true"; "false"|].(i))
       in
       build_cond_br cond branch_bbs.(0) branch_bbs.(1);
-      build_branches curr_function_exn [|if_true; if_false|] branch_bbs name_prefix
+      build_branches curr_fun [|if_true; if_false|] branch_bbs actual_name_prefix
 
   | Cmm.Ccatch (exit_label, _ident_list, body, handler) ->
-      let curr_function_exn = curr_function_exn () in
-      let branch_bbs =
-        make_basicblocks curr_function_exn 2 (fun i -> [|"body"; "handler"|].(i))
+      let curr_fun = curr_function_exn () in
+      let (branch_bbs, actual_name_prefix) = make_basicblocks curr_fun
+         2 "catch" (fun i -> [|"body"; "handler"|].(i))
       in
       build_br branch_bbs.(0);
       add_exit_target exit_label branch_bbs.(1);
-      build_branches curr_function_exn [|body; handler|] branch_bbs "catch"
+      build_branches curr_fun [|body; handler|] branch_bbs actual_name_prefix
 
   | Cmm.Cloop expr ->
       let loop_entry_block = insertion_block_exn () in
@@ -934,14 +939,14 @@ and build_branches curr_function_exn branch_exprs branch_bbs result_bb_name_pref
       value
   | phi_pairs ->
       let result_block =
-        Llvm.append_block context (result_bb_name_prefix ^ "result") curr_function_exn
+        Llvm.append_block context (result_bb_name_prefix ^ "_result") curr_function_exn
       in
       List.iter (fun (_v, last_bb) ->
         jmp_basicblock last_bb;
         build_br result_block)
       phi_pairs;
       jmp_basicblock result_block;
-      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
+      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "_resval") builder
 
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
