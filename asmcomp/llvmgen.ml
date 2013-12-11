@@ -242,7 +242,6 @@ module Closure = struct
     Array.iteri (fun i arg -> Llvm.set_value_name
       (arg_name (numof_bind_vars + i + 1)) arg) app_args;
     Llvm.set_value_name "closure" app_args.(to_bind);
-    app_args.(to_bind) <- recast app_args.(to_bind) lltype_of_block;
     jmp_basicblock (Llvm.entry_block app_def);
     (app_def, app_args)
 
@@ -256,20 +255,24 @@ module Closure = struct
       let offset_corr =
         if (i = numof_bind_vars - 1) && (numof_free_vars = 1) then -1 else 0
       in
-      fun_args.(i) <- closure_field_at fun_args.(total_numof_args)
-          (3 + offset_corr) (arg_name (i + 1));
-      fun_args.(total_numof_args) <- closure_field_as_block
-          fun_args.(total_numof_args) (4 + offset_corr)
+      let closure_ptr = inttoptr_unsafe fun_args.(total_numof_args)
+          lltype_of_block "closure_ptr"
+      in
+      fun_args.(i) <- closure_field_at
+          closure_ptr (3 + offset_corr) (arg_name (i + 1));
+      fun_args.(total_numof_args) <- closure_field_at
+          closure_ptr (4 + offset_corr)
           (gen_curry_name total_numof_args i ^ "_block")
     done;
+    let closure_ptr = inttoptr_unsafe
+        fun_args.(total_numof_args) lltype_of_block "closure_ptr"
+    in
     let fun_untyped =
-      closure_field_at fun_args.(total_numof_args) 2 "function_untyped"
+      closure_field_at closure_ptr 2 "function_untyped"
     in
     let fun_type = Llvm.pointer_type (applicator_type total_numof_args) in
     let fun_typed =
       inttoptr_unsafe fun_untyped fun_type "function" in
-    fun_args.(total_numof_args) <-
-        recast fun_args.(total_numof_args) lltype_of_word;
     build_call fun_typed fun_args "result"
 
   let get name_gen app_gen total_numof_args numof_bind_args =
@@ -284,7 +287,8 @@ module Closure = struct
       gen_applicator_head numof_args 0 numof_args gen_apply_name
     in
     let closure = apply_args.(numof_args) in
-    let numof_free_vars = closure_field_at closure 1 "numof_free_vars" in
+    let closure_ptr = inttoptr_unsafe closure lltype_of_block "closure_ptr" in
+    let numof_free_vars = closure_field_at closure_ptr 1 "numof_free_vars" in
     let is_full_application =
       Llvm.build_icmp Llvm.Icmp.Eq numof_free_vars
           (make_word (2 * numof_args + 1)) "is_full_application" builder
@@ -302,16 +306,15 @@ module Closure = struct
     let part_result = ref closure in
     for i = 0 to numof_args - 1 do
       let suffix = string_of_int (i + 1) in
-      let part_applicator = inttoptr_unsafe (build_load !part_result
+      let part_applicator_ptr =
+        inttoptr_unsafe !part_result lltype_of_block "part_applicator_ptr"
+      in
+      let part_applicator = inttoptr_unsafe (build_load part_applicator_ptr
           ("part_applicator_untyped" ^ suffix)) (Llvm.pointer_type
           part_applicator_type) ("part_applicator" ^ suffix)
       in
       part_result := build_call part_applicator
-          [|apply_args.(i); recast !part_result lltype_of_word|]
-          ("part_result" ^ suffix);
-      if i <> numof_args - 1 then
-        part_result := inttoptr_unsafe !part_result lltype_of_block
-          ("closure" ^ suffix)
+          [|apply_args.(i); !part_result|] ("part_result" ^ suffix);
     done;
     build_ret !part_result;
     apply_def
@@ -339,35 +342,35 @@ module Closure = struct
     let new_numof_free_vars = total_numof_args - numof_bind_args - 1 in
     let new_llnumof_free_vars = make_word (new_numof_free_vars * 2 + 1) in
     let create_new_closure size =
-      let new_closure = inttoptr_unsafe (build_call
-          caml_alloc_closure_f [|make_word size|] "new_closure_untyped")
-          lltype_of_block "new_closure"
+      let new_closure =
+        build_call caml_alloc_closure_f [|make_word size|] "new_closure"
+      in
+      let new_closure_ptr =
+        inttoptr_unsafe new_closure lltype_of_block "new_closure_ptr"
       in
       let next_part_applicator =
         get_curry total_numof_args (numof_bind_args + 1)
       in
       jmp_basicblock (Llvm.entry_block curry_def);
-      store_as_word new_closure 0 next_part_applicator;
-      store_at new_closure 1 new_llnumof_free_vars;
-      store_at new_closure (size - 2) curry_args.(0);
-      store_as_word new_closure (size - 1) curry_args.(1);
-      new_closure
+      store_as_word new_closure_ptr 0 next_part_applicator;
+      store_at new_closure_ptr 1 new_llnumof_free_vars;
+      store_at new_closure_ptr (size - 2) curry_args.(0);
+      store_as_word new_closure_ptr (size - 1) curry_args.(1);
+      (new_closure, new_closure_ptr)
     in
     let result =
       if numof_bind_args = total_numof_args - 1 then
         gen_applicator_body total_numof_args curry_args
       else if numof_bind_args = total_numof_args - 2 then
-        let new_closure = create_new_closure 4 in
-        ptrtoword_unsafe new_closure
-            ("casted_" ^ Llvm.value_name new_closure)
+        fst (create_new_closure 4)
       else begin
-        let new_closure = create_new_closure 5 in
+        let (new_closure, new_closure_ptr) = create_new_closure 5 in
         let next_full_applicator =
           get_curry_app total_numof_args (numof_bind_args + 1)
         in
         jmp_basicblock (Llvm.entry_block curry_def);
-        store_as_word new_closure 2 next_full_applicator;
-        ptrtoword_unsafe new_closure ("casted_" ^ Llvm.value_name new_closure)
+        store_as_word new_closure_ptr 2 next_full_applicator;
+        new_closure
       end
     in
     build_ret result;
@@ -663,7 +666,12 @@ let rec gen_expression expr =
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
       let numof_args = List.length args_list in
       let fun_ptr_type = Llvm.pointer_type (make_generic_fun_type numof_args) in
-      let fun_untyped = gen_expression func in
+      let fun_untyped =
+        match func with
+        | Cmm.Cconst_symbol fun_name ->
+            Global_memory.find_symbol ~numof_args fun_name
+        | _ -> gen_expression func
+      in
       let fun_value = recast fun_untyped fun_ptr_type in
       dump_value fun_value;
       let args = Array.of_list (List.mapi (fun i arg ->
