@@ -67,6 +67,12 @@ value caml_alloc_closure(mlsize_t wosize)
   return alloc_via_malloc(wosize, Closure_tag);
 }
 
+value caml_modify(value addr, value new_value)
+{
+  *(value *)addr = new_value;
+  return Val_unit;
+}
+
 value caml_exception_handler(void)
 {
   printf("\nFatal error: Unknown exception\n");
