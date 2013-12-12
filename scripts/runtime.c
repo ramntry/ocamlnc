@@ -128,6 +128,34 @@ value caml_array_sub(value array, value start_idx, value len) /* 'a array -> int
   return new_array;
 }
 
+value caml_array_append(value lhs, value rhs) /* 'a array -> 'a array -> 'a array */
+{
+  tag_t tag = Tag_val(lhs);
+  assert(tag == Tag_val(rhs));
+  mlsize_t lhs_size = Wosize_val(lhs);
+  mlsize_t rhs_size = Wosize_val(rhs);
+  value appended = alloc_via_malloc(lhs_size + rhs_size, tag);
+  memcpy((void *)appended, (void *)lhs, lhs_size * sizeof(value));
+  memcpy((void *)((value *)appended + lhs_size), (void *)rhs, rhs_size * sizeof(value));
+  return appended;
+}
+
+value caml_array_blit(value src, value src_start, value dst, value dst_start, value len) /* 'a array -> int -> 'a array -> int -> int -> unit */
+{
+  mlsize_t src_start_idx = Long_val(src_start);
+  mlsize_t dst_start_idx = Long_val(dst_start);
+  mlsize_t size = Long_val(len);
+  tag_t tag = Tag_val(dst);
+  assert(tag == Tag_val(src));
+  if (tag == Double_array_tag) {
+    src_start_idx *= Double_wosize;
+    dst_start_idx *= Double_wosize;
+    size *= Double_wosize;
+  }
+  memcpy((void *)((value *)dst + dst_start_idx), (void *)((value *)src + src_start_idx), size * sizeof(value));
+  return Val_unit;
+}
+
 value caml_obj_dup(value arg)
 {
   mlsize_t size = Wosize_val(arg);
