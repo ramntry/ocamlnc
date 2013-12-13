@@ -120,6 +120,19 @@ let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
       [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
 
+let llvm_setjmp_f =
+  let fun_type =
+    Llvm.function_type (Llvm.i32_type context) [|lltype_of_generic_ptr|]
+  in
+  Llvm.declare_function "llvm.eh.sjlj.setjmp" fun_type the_module
+
+let llvm_longjmp_f =
+  let fun_declaration =
+    make_external_void_decl "llvm.eh.sjlj.longjmp" [|lltype_of_generic_ptr|]
+  in
+  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
+  fun_declaration
+
 let insertion_block_exn () =
   try
     Llvm.insertion_block builder
@@ -528,12 +541,26 @@ module Global_memory = struct
 end
 
 
-let make_basicblocks curr_fun n bb_name_prefix bb_name_gen =
-  let actual_bb_name_prefix = bb_name_prefix ^ get_next_branch_name_infix () in
+let eh_setjmp_buf_type = Llvm.array_type lltype_of_byte 144
+
+let eh_buf_struct_type = Llvm.struct_type context
+    [|eh_setjmp_buf_type;      (* active setjmp buffer *)
+      lltype_of_generic_ptr|]  (* pointer to parent setjmp buffer *)
+
+let eh_active_setjmp_buf = Llvm.define_global "eh_active_setjmp_buf"
+    (make_null lltype_of_generic_ptr) the_module
+
+let eh_active_exception = Llvm.define_global "eh_active_exception"
+    (make_word 0) the_module
+
+
+let make_basicblocks n bb_name_prefix bb_name_gen =
+  let curr_fun = curr_function_exn () in
+  let actual_bb_name_prefix =
+    bb_name_prefix ^ get_next_branch_name_infix () ^ "_"
+  in
   (Array.init n (fun i ->
-    let bb_full_name =
-      actual_bb_name_prefix ^ "_" ^ bb_name_gen i ^ "_"
-    in
+    let bb_full_name = actual_bb_name_prefix ^ bb_name_gen i ^ "_" in
     Llvm.append_block context bb_full_name curr_fun),
   actual_bb_name_prefix)
 
@@ -550,6 +577,12 @@ let get_exit_target exit_label =
     Hashtbl.find exit_targets exit_label
   with Not_found ->
     raise (Compiler_error "Can not find exit target")
+
+let alloca_within_entry typeof_var name =
+  call_basicblock (entry_block ());
+  let var_ptr = Llvm.build_alloca typeof_var name builder in
+  ret_basicblock ();
+  var_ptr
 
 let handle_gcroot root_value =
   call_basicblock (entry_block ());
@@ -572,11 +605,9 @@ let ident_name ident =
   Ident.unique_name ident
 
 let add_symbol ident v =
-  call_basicblock (entry_block ());
   let name = "local_" ^ ident_name ident in
-  let local = Llvm.build_alloca (Llvm.type_of v) name builder in
+  let local = alloca_within_entry (Llvm.type_of v) name in
   Hashtbl.add symbol_table ident local;
-  ret_basicblock ();
   build_store v local
 
 let get_symbol ident =
@@ -673,12 +704,20 @@ let rec gen_expression expr =
       in
       build_gccall fun_value args "application"
 
-  | Cmm.Cop (Cmm.Craise _debuginfo, _args) ->
+  | Cmm.Cop (Cmm.Craise _debuginfo, exception_expr :: []) ->
+      let exception_value = gen_expression exception_expr in
+      build_store exception_value eh_active_exception;
+      let active_setjmp_buf =
+        build_load eh_active_setjmp_buf "active_setjmp_buf"
+      in
       let (_ : Llvm.llvalue) =
-        build_call caml_exception_handler_f [||] "noreturn"
+        build_call llvm_longjmp_f [|active_setjmp_buf|] ""
       in
       unreachable ();
       branch_stub
+
+  | Cmm.Cop (Cmm.Craise _debuginfo, _exception_exprs) ->
+      raise (Not_implemented_yet "raise operator with more than one arg")
 
   | Cmm.Cop (Cmm.Ccheckbound _debuginfo, [size; index]) ->
       let size_value = recast (gen_expression size) lltype_of_word in
@@ -864,9 +903,8 @@ let rec gen_expression expr =
       if numof_exprs < 2 then
         raise (Not_implemented_yet "Too few exprs in switch (< 2)");
       let control = gen_expression control_expr in
-      let curr_fun = curr_function_exn () in
       let (expr_blocks, actual_name_prefix) =
-        make_basicblocks curr_fun numof_exprs "switch" (fun i ->
+        make_basicblocks numof_exprs "switch" (fun i ->
           "caseexpr" ^ string_of_int cases.(i))
       in
       let switch = Llvm.build_switch
@@ -875,26 +913,59 @@ let rec gen_expression expr =
       for i = 0 to numof_cases - 2 do
         Llvm.add_case switch (make_word i) expr_blocks.(cases.(i))
       done;
-      build_branches curr_fun exprs expr_blocks actual_name_prefix
+      build_branches exprs expr_blocks actual_name_prefix
 
   | Cmm.Cifthenelse (predicate, if_true, if_false) ->
       let cond = word_to_i1 (gen_expression predicate) in
-      let curr_fun = curr_function_exn () in
       let (branch_bbs, actual_name_prefix) =
-        make_basicblocks curr_fun 2 "if" (fun i ->
+        make_basicblocks 2 "if" (fun i ->
           [|"true"; "false"|].(i))
       in
       build_cond_br cond branch_bbs.(0) branch_bbs.(1);
-      build_branches curr_fun [|if_true; if_false|] branch_bbs actual_name_prefix
+      build_branches [|if_true; if_false|] branch_bbs actual_name_prefix
 
   | Cmm.Ccatch (exit_label, _ident_list, body, handler) ->
-      let curr_fun = curr_function_exn () in
-      let (branch_bbs, actual_name_prefix) = make_basicblocks curr_fun
+      let (branch_bbs, actual_name_prefix) = make_basicblocks
          2 "catch" (fun i -> [|"body"; "handler"|].(i))
       in
       build_br branch_bbs.(0);
       add_exit_target exit_label branch_bbs.(1);
-      build_branches curr_fun [|body; handler|] branch_bbs actual_name_prefix
+      build_branches [|body; handler|] branch_bbs actual_name_prefix
+
+  | Cmm.Ctrywith (try_expr, exn_ident, with_expr) ->
+      let (branch_bbs, actual_name_prefix) =
+        make_basicblocks 2 "trywith" (fun i ->
+          [|"try"; "with"|].(i))
+      in
+      let (active_setjmp_buf, parent_setjmp_buf_ptr) =
+        let new_eh_buf =
+          alloca_within_entry eh_buf_struct_type (actual_name_prefix ^ "eh_buf")
+        in
+        (build_gep new_eh_buf [|make_bidx 0; make_sidx 0; make_bidx 0|]
+            (actual_name_prefix ^ "setjmp_buf")
+       , build_gep new_eh_buf [|make_bidx 0; make_sidx 1|]
+            (actual_name_prefix ^ "parent_setjmp_buf_ptr"))
+      in
+      let parent_setjmp_buf =
+        build_load eh_active_setjmp_buf "active_setjmp_buf"
+      in
+      build_store parent_setjmp_buf parent_setjmp_buf_ptr;
+      build_store active_setjmp_buf eh_active_setjmp_buf;
+      let setjmp_status = build_call llvm_setjmp_f
+          [|active_setjmp_buf|] (actual_name_prefix ^ "setjmp_status")
+      in
+      let setjmp_cond =
+        Llvm.build_is_null setjmp_status "is_normal_execution" builder
+      in
+      build_cond_br setjmp_cond branch_bbs.(0) branch_bbs.(1);
+      jmp_basicblock branch_bbs.(1);
+      build_store parent_setjmp_buf eh_active_setjmp_buf;
+      Hashtbl.add symbol_table exn_ident eh_active_exception;
+      let resval =
+        build_branches [|try_expr; with_expr|] branch_bbs actual_name_prefix
+      in
+      build_store parent_setjmp_buf eh_active_setjmp_buf;
+      resval
 
   | Cmm.Cloop expr ->
       let loop_entry_block = insertion_block_exn () in
@@ -919,7 +990,7 @@ let rec gen_expression expr =
   | _ -> raise (Not_implemented_yet "Outer matching in gen_expression")
 
 
-and build_branches curr_function_exn branch_exprs branch_bbs result_bb_name_prefix =
+and build_branches branch_exprs branch_bbs result_bb_name_prefix =
   let (_, branch_phi_pairs) =
     Array.fold_left (fun (i, acc) expr ->
       jmp_basicblock branch_bbs.(i);
@@ -938,15 +1009,13 @@ and build_branches curr_function_exn branch_exprs branch_bbs result_bb_name_pref
       jmp_basicblock last_bb;
       value
   | phi_pairs ->
-      let result_block =
-        Llvm.append_block context (result_bb_name_prefix ^ "_result") curr_function_exn
-      in
+      let result_block = make_basicblock (result_bb_name_prefix ^ "result") in
       List.iter (fun (_v, last_bb) ->
         jmp_basicblock last_bb;
         build_br result_block)
       phi_pairs;
       jmp_basicblock result_block;
-      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "_resval") builder
+      Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
 
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
