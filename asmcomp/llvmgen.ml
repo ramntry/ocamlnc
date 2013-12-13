@@ -120,19 +120,6 @@ let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
       [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
 
-let llvm_setjmp_f =
-  let fun_type =
-    Llvm.function_type (Llvm.i32_type context) [|lltype_of_generic_ptr|]
-  in
-  Llvm.declare_function "llvm.eh.sjlj.setjmp" fun_type the_module
-
-let llvm_longjmp_f =
-  let fun_declaration =
-    make_external_void_decl "llvm.eh.sjlj.longjmp" [|lltype_of_generic_ptr|]
-  in
-  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
-  fun_declaration
-
 let insertion_block_exn () =
   try
     Llvm.insertion_block builder
@@ -541,14 +528,29 @@ module Global_memory = struct
 end
 
 
-let eh_setjmp_buf_type = Llvm.array_type lltype_of_byte 144
+let eh_setjmp_buf_type = Llvm.array_type lltype_of_word 25
+let eh_setjmp_buf_ptr_type = Llvm.pointer_type lltype_of_word
+let eh_setjmp_ret_type = Llvm.i32_type context
+
+let libc_setjmp_f =
+  let fun_type =
+    Llvm.function_type eh_setjmp_ret_type [|eh_setjmp_buf_ptr_type|]
+  in
+  Llvm.declare_function "setjmp" fun_type the_module
+
+let libc_longjmp_f =
+  let fun_declaration = make_external_void_decl "longjmp"
+      [|eh_setjmp_buf_ptr_type; eh_setjmp_ret_type|]
+  in
+  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
+  fun_declaration
 
 let eh_buf_struct_type = Llvm.struct_type context
-    [|eh_setjmp_buf_type;      (* active setjmp buffer *)
-      lltype_of_generic_ptr|]  (* pointer to parent setjmp buffer *)
+    [|eh_setjmp_buf_type;       (* active setjmp buffer *)
+      eh_setjmp_buf_ptr_type|]  (* pointer to parent setjmp buffer *)
 
 let eh_active_setjmp_buf = Llvm.define_global "eh_active_setjmp_buf"
-    (make_null lltype_of_generic_ptr) the_module
+    (make_null eh_setjmp_buf_ptr_type) the_module
 
 let eh_active_exception = Llvm.define_global "eh_active_exception"
     (make_word 0) the_module
@@ -710,8 +712,8 @@ let rec gen_expression expr =
       let active_setjmp_buf =
         build_load eh_active_setjmp_buf "active_setjmp_buf"
       in
-      let (_ : Llvm.llvalue) =
-        build_call llvm_longjmp_f [|active_setjmp_buf|] ""
+      let (_ : Llvm.llvalue) = build_call libc_longjmp_f 
+          [|active_setjmp_buf; Llvm.const_int eh_setjmp_ret_type 1|] ""
       in
       unreachable ();
       branch_stub
@@ -951,7 +953,7 @@ let rec gen_expression expr =
       in
       build_store parent_setjmp_buf parent_setjmp_buf_ptr;
       build_store active_setjmp_buf eh_active_setjmp_buf;
-      let setjmp_status = build_call llvm_setjmp_f
+      let setjmp_status = build_call libc_setjmp_f
           [|active_setjmp_buf|] (actual_name_prefix ^ "setjmp_status")
       in
       let setjmp_cond =
