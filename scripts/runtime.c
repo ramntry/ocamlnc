@@ -140,6 +140,34 @@ value caml_array_append(value lhs, value rhs) /* 'a array -> 'a array -> 'a arra
   return appended;
 }
 
+value caml_array_concat(value array_list) /* 'a array list -> 'a array */
+{
+  if (!Is_block(array_list))
+    return Atom(0);
+  value first_array = Field(array_list, 0);
+  tag_t tag = Tag_val(first_array);
+  mlsize_t total_size = Wosize_val(first_array);
+  int list_length = 1;
+  value cursor = Field(array_list, 1);
+  while (Is_block(cursor)) {
+    ++list_length;
+    value array = Field(cursor, 0);
+    assert(tag == Tag_val(array));
+    total_size += Wosize_val(array);
+    cursor = Field(cursor, 1);
+  }
+  value concated = alloc_via_malloc(total_size, tag);
+  mlsize_t offset = 0;
+  for (cursor = array_list; list_length; --list_length) {
+    value array = Field(cursor, 0);
+    mlsize_t size = Wosize_val(array);
+    memcpy((void *)((value *)concated + offset), (void *)array, size * sizeof(value));
+    offset += size;
+    cursor = Field(cursor, 1);
+  }
+  return concated;
+}
+
 value caml_array_blit(value src, value src_start, value dst, value dst_start, value len) /* 'a array -> int -> 'a array -> int -> int -> unit */
 {
   mlsize_t src_start_idx = Long_val(src_start);
