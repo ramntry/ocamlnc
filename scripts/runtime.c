@@ -182,6 +182,7 @@ value caml_lessthan(value lhs, value rhs)
 value caml_print_endline(value string) /* string -> unit */
 {
   printf("%s\n", (char const *)string);
+  fflush(stdout);
   return Val_unit;
 }
 

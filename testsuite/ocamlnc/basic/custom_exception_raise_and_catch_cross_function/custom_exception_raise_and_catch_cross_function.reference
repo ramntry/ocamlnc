@@ -1,0 +1,5 @@
+Within f3 before call f2
+TEST OK0
+Within f2 before call f1
+Within f1 before call f0
+TEST OK1
