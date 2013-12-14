@@ -88,9 +88,29 @@ let make_generic_fun_type numof_args =
   let fun_arg_types = Array.make numof_args lltype_of_word in
   Llvm.function_type lltype_of_word fun_arg_types
 
+let mangle name =
+  let buf = Buffer.create 16 in
+  let name_len = String.length name in
+  for i = 0 to name_len - 1 do
+    match name.[i] with
+    | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' | '.' as c ->
+        Buffer.add_char buf c
+    | c ->
+        Buffer.add_string buf ("$" ^ string_of_int (Char.code c))
+  done;
+  Buffer.contents buf
+
+let declare_function name fun_type =
+  let mangled_name = mangle name in
+  Llvm.declare_function mangled_name fun_type the_module
+
+let lookup_function name =
+  let mangled_name = mangle name in
+  Llvm.lookup_function mangled_name the_module
+
 let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
-  Llvm.declare_function name fun_type the_module
+  declare_function name fun_type
 
 let make_external_noreturn_decl name fun_arg_types =
   let fun_declaration = make_external_decl name fun_arg_types in
@@ -99,7 +119,7 @@ let make_external_noreturn_decl name fun_arg_types =
 
 let make_external_void_decl name fun_arg_types =
   let fun_type = Llvm.function_type (Llvm.void_type context) fun_arg_types in
-  Llvm.declare_function name fun_type the_module
+  declare_function name fun_type
 
 let caml_alloc_small_f =
   make_external_decl "caml_alloc_small" [|lltype_of_mlsize_t; lltype_of_tag_t|]
@@ -277,7 +297,7 @@ module Closure = struct
 
   let get name_gen app_gen total_numof_args numof_bind_args =
     let app_name = name_gen total_numof_args numof_bind_args in
-    match Llvm.lookup_function app_name the_module with
+    match lookup_function app_name with
     | Some f -> f
     | None -> app_gen total_numof_args numof_bind_args
 
@@ -464,7 +484,7 @@ module Global_memory = struct
       (* Didn't find it among data symbols? Don't worry, maybe it is a function!
        * We are in a functional language, man. Everything may be a function, it
        * is cool! Look it up! *)
-        match Llvm.lookup_function symbol the_module with
+        match lookup_function symbol with
         | Some f -> f
         | None ->
       (* Sad story. It is not ordinary function, matter of fact. Does this tricky
@@ -478,7 +498,7 @@ module Global_memory = struct
                 begin match numof_args with
                 | Some num ->
                     let fun_type = make_generic_fun_type num in
-                    Llvm.declare_function symbol fun_type the_module
+                    declare_function symbol fun_type
                 | None -> make_null lltype_of_block
                 end
             end
@@ -536,7 +556,7 @@ let libc_setjmp_f =
   let fun_type =
     Llvm.function_type eh_setjmp_ret_type [|eh_setjmp_buf_ptr_type|]
   in
-  Llvm.declare_function "setjmp" fun_type the_module
+  declare_function "setjmp" fun_type
 
 let libc_longjmp_f =
   let fun_declaration = make_external_void_decl "longjmp"
@@ -638,12 +658,15 @@ let is_terminated bb =
 let rec gen_expression expr =
   match expr with
   | Cmm.Cconst_int int_value -> make_word int_value
+  | Cmm.Cconst_natint natint_value -> make_word (Nativeint.to_int natint_value)
   | Cmm.Cconst_float float_string ->
       Llvm.const_float lltype_of_unboxed_float (float_of_string float_string)
   | Cmm.Cvar ident -> get_symbol_value ident
   | Cmm.Cconst_symbol symbol ->
       recast (Global_memory.find_symbol symbol) lltype_of_word
   | Cmm.Cconst_pointer value -> make_word value
+  | Cmm.Cconst_natpointer _ ->
+      raise (Not_implemented_yet "Cconst_natpointer")
   | Cmm.Ctuple [] -> branch_stub
   | Cmm.Ctuple _ ->
       raise (Not_implemented_yet "Ctuple with non-empty list of fields")
@@ -1024,7 +1047,7 @@ let gen_main_function entry_function =
   let main_type = Llvm.function_type cint_type
       [|cint_type; Llvm.pointer_type lltype_of_string|]
   in
-  let main_def = Llvm.declare_function "main" main_type the_module in
+  let main_def = declare_function "main" main_type in
   let main_args = Llvm.params main_def in
   Llvm.set_value_name "argc" main_args.(0);
   Llvm.set_value_name "argv" main_args.(1);
@@ -1053,7 +1076,7 @@ let gen_main_function entry_function =
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   let numof_args = List.length fun_args in
   let fun_type = make_generic_fun_type numof_args in
-  let fun_def = Llvm.declare_function fun_name fun_type the_module in
+  let fun_def = declare_function fun_name fun_type in
   Llvm.set_gc (Some gc_name) fun_def;
   let arg_llvalues = Llvm.params fun_def in
   ignore (Llvm.append_block context "entry" fun_def);
