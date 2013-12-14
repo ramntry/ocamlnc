@@ -1019,6 +1019,36 @@ and build_branches branch_exprs branch_bbs result_bb_name_prefix =
       jmp_basicblock result_block;
       Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
 
+let gen_main_function entry_function =
+  let cint_type = Llvm.i32_type context in
+  let main_type = Llvm.function_type cint_type
+      [|cint_type; Llvm.pointer_type lltype_of_string|]
+  in
+  let main_def = Llvm.declare_function "main" main_type the_module in
+  let main_args = Llvm.params main_def in
+  Llvm.set_value_name "argc" main_args.(0);
+  Llvm.set_value_name "argv" main_args.(1);
+  jmp_basicblock (Llvm.append_block context "entry" main_def);
+  let setjmp_buf =
+    alloca_within_entry eh_setjmp_buf_type "default_setjmp_buf"
+  in
+  let setjmp_buf_ptr = build_gep setjmp_buf
+      [|make_bidx 0; make_bidx 0|] "default_setjmp_buf_ptr"
+  in
+  build_store setjmp_buf_ptr eh_active_setjmp_buf;
+  let setjmp_status =
+    build_call libc_setjmp_f [|setjmp_buf_ptr|] "setjmp_status"
+  in
+  let setjmp_cond = Llvm.build_is_null setjmp_status "setjmp_cond" builder in
+  let normal_execution = make_basicblock "normal_execution" in
+  let unexpected_exception = make_basicblock "unexpected_exception" in
+  build_cond_br setjmp_cond normal_execution unexpected_exception;
+  jmp_basicblock normal_execution;
+  let (_ : Llvm.llvalue) = build_call entry_function [||] "useless_value" in
+  build_ret (Llvm.const_int cint_type 0);
+  jmp_basicblock unexpected_exception;
+  let (_: Llvm.llvalue) = build_call caml_exception_handler_f [||] "noreturn" in
+  unreachable ()
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   let numof_args = List.length fun_args in
@@ -1042,6 +1072,8 @@ let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
   build_ret ret_val;
   jmp_basicblock (entry_block ());
   build_br after_gcroots_and_vars;
+  if Str.string_match (Str.regexp ".*__entry") fun_name 0 then
+    gen_main_function fun_def;
   fun_def
 
 let gen_data items =

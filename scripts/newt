@@ -21,17 +21,6 @@ then
   extract_externals runtime.c > $source_name
 fi
 
-cat > main.c <<EOF
-#include <caml/mlvalues.h>
-
-value caml${test_name^}__entry(void);
-
-int main()
-{
-  caml${test_name^}__entry();
-}
-EOF
-
 if [ ! -e Makefile ]
 then
   makefile_name=Makefile
@@ -44,7 +33,7 @@ fi
 
 cat > "$makefile_name" <<EOF
 PROGRAM = $program_name
-OBJECTS = main.o $test_name.o runtime.o
+OBJECTS = $test_name.o runtime.o
 
 CFLAGS = -std=c99 -g -Wall -pedantic $aux_opts
 

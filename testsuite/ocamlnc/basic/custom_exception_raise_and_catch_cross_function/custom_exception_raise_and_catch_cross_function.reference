@@ -3,3 +3,5 @@ TEST OK0
 Within f2 before call f1
 Within f1 before call f0
 TEST OK1
+
+Fatal error: Unknown exception

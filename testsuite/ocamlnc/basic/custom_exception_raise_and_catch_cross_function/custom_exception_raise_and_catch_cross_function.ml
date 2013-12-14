@@ -14,6 +14,7 @@ external blit_string : string -> int -> string -> int -> int -> unit = "caml_bli
 
 exception Exception1
 exception Exception2
+exception Exception3
 
 let f0 arg =
   if arg = 0
@@ -48,7 +49,8 @@ let f3 arg =
   | Exception2 ->
       print_endline "TEST FAIL3"
   | Exception1 ->
-      print_endline "TEST OK1"
+      print_endline "TEST OK1";
+      raise Exception3
 
 let () =
   f3 (read_int ())

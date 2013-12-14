@@ -15,7 +15,7 @@ test_directory=`dirname $(readlink -f $0)`
 
 cd $test_directory
 
-if [ ! -e Makefile ] && [ ! -e main.c ] && [ ! -e runtime.c ]
+if [ ! -e Makefile ] && [ ! -e runtime.c ]
 then
   newt -
 fi
