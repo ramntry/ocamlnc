@@ -1,5 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdint.h>
+#include <unwind.h>
 #include <string.h>
 #include <stdarg.h>
 #include <caml/mlvalues.h>
@@ -271,3 +273,281 @@ value caml_blit_string(value s1, value ofs1, value s2, value ofs2, value n) /* s
   return Val_unit;
 }
 
+static void eh_fatal_error(_Unwind_Reason_Code reason)
+{
+  int const exit_code = 1;
+  fprintf(stderr, "Exception handling fatal error with reason code = %d => exit(%d)\n"
+      , reason, exit_code);
+  exit(exit_code);
+}
+
+void uncaught_exception(value exception_value)
+{
+  int const exit_code = 2;
+  fprintf(stderr, "%s was called => exit(%d)\n", __func__, exit_code);
+  exit(exit_code);
+}
+
+struct Exception
+{
+  struct _Unwind_Exception uw_header;
+  value exception_value;
+  uint64_t landing_pad;
+};
+
+static void exception_cleanup(_Unwind_Reason_Code reason, struct _Unwind_Exception *exc)
+{
+  // do nothing for static allocated exception
+}
+
+struct Exception active_exception = {
+  { 0x4a424c424f434d4c  // exception class: vendor = 'JBLB', language = 'OCML'
+  , exception_cleanup
+  , 0x0  // private_1
+  , 0x0  // private_2
+  }
+  , Val_unit
+  , 0x0  // landing pad cache
+};
+
+// DWARF Constants
+enum {
+  DW_EH_PE_absptr   = 0x00,
+  DW_EH_PE_uleb128  = 0x01,
+  DW_EH_PE_udata2   = 0x02,
+  DW_EH_PE_udata4   = 0x03,
+  DW_EH_PE_udata8   = 0x04,
+  DW_EH_PE_sleb128  = 0x09,
+  DW_EH_PE_sdata2   = 0x0A,
+  DW_EH_PE_sdata4   = 0x0B,
+  DW_EH_PE_sdata8   = 0x0C,
+  DW_EH_PE_pcrel    = 0x10,
+  DW_EH_PE_textrel  = 0x20,
+  DW_EH_PE_datarel  = 0x30,
+  DW_EH_PE_funcrel  = 0x40,
+  DW_EH_PE_aligned  = 0x50,
+  DW_EH_PE_indirect = 0x80,
+  DW_EH_PE_omit     = 0xFF
+};
+
+/// Read a uleb128 encoded value and advance pointer
+/// See Variable Length Data Appendix C in:
+/// @link http://dwarfstd.org/Dwarf4.pdf @unlink
+/// @param data reference variable holding memory pointer to decode from
+/// @returns decoded value
+static uint64_t read_uleb128(uint8_t const **data)
+{
+  uint64_t result = 0;
+  uint64_t shift = 0;
+  unsigned char byte;
+  uint8_t const *p = *data;
+  do {
+    byte = *p++;
+    result |= (uintptr_t)(byte & 0x7F) << shift;
+    shift += 7;
+  } while (byte & 0x80);
+  *data = p;
+  return result;
+}
+
+/// Read a sleb128 encoded value and advance pointer
+/// See Variable Length Data Appendix C in:
+/// @link http://dwarfstd.org/Dwarf4.pdf @unlink
+/// @param data reference variable holding memory pointer to decode from
+/// @returns decoded value
+static int64_t read_sleb128(uint8_t const **data)
+{
+  uint64_t result = 0;
+  uint64_t shift = 0;
+  unsigned char byte;
+  uint8_t const *p = *data;
+  do {
+    byte = *p++;
+    result |= (uint64_t)(byte & 0x7F) << shift;
+    shift += 7;
+  } while (byte & 0x80);
+  *data = p;
+  if ((byte & 0x40) && (shift < (sizeof(result) << 3)))
+    result |= (uint64_t)(~0) << shift;
+  return (int64_t)(result);
+}
+
+static void skip_leb128(uint8_t const **data)
+{
+  unsigned char byte;
+  uint8_t const *p = *data;
+  do {
+    byte = *p++;
+  } while (byte & 0x80);
+  *data = p;
+}
+
+/// Read a pointer encoded value and advance pointer
+/// See Variable Length Data in:
+/// @link http://dwarfstd.org/Dwarf3.pdf @unlink
+/// @param data reference variable holding memory pointer to decode from
+/// @param encoding dwarf encoding type
+/// @returns decoded value
+static uint64_t read_encoded_pointer(uint8_t const **data, uint8_t encoding)
+{
+  uint64_t result = 0;
+  if (encoding == DW_EH_PE_omit)
+      return result;
+  uint8_t const *p = *data;
+  // first get value
+  switch (encoding & 0x0F)
+  {
+  case DW_EH_PE_absptr:
+    result = *((uint64_t *)p);
+    p += sizeof(uint64_t);
+    break;
+  case DW_EH_PE_uleb128:
+    result = read_uleb128(&p);
+    break;
+  case DW_EH_PE_sleb128:
+    result = (uint64_t)(read_sleb128(&p));
+    break;
+  case DW_EH_PE_udata2:
+    result = *((uint16_t *)p);
+    p += sizeof(uint16_t);
+    break;
+  case DW_EH_PE_udata4:
+    result = *((uint32_t *)p);
+    p += sizeof(uint32_t);
+    break;
+  case DW_EH_PE_udata8:
+    result = *((uint64_t *)p);
+    p += sizeof(uint64_t);
+    break;
+  case DW_EH_PE_sdata2:
+    result = (uint64_t)(*((int16_t *)p));
+    p += sizeof(int16_t);
+    break;
+  case DW_EH_PE_sdata4:
+    result = (uint64_t)(*((int32_t *)p));
+    p += sizeof(int32_t);
+    break;
+  case DW_EH_PE_sdata8:
+    result = (uint64_t)(*((int64_t *)p));
+    p += sizeof(int64_t);
+    break;
+  default:
+    // not supported
+    exit(4);
+    break;
+  }
+  // then add relative offset
+  switch (encoding & 0x70)
+  {
+  case DW_EH_PE_absptr:
+    // do nothing
+    break;
+  case DW_EH_PE_pcrel:
+    if (result)
+      result += (int64_t)(*data);
+    break;
+  case DW_EH_PE_textrel:
+  case DW_EH_PE_datarel:
+  case DW_EH_PE_funcrel:
+  case DW_EH_PE_aligned:
+  default:
+    // not supported
+    exit(8);
+    break;
+  }
+  // then apply indirection
+  if (result && (encoding & DW_EH_PE_indirect))
+    result = *((uint64_t *)result);
+  *data = p;
+  return result;
+}
+
+static uint64_t extract_landing_pad_from_lsda(uint8_t const *lsda, struct _Unwind_Context *context)
+{
+  // Get the current instruction pointer and offset it before next
+  // instruction in the current frame which threw the exception.
+  uint64_t ip = _Unwind_GetIP(context) - 1;
+  // Get beginning current frame's code (as defined by the
+  // emitted dwarf code)
+  uint64_t func_start = _Unwind_GetRegionStart(context);
+  uint64_t ip_offset = ip - func_start;
+  log("    actual call site ip = %p, ip offset = %llu\n", (void *)ip, (unsigned long long)ip_offset);
+
+  // Parse LSDA header.
+  uint8_t lpad_start_encoding = *lsda++;
+  uint8_t const *lpad_start = (uint8_t const *)read_encoded_pointer(&lsda, lpad_start_encoding);
+  if (lpad_start == 0)
+    lpad_start = (uint8_t const *)func_start;
+  if (*lsda++ != DW_EH_PE_omit)
+    skip_leb128(&lsda);
+  uint8_t call_site_encoding = *lsda++;
+  uint32_t call_site_table_length = (uint32_t)(read_uleb128(&lsda));
+  uint8_t const *call_site_table_start = lsda;
+  uint8_t const *call_site_table_end = call_site_table_start + call_site_table_length;
+
+  // Parse call site table
+  log("    appropriate call site searching...\n");
+  uint8_t const *call_site_ptr = call_site_table_start;
+  while (call_site_ptr < call_site_table_end) {
+    // There is one entry per call site.
+    // The call sites are non-overlapping in [start, start+length)
+    // The call sites are ordered in increasing value of start
+    uint64_t start = read_encoded_pointer(&call_site_ptr, call_site_encoding);
+    uint64_t length = read_encoded_pointer(&call_site_ptr, call_site_encoding);
+    uint64_t landing_pad = read_encoded_pointer(&call_site_ptr, call_site_encoding);
+    skip_leb128(&call_site_ptr);
+    log(" .  call site: ip <- [%llu, %llu), landing pad = %llu\n"
+        , (unsigned long long)start, (unsigned long long)(start + length), (unsigned long long)landing_pad);
+    if ((start <= ip_offset) && (ip_offset < (start + length))) {
+      // Found the call site containing ip.
+      if (landing_pad == 0)
+        return 0;
+      return (uint64_t)lpad_start + landing_pad;
+    }
+  }
+  return 0;
+}
+
+_Unwind_Reason_Code caml_personality(int version, _Unwind_Action actions, uint64_t exception_class,
+    struct _Unwind_Exception *exception_object, struct _Unwind_Context *context)
+{
+  struct Exception *exception = (struct Exception *)exception_object;
+  value exception_value = exception->exception_value;
+  log("%s was called during %s phase with exception_value = %lu, actions = %x\n"
+      , __func__, actions & _UA_CLEANUP_PHASE ? "cleanup" : "search", exception_value, actions);
+
+  if (actions & _UA_HANDLER_FRAME) {
+    log("--- it is the handler frame! Try to pass control to the landing pad\n");
+    _Unwind_SetGR(context, 0 /* rax */, (uint64_t)exception_value);
+    _Unwind_SetIP(context, exception->landing_pad);
+    return _URC_INSTALL_CONTEXT;
+  }
+  if (actions & _UA_CLEANUP_PHASE)
+    return _URC_CONTINUE_UNWIND;
+
+  uint8_t const *lsda = (uint8_t const *)_Unwind_GetLanguageSpecificData(context);
+  log("... and lsda address = %p\n", lsda);
+  if (lsda == NULL)
+    return _URC_CONTINUE_UNWIND;
+
+  uint64_t landing_pad = extract_landing_pad_from_lsda(lsda, context);
+  log("    landing pad address = %p\n", (void *)landing_pad);
+  if (landing_pad == 0)
+    return _URC_CONTINUE_UNWIND;
+
+  log("--- landing pad was found! Go to cleanup phase\n");
+  exception->landing_pad = landing_pad;
+  return _URC_HANDLER_FOUND;
+}
+
+void caml_raise(value exception_value)
+{
+  log("%s was called with exception_value = %lu\n", __func__, exception_value);
+  active_exception.exception_value = exception_value;
+  _Unwind_Reason_Code unexpected_return_code =
+      _Unwind_RaiseException((struct _Unwind_Exception *)&active_exception);
+  if (unexpected_return_code == _URC_END_OF_STACK)
+    uncaught_exception(exception_value);
+  else
+    eh_fatal_error(unexpected_return_code);
+}
