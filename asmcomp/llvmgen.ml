@@ -14,6 +14,7 @@ let builder = Llvm.builder context
 let basicblocks_history : Llvm.llbasicblock option Stack.t = Stack.create ()
 let symbol_table : (Ident.t, Llvm.llvalue) Hashtbl.t = Hashtbl.create 16
 let exit_targets : (int, Llvm.llbasicblock) Hashtbl.t = Hashtbl.create 16
+let landing_pads_stack : Llvm.llbasicblock Stack.t = Stack.create ()
 
 let branches_counter = ref 0
 let get_next_branch_name_infix () =
@@ -31,6 +32,8 @@ let lltype_of_byte = Llvm.i8_type context
 let lltype_of_string = Llvm.pointer_type lltype_of_byte
 let lltype_of_generic_ptr = Llvm.pointer_type lltype_of_byte
 let lltype_of_root = lltype_of_generic_ptr
+
+let lltype_of_cint = Llvm.i32_type context
 
 let lltype_of_unboxed_float = Llvm.double_type context
 
@@ -110,7 +113,9 @@ let lookup_function name =
 
 let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
-  declare_function name fun_type
+  let fun_declaration = declare_function name fun_type in
+  (*Llvm.add_function_attr fun_declaration Llvm.Attribute.Nounwind;*)
+  fun_declaration
 
 let make_external_noreturn_decl name fun_arg_types =
   let fun_declaration = make_external_decl name fun_arg_types in
@@ -195,6 +200,7 @@ let build_gep base_ptr indexes name =
   Llvm.build_gep base_ptr indexes name builder
 
 let build_load ptr name =
+  dump_value ptr;
   Llvm.build_load ptr name builder
 
 let build_store value ptr =
@@ -204,6 +210,59 @@ let build_call fun_value arg_values call_name =
   if !Clflags.dump_llvm then Printf.fprintf stderr "Try to call =>\n%!";
   dump_value fun_value;
   Llvm.build_call fun_value arg_values call_name builder
+
+let make_basicblock name =
+  Llvm.append_block context name (curr_function_exn ())
+
+let caml_personality_f =
+  let fun_type = Llvm.function_type
+      lltype_of_cint [|lltype_of_cint; lltype_of_cint; lltype_of_word;
+                       lltype_of_generic_ptr; lltype_of_generic_ptr|]
+  in
+  let fun_declaration = declare_function "caml_personality" fun_type in
+  (*Llvm.add_function_attr fun_declaration Llvm.Attribute.Nounwind;*)
+  fun_declaration
+
+let caml_raise_f =
+  let fun_declaration =
+    make_external_void_decl "caml_raise" [|lltype_of_word|]
+  in
+  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
+  fun_declaration
+
+let build_ehcall fun_value arg_values call_name =
+  if Stack.is_empty landing_pads_stack then
+    build_call fun_value arg_values call_name
+  else begin
+    let current_landing_pad = Stack.top landing_pads_stack in
+    let current_bb_name =
+      Llvm.value_name (Llvm.value_of_block (insertion_block_exn ()))
+    in
+    let normal_execution_name =
+      let suffix = "normal_execution" in
+      if Str.string_match (Str.regexp (".*\\." ^ suffix)) current_bb_name 0
+      then current_bb_name
+      else current_bb_name ^ "." ^ suffix
+    in
+    let normal_execution = make_basicblock normal_execution_name in
+    let invoke_result = Llvm.build_invoke fun_value arg_values
+        normal_execution current_landing_pad call_name builder
+    in
+    jmp_basicblock normal_execution;
+    invoke_result
+  end
+
+let build_landingpad name_prefix =
+  let landing_pad_res_type =
+    Llvm.struct_type context [|lltype_of_word; lltype_of_cint|]
+  in
+  let landing_pad_name = name_prefix ^ "lpadres.struct" in
+  let landing_pad_res = Llvm.build_landingpad landing_pad_res_type
+      caml_personality_f 1 landing_pad_name builder
+  in
+  Llvm.add_clause landing_pad_res (make_null lltype_of_block);
+  Llvm.build_extractvalue landing_pad_res 0 "exception_value" builder
+
 
 let build_cond_br cond true_block false_block =
   ignore (Llvm.build_cond_br cond true_block false_block builder)
@@ -548,34 +607,6 @@ module Global_memory = struct
 end
 
 
-let eh_setjmp_buf_type = Llvm.array_type lltype_of_word 25
-let eh_setjmp_buf_ptr_type = Llvm.pointer_type lltype_of_word
-let eh_setjmp_ret_type = Llvm.i32_type context
-
-let libc_setjmp_f =
-  let fun_type =
-    Llvm.function_type eh_setjmp_ret_type [|eh_setjmp_buf_ptr_type|]
-  in
-  declare_function "setjmp" fun_type
-
-let libc_longjmp_f =
-  let fun_declaration = make_external_void_decl "longjmp"
-      [|eh_setjmp_buf_ptr_type; eh_setjmp_ret_type|]
-  in
-  Llvm.add_function_attr fun_declaration Llvm.Attribute.Noreturn;
-  fun_declaration
-
-let eh_buf_struct_type = Llvm.struct_type context
-    [|eh_setjmp_buf_type;       (* active setjmp buffer *)
-      eh_setjmp_buf_ptr_type|]  (* pointer to parent setjmp buffer *)
-
-let eh_active_setjmp_buf = Llvm.define_global "eh_active_setjmp_buf"
-    (make_null eh_setjmp_buf_ptr_type) the_module
-
-let eh_active_exception = Llvm.define_global "eh_active_exception"
-    (make_word 0) the_module
-
-
 let make_basicblocks n bb_name_prefix bb_name_gen =
   let curr_fun = curr_function_exn () in
   let actual_bb_name_prefix =
@@ -585,9 +616,6 @@ let make_basicblocks n bb_name_prefix bb_name_gen =
     let bb_full_name = actual_bb_name_prefix ^ bb_name_gen i ^ "_" in
     Llvm.append_block context bb_full_name curr_fun),
   actual_bb_name_prefix)
-
-let make_basicblock name =
-  Llvm.append_block context name (curr_function_exn ())
 
 let add_exit_target exit_label basic_block =
   if Hashtbl.mem exit_targets exit_label
@@ -619,6 +647,9 @@ let handle_gcroot root_value =
 
 let build_gccall fun_value arg_values call_name =
   handle_gcroot (build_call fun_value arg_values call_name)
+
+let build_gcehcall fun_value arg_values call_name =
+  handle_gcroot (build_ehcall fun_value arg_values call_name)
 
 let build_gcload addr_value load_name =
   handle_gcroot (build_load addr_value load_name)
@@ -727,17 +758,11 @@ let rec gen_expression expr =
       let args = Array.of_list (List.fold_right (fun arg acc ->
         gen_expression arg :: acc) args_list [])
       in
-      build_gccall fun_value args "application"
+      build_gcehcall fun_value args "application"
 
   | Cmm.Cop (Cmm.Craise _debuginfo, exception_expr :: []) ->
       let exception_value = gen_expression exception_expr in
-      build_store exception_value eh_active_exception;
-      let active_setjmp_buf =
-        build_load eh_active_setjmp_buf "active_setjmp_buf"
-      in
-      let (_ : Llvm.llvalue) = build_call libc_longjmp_f 
-          [|active_setjmp_buf; Llvm.const_int eh_setjmp_ret_type 1|] ""
-      in
+      ignore (build_ehcall caml_raise_f [|exception_value|] "");
       unreachable ();
       branch_stub
 
@@ -797,7 +822,7 @@ let rec gen_expression expr =
                      ^ " load / store operation"))
         end
       in
-      let typed_base_addr =  recast base_addr (Llvm.pointer_type value_type) in
+      let typed_base_addr = recast base_addr (Llvm.pointer_type value_type) in
       let size_shift_value = Llvm.const_int lltype_of_word size_shift in
       let typed_offset =
         Llvm.build_ashr offset size_shift_value "typed_offset" builder
@@ -962,35 +987,18 @@ let rec gen_expression expr =
         make_basicblocks 2 "trywith" (fun i ->
           [|"try"; "with"|].(i))
       in
-      let (active_setjmp_buf, parent_setjmp_buf_ptr) =
-        let new_eh_buf =
-          alloca_within_entry eh_buf_struct_type (actual_name_prefix ^ "eh_buf")
-        in
-        (build_gep new_eh_buf [|make_bidx 0; make_sidx 0; make_bidx 0|]
-            (actual_name_prefix ^ "setjmp_buf")
-       , build_gep new_eh_buf [|make_bidx 0; make_sidx 1|]
-            (actual_name_prefix ^ "parent_setjmp_buf_ptr"))
-      in
-      let parent_setjmp_buf =
-        build_load eh_active_setjmp_buf "active_setjmp_buf"
-      in
-      build_store parent_setjmp_buf parent_setjmp_buf_ptr;
-      build_store active_setjmp_buf eh_active_setjmp_buf;
-      let setjmp_status = build_call libc_setjmp_f
-          [|active_setjmp_buf|] (actual_name_prefix ^ "setjmp_status")
-      in
-      let setjmp_cond =
-        Llvm.build_is_null setjmp_status "is_normal_execution" builder
-      in
-      build_cond_br setjmp_cond branch_bbs.(0) branch_bbs.(1);
-      jmp_basicblock branch_bbs.(1);
-      build_store parent_setjmp_buf eh_active_setjmp_buf;
-      Hashtbl.add symbol_table exn_ident eh_active_exception;
-      let resval =
-        build_branches [|try_expr; with_expr|] branch_bbs actual_name_prefix
-      in
-      build_store parent_setjmp_buf eh_active_setjmp_buf;
-      resval
+      build_br branch_bbs.(0);
+      Stack.push branch_bbs.(1) landing_pads_stack;
+      build_branches [|try_expr; with_expr|] branch_bbs ~post_actions:(fun i ->
+        if i = 0 then begin
+          ignore (Stack.pop landing_pads_stack);
+          call_basicblock branch_bbs.(1);
+          let exception_value = build_landingpad actual_name_prefix in
+          dump_value exception_value;
+          add_symbol exn_ident exception_value;
+          ret_basicblock ()
+        end
+      ) actual_name_prefix
 
   | Cmm.Cloop expr ->
       let loop_entry_block = insertion_block_exn () in
@@ -1015,11 +1023,13 @@ let rec gen_expression expr =
   | _ -> raise (Not_implemented_yet "Outer matching in gen_expression")
 
 
-and build_branches branch_exprs branch_bbs result_bb_name_prefix =
+and build_branches branch_exprs branch_bbs ?(post_actions = fun _i -> ())
+    result_bb_name_prefix =
   let (_, branch_phi_pairs) =
     Array.fold_left (fun (i, acc) expr ->
       jmp_basicblock branch_bbs.(i);
       let value = gen_expression expr in
+      post_actions i;
       let last_bb = insertion_block_exn () in
       (i + 1, (value, last_bb) :: acc))
     (0, [])
@@ -1043,34 +1053,22 @@ and build_branches branch_exprs branch_bbs result_bb_name_prefix =
       Llvm.build_phi phi_pairs (result_bb_name_prefix ^ "resval") builder
 
 let gen_main_function entry_function =
-  let cint_type = Llvm.i32_type context in
-  let main_type = Llvm.function_type cint_type
-      [|cint_type; Llvm.pointer_type lltype_of_string|]
+  let main_type = Llvm.function_type lltype_of_cint
+      [|lltype_of_cint; Llvm.pointer_type lltype_of_string|]
   in
   let main_def = declare_function "main" main_type in
   let main_args = Llvm.params main_def in
   Llvm.set_value_name "argc" main_args.(0);
   Llvm.set_value_name "argv" main_args.(1);
   jmp_basicblock (Llvm.append_block context "entry" main_def);
-  let setjmp_buf =
-    alloca_within_entry eh_setjmp_buf_type "default_setjmp_buf"
-  in
-  let setjmp_buf_ptr = build_gep setjmp_buf
-      [|make_bidx 0; make_bidx 0|] "default_setjmp_buf_ptr"
-  in
-  build_store setjmp_buf_ptr eh_active_setjmp_buf;
-  let setjmp_status =
-    build_call libc_setjmp_f [|setjmp_buf_ptr|] "setjmp_status"
-  in
-  let setjmp_cond = Llvm.build_is_null setjmp_status "setjmp_cond" builder in
-  let normal_execution = make_basicblock "normal_execution" in
   let unexpected_exception = make_basicblock "unexpected_exception" in
-  build_cond_br setjmp_cond normal_execution unexpected_exception;
-  jmp_basicblock normal_execution;
-  let (_ : Llvm.llvalue) = build_call entry_function [||] "useless_value" in
-  build_ret (Llvm.const_int cint_type 0);
+  Stack.push unexpected_exception landing_pads_stack;
+  let (_ : Llvm.llvalue) = build_ehcall entry_function [||] "useless_value" in
+  build_ret (Llvm.const_int lltype_of_cint 0);
+  ignore (Stack.pop landing_pads_stack);
   jmp_basicblock unexpected_exception;
-  let (_: Llvm.llvalue) = build_call caml_exception_handler_f [||] "noreturn" in
+  let (_ : Llvm.llvalue) = build_landingpad "unexpected_" in
+  ignore (build_call caml_exception_handler_f [||] "noreturn");
   unreachable ()
 
 let gen_fundecl { Cmm.fun_name; fun_args; fun_body; _ } =
