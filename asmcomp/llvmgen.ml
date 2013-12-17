@@ -113,9 +113,7 @@ let lookup_function name =
 
 let make_external_decl name fun_arg_types =
   let fun_type = Llvm.function_type lltype_of_word fun_arg_types in
-  let fun_declaration = declare_function name fun_type in
-  Llvm.add_function_attr fun_declaration Llvm.Attribute.Nounwind;
-  fun_declaration
+  declare_function name fun_type
 
 let make_external_noreturn_decl name fun_arg_types =
   let fun_declaration = make_external_decl name fun_arg_types in
