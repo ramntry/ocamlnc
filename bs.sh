@@ -1,10 +1,12 @@
 #!/bin/bash
 
-numof_old_builds_to_save=2
+numof_old_builds_to_save=12
 
-host_llvm_root="/opt/llvm-3.3/dist"
-host_CC="$host_llvm_root/bin/clang"
-host_CXX="$host_llvm_root/bin/clang++"
+#host_llvm_root="/opt/llvm-3.3/dist"
+#host_CC="$host_llvm_root/bin/clang"
+#host_CXX="$host_llvm_root/bin/clang++"
+host_CC="gcc"
+host_CXX="g++"
 
 this_script_full_path="$(dirname $(readlink -f $0))"
 
