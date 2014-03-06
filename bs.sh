@@ -76,7 +76,7 @@ PATH="$original_ocaml_root/bin:$PATH" CC="$host_CC" CXX="$host_CXX" ../llvm/conf
   --enable-targets=x86_64 --prefix="$llvm_root"
 
 rm -rf "$llvm_src_root/projects/jblab-gc-dummy/"
-make -j 32 || make -j 8 || make -j 4 || make -j 2 || make
+make -j 4 || make -j 2 || make
 make install
 
 echo "#### Switch to jblab-gc-testing branch"
