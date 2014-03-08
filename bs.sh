@@ -47,7 +47,7 @@ bs_root="$this_script_full_path/bs/$bs_dirname"
 mkdir -p $bs_root/{ocamlnc,llvm-3.3}
 echo "############################ getting repo ############################"
 cd "$bs_root/ocamlnc"
-git clone git@github.com:ramntry/ocamlnc.git
+git clone https://github.com/ramntry/ocamlnc.git
 
 echo "##################### building of original tools #####################"
 mkdir 4.01.0-original_build
@@ -81,8 +81,7 @@ make install
 
 echo "#### Switch to jblab-gc-testing branch"
 cd ../../ocamlnc/ocamlnc
-git fetch origin jblab-gc-testing
-git checkout -b jblab-gc-testing origin/jblab-gc-testing
+git checkout jblab-gc-testing
 cp _setenv.sh setenv.sh
 mkdir ../dist
 ocaml_root="$bs_root/ocamlnc/dist"
