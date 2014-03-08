@@ -39,7 +39,7 @@ libunwind (см. пакеты с именами типа libunwind8-dev). Это
 реализации механизма исключений в стиле Intel Itanium C++ ABI.
 
 Среди зависимостей есть autotools, perl, valgrind, curses (искать в пакете
-ncurses в варианте dev/devel).
+ncurses в варианте dev/devel), gcc/g++.
 
 Сборка проверялась на трёх машинах:
 
