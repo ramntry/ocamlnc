@@ -1,4 +1,5 @@
 exception Not_implemented_yet of string
+
 exception Compiler_error of string
 exception Debug_checkpoint of string
 
@@ -142,6 +143,10 @@ let caml_exception_handler_f =
 let llvm_gcroot_f =
   make_external_void_decl "llvm.gcroot"
       [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
+
+let print_root_f =
+  make_external_void_decl "print_root"
+      [|Llvm.pointer_type lltype_of_root|]
 
 let insertion_block_exn () =
   try
@@ -641,6 +646,7 @@ let handle_gcroot root_value =
   ret_basicblock ();
   let casted = recast root_value lltype_of_root in
   build_store casted root;
+  let (_ : Llvm.llvalue) = build_call print_root_f [|root|] "" in
   root_value
 
 let build_gccall fun_value arg_values call_name =
