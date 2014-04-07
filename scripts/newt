@@ -35,7 +35,7 @@ cat > "$makefile_name" <<EOF
 PROGRAM = $program_name
 OBJECTS = $test_name.o runtime.o
 
-CFLAGS = -std=c99 -g -Wall -pedantic $aux_opts
+override CFLAGS := -std=c99 -g -Wall -pedantic $aux_opts \$(CFLAGS)
 
 .SUFFIXES: .ml
 
