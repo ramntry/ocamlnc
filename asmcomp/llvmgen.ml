@@ -710,8 +710,8 @@ let rec gen_expression expr =
         gen_expression field_expr :: acc) fields []
       in
       let fill_array array_type elem_type_name =
-        let alloc_args = [|wosize_value|] in
-        let block = build_gccall caml_alloc_tuple_f
+        let alloc_args = [|wosize_value; tag_value|] in
+        let block = build_gccall caml_alloc_small_f
            alloc_args ("allocated_" ^ elem_type_name)
         in
         let casted_block = recast block array_type in
@@ -733,13 +733,8 @@ let rec gen_expression expr =
           float_block
       | (254 (* Double_array_tag *), double_values) ->
           fill_array lltype_of_float "double"
-      | (0, fields_of_tuple) | (247, fields_of_tuple) ->
+      | (_, fields_of_tuple) ->
           fill_array lltype_of_block "field"
-      | _ -> raise (Not_implemented_yet ("I don't know what to do with"
-                    ^ " allocation of a block with tag = "
-                    ^ string_of_int tag ^ " and number of fields = "
-                    ^ string_of_int (List.length fields)
-                    ^ " (in gen_expression)"))
       end
 
   | Cmm.Cop (Cmm.Capply (_machtype, _debuginfo), func :: args_list) ->
