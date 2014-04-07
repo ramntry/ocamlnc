@@ -13,6 +13,8 @@ external print_int : int -> unit = "caml_print_int";;
 external print_char : char -> unit = "caml_print_char";;
 external create_string : int -> string = "caml_create_string";;
 
+external read_file : string -> string = "caml_read_file"
+external read_short_string : unit -> string = "caml_read_short_string"
 external int_of_string : string -> int = "caml_int_of_string"
 external string_length : string -> int = "%string_length";;
 external string_create : int -> string = "caml_create_string";;
@@ -44,50 +46,6 @@ let rec ( @ ) l1 l2 =
   | hd :: tl -> hd :: (tl @ l2)
 
 let string_of_char c = make 1 c
-
-let read_file_succ =
-    "pow (k, n) {\n"
-  ^ "  r := 1;\n"
-  ^ "\n"
-  ^ "  while n >> 0 do {\n"
-  ^ "    r := r * k;\n"
-  ^ "    n := n - 1;\n"
-  ^ "  }\n"
-  ^ "\n"
-  ^ "  return r;\n"
-  ^ "}\n"
-  ^ "\n"
-  ^ "fact (n) {\n"
-  ^ "  if n <= 1 then return 1;\n"
-  ^ "  else return n * fact (n-1);\n"
-  ^ "}\n"
-  ^ "\n"
-  ^ "main () {\n"
-  ^ "  read (n);\n"
-  ^ "  write (fact (n));\n"
-  ^ "}"
-
-let read_file_fail =
-    "pow (k, n) {\n"
-  ^ "  r := 1;\n"
-  ^ "\n"
-  ^ "  while n >> 0 do {\n"
-  ^ "    r := r * k;\n"
-  ^ "    n := n - 1;\n"
-  ^ "  }\n"
-  ^ "\n"
-  ^ "  return r;\n"
-  ^ "}\n"
-  ^ "\n"
-  ^ "fact (n) {\n"
-  ^ "  if n <= 1 return 1;\n"
-  ^ "  else return n * fact (n-1);\n"
-  ^ "}\n"
-  ^ "\n"
-  ^ "main () {\n"
-  ^ "  read (n);\n"
-  ^ "  write (fact (n));\n"
-  ^ "}"
 
 (* ========= Prerequisites ======= *)
 
@@ -313,12 +271,9 @@ let _ =
   inspect show_stmt (statement s) 
 *)
 
-let _ = 
-  begin match program (of_string read_file_succ) with
+let _ =
+  print_string "Enter input file name: ";
+  let filename = read_short_string () in
+  match program (of_string (read_file filename)) with
   | Some _ -> print_string "Success.\n"
   | None   -> print_string "Failure.\n"
-  end;
-  begin match program (of_string read_file_fail) with
-  | Some _ -> print_string "Success.\n"
-  | None   -> print_string "Failure.\n"
-  end

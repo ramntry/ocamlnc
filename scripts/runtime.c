@@ -7,6 +7,7 @@
 #include <caml/mlvalues.h>
 
 #define Make_header(wosize, tag, color) ((wosize) << 10 | (color) | (tag))
+#define SHORT_STRING_LENGTH 1024
 
 header_t caml_atom_table[256] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
   14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
@@ -216,6 +217,12 @@ value caml_print_endline(value string) /* string -> unit */
   return Val_unit;
 }
 
+value caml_fill_string(value s, value offset, value len, value init)
+{
+  memset(&Byte(s, Long_val(offset)), Int_val(init), Long_val(len));
+  return Val_unit;
+}
+
 value caml_print_string(value string) /* string -> unit */
 {
   printf("%s", (char const *)string);
@@ -242,6 +249,13 @@ value caml_read_int(value unit_value) /* unit -> int */
   return (value)(2 * n + 1);
 }
 
+value caml_int_of_string(value s) /* string -> int */
+{
+  long n = 0;
+  sscanf((char const *)s, "%ld", &n);
+  return (value)(2 * n + 1);
+}
+
 value caml_print_int(value word) /* int -> unit */
 {
   long const n = (long)word >> 1;
@@ -264,6 +278,31 @@ value caml_create_string(mlsize_t len) /* int -> string */
   Field(result, wosize - 1) = 0;
   mlsize_t offset_index = Bsize_wsize(wosize) - 1;
   Byte(result, offset_index) = offset_index - len;
+  return result;
+}
+
+value caml_read_file(value filename) /* string -> string */
+{
+  FILE *in = fopen((char const *)filename, "r");
+  if (!in) {
+    fprintf(stderr, "Can not open file %s\n", (char const *)filename);
+    exit(1);
+  }
+  fseek(in, 0, SEEK_END);
+  size_t const size = ftell(in);
+  fseek(in, 0, SEEK_SET);
+  value result = caml_create_string(size * 2 + 1);
+  fread((char *)result, 1, size, in);
+  fclose(in);
+  return result;
+}
+
+value caml_read_short_string() /* unit -> string */
+{
+  static char buf[SHORT_STRING_LENGTH];
+  scanf("%s", buf);
+  value result = caml_create_string(strlen(buf));
+  strcpy((char *)result, buf);
   return result;
 }
 
