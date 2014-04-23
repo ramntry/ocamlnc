@@ -139,10 +139,6 @@ let caml_out_of_bounds_handler_f =
 let caml_exception_handler_f =
   make_external_noreturn_decl "caml_exception_handler" [||]
 
-let llvm_gcroot_f =
-  make_external_void_decl "llvm.gcroot"
-      [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
-
 let insertion_block_exn () =
   try
     Llvm.insertion_block builder
@@ -186,13 +182,6 @@ let curr_function () =
 
 let entry_block () =
   Llvm.entry_block (curr_function_exn ())
-
-let fun_checkpoint message =
-  begin match curr_function () with
-  | Some f -> dump_value f
-  | None -> ()
-  end;
-  raise (Debug_checkpoint message)
 
 let build_gep base_ptr indexes name =
   Llvm.build_gep base_ptr indexes name builder
@@ -261,6 +250,37 @@ let build_landingpad name_prefix =
   Llvm.add_clause landing_pad_res (make_null lltype_of_block);
   Llvm.build_extractvalue landing_pad_res 0 "exception_value" builder
 
+let llvm_gcroot_f =
+  make_external_void_decl "llvm.gcroot"
+      [|Llvm.pointer_type lltype_of_root; lltype_of_generic_ptr|]
+
+let handle_gcroot root_value =
+  call_basicblock (entry_block ());
+  let root = Llvm.build_alloca lltype_of_root "root" builder in
+  let (_ : Llvm.llvalue) =
+    build_call llvm_gcroot_f [|root; make_null lltype_of_generic_ptr|] ""
+  in
+  ret_basicblock ();
+  let casted = recast root_value lltype_of_root in
+  build_store casted root;
+  root_value
+
+let build_gccall fun_value arg_values call_name =
+  handle_gcroot (build_call fun_value arg_values call_name)
+
+let build_gcehcall fun_value arg_values call_name =
+  handle_gcroot (build_ehcall fun_value arg_values call_name)
+
+let build_gcload addr_value load_name =
+  handle_gcroot (build_load addr_value load_name)
+
+let fun_checkpoint message =
+  begin match curr_function () with
+  | Some f -> dump_value f
+  | None -> ()
+  end;
+  raise (Debug_checkpoint message)
+
 
 let build_cond_br cond true_block false_block =
   ignore (Llvm.build_cond_br cond true_block false_block builder)
@@ -315,12 +335,18 @@ module Closure = struct
     let app_name = name_gen total_numof_args numof_bind_vars in
     let app_type = applicator_type to_bind in
     let app_def = Llvm.define_function app_name app_type the_module in
+
+    Llvm.set_gc (Some gc_name) app_def;
+    let after_gcroots_and_vars =
+      Llvm.append_block context "after_gcroots_and_vars" app_def
+    in
+    jmp_basicblock after_gcroots_and_vars;
+
     let app_args = Llvm.params app_def in
     Array.iteri (fun i arg -> Llvm.set_value_name
       (arg_name (numof_bind_vars + i + 1)) arg) app_args;
     Llvm.set_value_name "closure" app_args.(to_bind);
-    jmp_basicblock (Llvm.entry_block app_def);
-    (app_def, app_args)
+    (app_def, app_args, after_gcroots_and_vars)
 
   let gen_applicator_body total_numof_args free_vars_and_closure =
     let fun_args = Array.make (total_numof_args + 1) (make_word 0) in
@@ -350,7 +376,7 @@ module Closure = struct
     let fun_type = Llvm.pointer_type (applicator_type total_numof_args) in
     let fun_typed =
       inttoptr_unsafe fun_untyped fun_type "function" in
-    build_call fun_typed fun_args "result"
+    build_gccall fun_typed fun_args "result"
 
   let get name_gen app_gen total_numof_args numof_bind_args =
     let app_name = name_gen total_numof_args numof_bind_args in
@@ -360,7 +386,7 @@ module Closure = struct
 
   let gen_apply numof_args =
     (* i64 caml_applyM(i64 a1, i64 a2, ..., i64 aM, i64* fc) *)
-    let (apply_def, apply_args) =
+    let (apply_def, apply_args, after_gcroots_and_vars) =
       gen_applicator_head numof_args 0 numof_args gen_apply_name
     in
     let closure = apply_args.(numof_args) in
@@ -390,20 +416,26 @@ module Closure = struct
           ("part_applicator_untyped" ^ suffix)) (Llvm.pointer_type
           part_applicator_type) ("part_applicator" ^ suffix)
       in
-      part_result := build_call part_applicator
+      part_result := build_gccall part_applicator
           [|apply_args.(i); !part_result|] ("part_result" ^ suffix);
     done;
+    call_basicblock (entry_block ());
+    build_br after_gcroots_and_vars;
+    ret_basicblock ();
     build_ret !part_result;
     apply_def
 
   (* full applicator *)
   (* i64 caml_curryN_K_app(i64 a(K + 1), i64 a(K + 2), ..., i64 aN, i64* fc *)
   let rec gen_curry_app total_numof_args numof_bind_args =
-    let (curry_app_def, curry_app_args) =
+    let (curry_app_def, curry_app_args, after_gcroots_and_vars) =
       gen_applicator_head total_numof_args numof_bind_args
       (total_numof_args - numof_bind_args) gen_curry_app_name
     in
     let result = gen_applicator_body total_numof_args curry_app_args in
+    call_basicblock (entry_block ());
+    build_br after_gcroots_and_vars;
+    ret_basicblock ();
     build_ret result;
     curry_app_def
 
@@ -413,14 +445,14 @@ module Closure = struct
   (* partial applicator *)
   (* i64 caml_curryN[_K](i64 a(K + 1), i64* fc *)
   let rec gen_curry total_numof_args numof_bind_args =
-    let (curry_def, curry_args) =
+    let (curry_def, curry_args, after_gcroots_and_vars) =
       gen_applicator_head total_numof_args numof_bind_args 1 gen_curry_name
     in
     let new_numof_free_vars = total_numof_args - numof_bind_args - 1 in
     let new_llnumof_free_vars = make_word (new_numof_free_vars * 2 + 1) in
     let create_new_closure size =
       let new_closure =
-        build_call caml_alloc_closure_f [|make_word size|] "new_closure"
+        build_gccall caml_alloc_closure_f [|make_word size|] "new_closure"
       in
       let new_closure_ptr =
         inttoptr_unsafe new_closure lltype_of_block "new_closure_ptr"
@@ -428,7 +460,7 @@ module Closure = struct
       let next_part_applicator =
         get_curry total_numof_args (numof_bind_args + 1)
       in
-      jmp_basicblock (Llvm.entry_block curry_def);
+      jmp_basicblock after_gcroots_and_vars;
       store_as_word new_closure_ptr 0 next_part_applicator;
       store_at new_closure_ptr 1 new_llnumof_free_vars;
       store_at new_closure_ptr (size - 2) curry_args.(0);
@@ -445,11 +477,14 @@ module Closure = struct
         let next_full_applicator =
           get_curry_app total_numof_args (numof_bind_args + 1)
         in
-        jmp_basicblock (Llvm.entry_block curry_def);
+        jmp_basicblock after_gcroots_and_vars;
         store_as_word new_closure_ptr 2 next_full_applicator;
         new_closure
       end
     in
+    call_basicblock (entry_block ());
+    build_br after_gcroots_and_vars;
+    ret_basicblock ();
     build_ret result;
     curry_def
 
@@ -631,26 +666,6 @@ let alloca_within_entry typeof_var name =
   let var_ptr = Llvm.build_alloca typeof_var name builder in
   ret_basicblock ();
   var_ptr
-
-let handle_gcroot root_value =
-  call_basicblock (entry_block ());
-  let root = Llvm.build_alloca lltype_of_root "root" builder in
-  let (_ : Llvm.llvalue) =
-    build_call llvm_gcroot_f [|root; make_null lltype_of_generic_ptr|] ""
-  in
-  ret_basicblock ();
-  let casted = recast root_value lltype_of_root in
-  build_store casted root;
-  root_value
-
-let build_gccall fun_value arg_values call_name =
-  handle_gcroot (build_call fun_value arg_values call_name)
-
-let build_gcehcall fun_value arg_values call_name =
-  handle_gcroot (build_ehcall fun_value arg_values call_name)
-
-let build_gcload addr_value load_name =
-  handle_gcroot (build_load addr_value load_name)
 
 let ident_name ident =
   Ident.unique_name ident

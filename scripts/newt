@@ -28,7 +28,7 @@ then
 else
   makefile_name=Makefile.second
   program_name="program"
-  aux_opts="-DNDEBUG -Wno-unused-variable -Wno-unused-function"
+  aux_opts="-DNDEBUG -DMALLOC=malloc -Wno-unused-variable -Wno-unused-function"
 fi
 
 cat > "$makefile_name" <<EOF

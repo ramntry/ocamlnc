@@ -47,7 +47,7 @@ static void print_log(char const *fun_name, int line_number, char const *message
 static value alloc_via_malloc(mlsize_t wosize, tag_t tag)
 {
   mlsize_t allocation_size = (wosize + 1) * sizeof(value);
-  value *block = (value *)malloc(allocation_size);
+  value *block = (value *)MALLOC(allocation_size);
   *block = Make_header(wosize, tag, 0);
   return (value)(block + 1);
 }
