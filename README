@@ -1,3 +1,9 @@
+A variant of OCaml's native code compiler ocamlopt using LLVM in the
+back-end for optimization and code generation. For installation
+information see bootstrapping.txt, for futher details see paper/paper.pdf.
+
+Original README follows.
+
 OVERVIEW:
 
 OCaml is an implementation of the ML language, based on the Caml Light
